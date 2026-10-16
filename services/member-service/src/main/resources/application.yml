@@ -16,6 +16,11 @@ spring:
 server:
   port: ${MEMBER_SERVER_PORT:8082}
   shutdown: graceful
+  tomcat:
+    threads:
+      max: ${MEMBER_HTTP_MAX_THREADS:100}
+    max-connections: ${MEMBER_HTTP_MAX_CONNECTIONS:500}
+    accept-count: ${MEMBER_HTTP_ACCEPT_COUNT:50}
 
 spring.lifecycle:
   timeout-per-shutdown-phase: 20s
@@ -28,7 +33,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
@@ -42,11 +47,33 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 app:
   member:
     # Indian mobile format by default: 10 digits beginning with 6, 7, 8, or 9.
     mobile-number-regex: '^[6-9][0-9]{9}$'
+  idempotency:
+    ttl: ${IDEMPOTENCY_RECORD_TTL:24h}
+
+resilience:
+  society:
+    sliding-window-size: ${SOCIETY_CB_WINDOW_SIZE:10}
+    minimum-calls: ${SOCIETY_CB_MINIMUM_CALLS:5}
+    failure-rate-threshold: ${SOCIETY_CB_FAILURE_RATE:50}
+    slow-call-rate-threshold: ${SOCIETY_CB_SLOW_CALL_RATE:60}
+    slow-call-duration: ${SOCIETY_CB_SLOW_CALL_DURATION:2s}
+    open-state-wait: ${SOCIETY_CB_OPEN_WAIT:15s}
+    half-open-permitted-calls: ${SOCIETY_CB_HALF_OPEN_CALLS:2}
+    retry-max-attempts: ${SOCIETY_RETRY_MAX_ATTEMPTS:3}
+    retry-initial-interval: ${SOCIETY_RETRY_INITIAL_INTERVAL:200ms}
+    retry-multiplier: ${SOCIETY_RETRY_MULTIPLIER:2.0}
+    retry-jitter: ${SOCIETY_RETRY_JITTER:0.2}
+    retry-max-interval: ${SOCIETY_RETRY_MAX_INTERVAL:1s}
+    bulkhead-max-concurrent-calls: ${SOCIETY_BULKHEAD_MAX_CONCURRENT:12}
+    bulkhead-max-wait: ${SOCIETY_BULKHEAD_MAX_WAIT:0ms}
 
 society:
   service:

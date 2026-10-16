@@ -22,8 +22,8 @@ spec:
       name: emerald-edge
   timeout:
     connect: 2s
-    read: 8s
-    send: 8s
+    read: 32s
+    send: 32s
 ---
 apiVersion: gateway.nginx.org/v1alpha1
 kind: ClientSettingsPolicy

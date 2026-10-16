@@ -14,20 +14,36 @@ spring:
     gateway:
       server:
         webflux:
+          metrics:
+            enabled: true
           httpclient:
             connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:2000}
-            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:5s}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:28s}
           routes:
             - id: member-api
               uri: ${MEMBER_SERVICE_URL:http://localhost:8082}
               order: -10
               predicates:
                 - Path=/api/v1/members,/api/v1/members/**,/api/v1/flats/*/memberships/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@authenticatedAdminKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${GATEWAY_MEMBER_RATE_REPLENISH:10}
+                    redis-rate-limiter.burstCapacity: ${GATEWAY_MEMBER_RATE_BURST:20}
+                    redis-rate-limiter.requestedTokens: 1
             - id: society-api
               uri: ${SOCIETY_SERVICE_URL:http://localhost:8081}
               order: 0
               predicates:
                 - Path=/api/v1/society,/api/v1/society/**,/api/v1/floors,/api/v1/floors/**,/api/v1/flats,/api/v1/flats/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@authenticatedAdminKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${GATEWAY_SOCIETY_RATE_REPLENISH:20}
+                    redis-rate-limiter.burstCapacity: ${GATEWAY_SOCIETY_RATE_BURST:40}
+                    redis-rate-limiter.requestedTokens: 1
 
 emerald:
   security:
@@ -51,7 +67,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never

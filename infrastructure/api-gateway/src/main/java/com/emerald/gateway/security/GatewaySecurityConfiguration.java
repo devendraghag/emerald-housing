@@ -56,6 +56,7 @@ public class GatewaySecurityConfiguration {
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers("/actuator/health", "/actuator/health/**", "/api/v1/auth/csrf",
                                 "/api/v1/auth/login", "/internal/auth/session").permitAll()
+                        .pathMatchers("/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/**").hasRole("ADMIN")
                         .anyExchange().denyAll())
                 .exceptionHandling(exception -> exception

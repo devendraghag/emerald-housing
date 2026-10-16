@@ -1,8 +1,8 @@
-{
+﻿{
     "info":  {
                  "_postman_id":  "a3b55d97-5679-41bf-8a36-55f0486aa201",
-                 "name":  "Emerald Housing Society - Steps 1-8",
-                 "description":  "Combined Society and Member API collection for Steps 1–7 plus Step 8 NGINX edge access. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. First use Authentication: retrieve CSRF, log in, then retrieve a fresh CSRF token. Postman keeps SESSION and XSRF-TOKEN cookies for emerald.local. Direct societyBaseUrl, memberBaseUrl, and gatewayBaseUrl variables remain for diagnostics only.",
+                 "name":  "Emerald Housing Society - Steps 1-9",
+                 "description":  "Combined Society and Member API collection for Steps 1-9. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. Sign in, fetch a fresh CSRF token, and use manual Step 9 idempotency and resilience examples as described in each request. No automated Postman scripts are included.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [
@@ -45,7 +45,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/auth/login",
-                                                      "description":  "Log in with the privately provisioned administrator. Expected: 200 and minimal admin identity. Invalid credentials: 401. Do not save a real password in an exported collection/environment. Login rotates the session ID and clears the old CSRF token; fetch a new CSRF token after success."
+                                                      "description":  "Log in with the privately provisioned administrator. Expected: 200 and minimal admin identity. Invalid credentials: 401. Do not save a real password in an exported collection/environment. Login rotates the session ID and clears the old CSRF token; fetch a new CSRF token after success. Repeated login attempts share a Redis-backed unauthenticated bucket; after the configured burst is exhausted, expect 429 with Retry-After. If the shared limiter is unavailable, login fails closed with 503."
                                                   }
                                   },
                                   {
@@ -120,7 +120,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/society",
-                                                      "description":  "Returns Emerald Housing Society details. Expected: 200 OK with societyId, societyName, and totalFloors."
+                                                      "description":  "Returns Emerald Housing Society details. Expected: 200 OK with societyId, societyName, and totalFloors. For the Step 9 manual limiter demonstration, send a short burst as the authenticated admin; requests above the configured bucket may receive 429. Normal calls are not expected to be rejected."
                                                   }
                                   },
                                   {
@@ -153,7 +153,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/floors/99",
-                                                      "description":  "Demonstrates a numeric floor outside the configured 1â€“18 range. Expected: 404 Not Found with code RESOURCE_NOT_FOUND and the common JSON error fields."
+                                                      "description":  "Demonstrates a numeric floor outside the configured 1Ã¢â‚¬â€œ18 range. Expected: 404 Not Found with code RESOURCE_NOT_FOUND and the common JSON error fields."
                                                   }
                                   },
                                   {
@@ -197,7 +197,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/members",
-                                                      "description":  "Creates an active member. Expected: 201 Created, a Location header, and a response containing the generated memberId, normalized fields, ACTIVE status, createdAt, and updatedAt. Manually copy memberId into the selected environment\u0027s memberId variable for later requests. The default mobile format is a 10-digit Indian number beginning 6â€“9; the number must not already belong to an active member."
+                                                      "description":  "Creates an active member. Expected: 201 Created, a Location header, and a response containing the generated memberId, normalized fields, ACTIVE status, createdAt, and updatedAt. Manually copy memberId into the selected environment\u0027s memberId variable for later requests. The default mobile format is a 10-digit Indian number beginning 6Ã¢â‚¬â€œ9; the number must not already belong to an active member."
                                                   }
                                   },
                                   {
@@ -290,12 +290,111 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "Idempotency - Step 9",
+                                      "description":  "Manual durable idempotency examples. The key is retained for 24 hours by default. No automated Postman scripts are included.",
+                                      "item":  [
+                                                   {
+                                                       "name":  "POST Create Member With Idempotency Key",
+                                                       "request":  {
+                                                                       "method":  "POST",
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "Idempotency-Key",
+                                                                                          "value":  "{{idempotencyKey}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "X-XSRF-TOKEN",
+                                                                                          "value":  "{{csrfToken}}"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"fullName\":\"{{idempotencyFullName}}\",\"mobileNumber\":\"{{idempotencyMobile}}\",\"email\":\"{{idempotencyEmail}}\"}",
+                                                                                    "options":  {
+                                                                                                    "raw":  {
+                                                                                                                "language":  "json"
+                                                                                                            }
+                                                                                                }
+                                                                                },
+                                                                       "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                                       "description":  "Send after login and fetching a fresh CSRF token. Use a mobile number not already assigned to an active member. Expected: 201 and Idempotency-Replayed: false. The key is scoped to your authenticated admin and CREATE_MEMBER operation."
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "POST Replay Same Member Creation",
+                                                       "request":  {
+                                                                       "method":  "POST",
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "Idempotency-Key",
+                                                                                          "value":  "{{idempotencyKey}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "X-XSRF-TOKEN",
+                                                                                          "value":  "{{csrfToken}}"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"fullName\":\"{{idempotencyFullName}}\",\"mobileNumber\":\"{{idempotencyMobile}}\",\"email\":\"{{idempotencyEmail}}\"}",
+                                                                                    "options":  {
+                                                                                                    "raw":  {
+                                                                                                                "language":  "json"
+                                                                                                            }
+                                                                                                }
+                                                                                },
+                                                                       "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                                       "description":  "Repeat the first request with the exact same key and payload. Expected: 201, same memberId and Idempotency-Replayed: true; no second member is inserted. The durable record expires after 24 hours by default."
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "POST Reuse Idempotency Key With Different Payload",
+                                                       "request":  {
+                                                                       "method":  "POST",
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "Idempotency-Key",
+                                                                                          "value":  "{{idempotencyKey}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "key":  "X-XSRF-TOKEN",
+                                                                                          "value":  "{{csrfToken}}"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"fullName\":\"Different Request\",\"mobileNumber\":\"{{idempotencyMobile}}\",\"email\":\"different@example.com\"}",
+                                                                                    "options":  {
+                                                                                                    "raw":  {
+                                                                                                                "language":  "json"
+                                                                                                            }
+                                                                                                }
+                                                                                },
+                                                                       "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                                       "description":  "After the first request has committed, reuse its key with a different payload. Expected: 409 IDEMPOTENCY_CONFLICT and no extra member. This is a manual example; do not use it as a normal create request."
+                                                                   }
+                                                   }
+                                               ]
                                   }
                               ]
                  },
                  {
                      "name":  "Manual Error Scenarios",
-                     "description":  "Run these scenarios manually and inspect the status and JSON body. Dependency outage scenarios require stopping Society Service yourself; requests do not control service processes.",
+                     "description":  "Run these scenarios manually and inspect the status and JSON body. Dependency outage scenarios require stopping Society Service yourself; requests do not control service processes. Resilience thresholds and per-pod circuit state are described in README Step 9.",
                      "item":  [
                                   {
                                       "name":  "Create Member With Missing Name",
@@ -439,7 +538,45 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/floors/99",
-                                                      "description":  "Uses an integer outside the configured 1â€“18 floor range. Expected: 404 Not Found, code RESOURCE_NOT_FOUND. A non-integer path segment instead returns 400 Bad Request."
+                                                      "description":  "Uses an integer outside the configured 1Ã¢â‚¬â€œ18 floor range. Expected: 404 Not Found, code RESOURCE_NOT_FOUND. A non-integer path segment instead returns 400 Bad Request."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST Assignment Under Dependency Saturation (manual 503)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\"flatId\":\"{{flatId}}\",\"relationshipType\":\"RESIDENT\",\"startDate\":\"{{startDate}}\"}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "description":  "Requires controlled concurrent load beyond SOCIETY_BULKHEAD_MAX_CONCURRENT. Expected 503 SOCIETY_CAPACITY_EXCEEDED, with no membership saved. Do not run as a single request and do not use production traffic for this demonstration."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Member Route Rate Limit (manual 429)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                      "description":  "After admin login, send a short burst from the same client. The shared route limiter is keyed by authenticated admin and may return 429 when its burst is exhausted. Do not treat a single request as expected to be limited."
                                                   }
                                   }
                               ]

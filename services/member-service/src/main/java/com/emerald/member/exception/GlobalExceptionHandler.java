@@ -51,6 +51,18 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", exception.getMessage(), Map.of(), request);
     }
 
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<ApiError> handleInvalidIdempotencyKey(
+            InvalidIdempotencyKeyException exception, HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", exception.getMessage(), Map.of(), request);
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ApiError> handleIdempotencyConflict(
+            IdempotencyConflictException exception, HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", exception.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler({FlatNotFoundException.class})
     public ResponseEntity<ApiError> handleFlatNotFound(FlatNotFoundException exception, HttpServletRequest request) {
         return error(HttpStatus.NOT_FOUND, "FLAT_NOT_FOUND", exception.getMessage(), Map.of(), request);

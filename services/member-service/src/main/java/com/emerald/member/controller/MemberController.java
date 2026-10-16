@@ -9,8 +9,12 @@ import com.emerald.member.dto.CreateMembershipRequest;
 import com.emerald.member.dto.MembershipResponse;
 import com.emerald.member.dto.PageResponse;
 import com.emerald.member.dto.EndMembershipRequest;
+import com.emerald.member.dto.MemberCreationResult;
+import com.emerald.member.security.SessionIdentityResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,9 +42,15 @@ public class MemberController {
     }
 
     @PostMapping
-    public ResponseEntity<MemberResponse> create(@Valid @RequestBody CreateMemberRequest request) {
-        MemberResponse member = memberService.create(request);
-        return ResponseEntity.created(URI.create("/api/v1/members/" + member.memberId())).body(member);
+    public ResponseEntity<MemberResponse> create(@Valid @RequestBody CreateMemberRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @AuthenticationPrincipal SessionIdentityResponse actor) {
+        MemberCreationResult result = idempotencyKey == null
+                ? new MemberCreationResult(memberService.create(request), false)
+                : memberService.createIdempotent(request, idempotencyKey, actor == null ? null : actor.adminId());
+        MemberResponse member = result.member();
+        return ResponseEntity.created(URI.create("/api/v1/members/" + member.memberId()))
+                .header("Idempotency-Replayed", Boolean.toString(result.replayed())).body(member);
     }
 
     @GetMapping("/{memberId}")

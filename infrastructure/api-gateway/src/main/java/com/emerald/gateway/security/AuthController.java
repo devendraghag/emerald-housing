@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.core.Authentication;
@@ -15,6 +16,8 @@ import org.springframework.security.web.server.context.ServerSecurityContextRepo
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRepository;
+import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import io.micrometer.core.instrument.Metrics;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,12 +32,21 @@ public class AuthController {
     private final ReactiveAuthenticationManager authenticationManager;
     private final ServerSecurityContextRepository securityContexts;
     private final ServerCsrfTokenRepository csrfTokens;
+    private final RedisRateLimiter adminLoginRateLimiter;
 
+    @Autowired
     public AuthController(ReactiveAuthenticationManager authenticationManager,
-            ServerSecurityContextRepository securityContexts, ServerCsrfTokenRepository csrfTokens) {
+            ServerSecurityContextRepository securityContexts, ServerCsrfTokenRepository csrfTokens,
+            RedisRateLimiter adminLoginRateLimiter) {
         this.authenticationManager = authenticationManager;
         this.securityContexts = securityContexts;
         this.csrfTokens = csrfTokens;
+        this.adminLoginRateLimiter = adminLoginRateLimiter;
+    }
+
+    public AuthController(ReactiveAuthenticationManager authenticationManager,
+            ServerSecurityContextRepository securityContexts, ServerCsrfTokenRepository csrfTokens) {
+        this(authenticationManager, securityContexts, csrfTokens, new RedisRateLimiter(2, 5));
     }
 
     @GetMapping("/csrf")
@@ -47,6 +59,28 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<?>> login(@Valid @RequestBody LoginRequest request, ServerWebExchange exchange) {
+        return adminLoginRateLimiter.isAllowed("admin-login", "unauthenticated")
+                .flatMap(rate -> rate.isAllowed()
+                        ? authenticate(request, exchange)
+                        : loginRateLimited(exchange))
+                .onErrorResume(rateLimiterFailure -> {
+                    Metrics.counter("emerald.gateway.rate_limiter.errors", "route", "login").increment();
+                    return Mono.just((ResponseEntity<?>) ResponseEntity
+                            .status(HttpStatus.SERVICE_UNAVAILABLE)
+                            .body(error(exchange, HttpStatus.SERVICE_UNAVAILABLE, "RATE_LIMITER_UNAVAILABLE",
+                                    "Login protection is temporarily unavailable")));
+                });
+    }
+
+    private Mono<ResponseEntity<?>> loginRateLimited(ServerWebExchange exchange) {
+        Metrics.counter("emerald.gateway.rate_limited.requests", "route", "login").increment();
+        return Mono.just((ResponseEntity<?>) ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "1")
+                .body(error(exchange, HttpStatus.TOO_MANY_REQUESTS, "LOGIN_RATE_LIMITED",
+                        "Too many login attempts; wait before trying again")));
+    }
+
+    private Mono<ResponseEntity<?>> authenticate(LoginRequest request, ServerWebExchange exchange) {
         Authentication credentials = UsernamePasswordAuthenticationToken.unauthenticated(request.username(), request.password());
         return authenticationManager.authenticate(credentials)
                 .flatMap(authentication -> {
