@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emerald-app-config
+  namespace: emerald-housing
+data:
+  # Verified from a kind Pod on this Docker Desktop host; use a reachable host name/IP elsewhere.
+  POSTGRES_HOST: "host.docker.internal"
+  SOCIETY_SERVICE_BASE_URL: "http://society-service:8080"
+  SOCIETY_SERVER_PORT: "8080"
+  MEMBER_SERVER_PORT: "8080"
+  INSTANCE_HEADER_ENABLED: "true"

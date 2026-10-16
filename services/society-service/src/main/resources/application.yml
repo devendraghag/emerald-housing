@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: society-service
+  datasource:
+    url: ${SOCIETY_DB_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/society_db}
+    username: ${SOCIETY_DB_USERNAME:emerald}
+    password: ${SOCIETY_DB_PASSWORD:emerald_local}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: ${JPA_SHOW_SQL:false}
+  flyway:
+    enabled: true
+
+server:
+  port: ${SOCIETY_SERVER_PORT:8081}
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 20s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [correlationId=%X{correlationId:-}] %logger{36} - %msg%n%ex"
+
+app:
+  instance:
+    id: ${INSTANCE_ID:local}
+    header-enabled: ${INSTANCE_HEADER_ENABLED:true}

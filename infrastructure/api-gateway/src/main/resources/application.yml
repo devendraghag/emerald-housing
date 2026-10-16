@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:2000}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:5s}
+          routes:
+            - id: member-api
+              uri: ${MEMBER_SERVICE_URL:http://localhost:8082}
+              order: -10
+              predicates:
+                - Path=/api/v1/members,/api/v1/members/**,/api/v1/flats/*/memberships/**
+            - id: society-api
+              uri: ${SOCIETY_SERVICE_URL:http://localhost:8081}
+              order: 0
+              predicates:
+                - Path=/api/v1/society,/api/v1/society/**,/api/v1/floors,/api/v1/floors/**,/api/v1/flats,/api/v1/flats/**
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 20s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: INFO

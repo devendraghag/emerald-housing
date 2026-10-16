@@ -1,0 +1,14 @@
+target/
+**/target/
+**/.m2/
+**/.mvn/wrapper/dists/
+*.class
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+kubernetes/config/local-secrets.yaml
+.env
+.env.*
+!.env.example
+

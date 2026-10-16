@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: society-service
+  namespace: emerald-housing
+  labels:
+    app.kubernetes.io/name: society-service
+spec:
+  type: ClusterIP
+  selector:
+    app: society-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,38 @@
+package com.emerald.member.service;
+
+import com.emerald.member.client.SocietyClient;
+import com.emerald.member.exception.FlatNotEligibleException;
+import com.emerald.member.dto.CreateMembershipRequest;
+import com.emerald.member.dto.MembershipResponse;
+import com.emerald.member.dto.PageResponse;
+import com.emerald.member.dto.EndMembershipRequest;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+
+@Service
+public class MembershipService {
+    private final MemberService members;
+    private final SocietyClient societyClient;
+    private final MembershipWriter writer;
+    public MembershipService(MemberService members, SocietyClient societyClient, MembershipWriter writer) {
+        this.members=members; this.societyClient=societyClient; this.writer=writer;
+    }
+    public MembershipResponse assign(UUID memberId, CreateMembershipRequest request) {
+        members.requireActive(memberId);
+        var flat = societyClient.getFlat(request.flatId());
+        if (!"ACTIVE".equals(flat.status())) throw new FlatNotEligibleException();
+        return writer.persist(memberId, request);
+    }
+    public List<MembershipResponse> byMember(UUID id) { return writer.byMember(id); }
+    public List<MembershipResponse> byFlat(UUID id) { return writer.byFlat(id); }
+    public PageResponse<MembershipResponse> pageByMember(UUID id, int page, int size, String sortBy, String direction) {
+        return writer.pageByMember(id, page, size, sortBy, direction);
+    }
+    public PageResponse<MembershipResponse> pageByFlat(UUID id, int page, int size, String sortBy, String direction) {
+        return writer.pageByFlat(id, page, size, sortBy, direction);
+    }
+    public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
+        return writer.end(memberId, membershipId, request);
+    }
+}

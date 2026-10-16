@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: emerald-housing
+data:
+  MEMBER_SERVICE_URL: "http://member-service:8080"
+  SOCIETY_SERVICE_URL: "http://society-service:8080"
+  SERVER_PORT: "8080"
+  GATEWAY_CONNECT_TIMEOUT_MS: "2000"
+  GATEWAY_RESPONSE_TIMEOUT: "5s"

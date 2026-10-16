@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+MAVEN_VERSION=3.9.16
+MAVEN_BASE="$PROJECT_DIR/.mvn/wrapper/dists"
+MAVEN_HOME="$MAVEN_BASE/apache-maven-$MAVEN_VERSION"
+MAVEN_ARCHIVE="$MAVEN_BASE/apache-maven-$MAVEN_VERSION-bin.tar.gz"
+MAVEN_URL="https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz"
+
+if [ ! -x "$MAVEN_HOME/bin/mvn" ]; then
+  mkdir -p "$MAVEN_BASE"
+  if [ ! -f "$MAVEN_ARCHIVE" ]; then
+    echo "Downloading Apache Maven $MAVEN_VERSION for this project..."
+    if command -v curl >/dev/null 2>&1; then
+      curl -fL "$MAVEN_URL" -o "$MAVEN_ARCHIVE"
+    elif command -v wget >/dev/null 2>&1; then
+      wget "$MAVEN_URL" -O "$MAVEN_ARCHIVE"
+    else
+      echo "Install curl or wget to bootstrap the project Maven distribution." >&2
+      exit 1
+    fi
+  fi
+  tar -xzf "$MAVEN_ARCHIVE" -C "$MAVEN_BASE"
+fi
+
+if [ ! -x "$MAVEN_HOME/bin/mvn" ]; then
+  echo "Maven was not found after extracting the configured distribution." >&2
+  exit 1
+fi
+
+echo "Using project-local Apache Maven $MAVEN_VERSION."
+if [ ! -f "$PROJECT_DIR/.mvn/settings.xml" ]; then
+  echo "Project Maven settings file is missing: $PROJECT_DIR/.mvn/settings.xml" >&2
+  exit 1
+fi
+echo "Using project Maven settings: $PROJECT_DIR/.mvn/settings.xml"
+unset MAVEN_ARGS
+exec "$MAVEN_HOME/bin/mvn" --global-settings "$PROJECT_DIR/.mvn/settings.xml" --settings "$PROJECT_DIR/.mvn/settings.xml" "-Dmaven.repo.local=$PROJECT_DIR/.m2/repository" "$@"

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-service
+  namespace: emerald-housing
+  labels:
+    app.kubernetes.io/name: member-service
+spec:
+  type: ClusterIP
+  selector:
+    app: member-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
