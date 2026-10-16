@@ -1,8 +1,8 @@
 ﻿{
     "info":  {
                  "_postman_id":  "a3b55d97-5679-41bf-8a36-55f0486aa201",
-                 "name":  "Emerald Housing Society - Steps 1-9",
-                 "description":  "Combined Society and Member API collection for Steps 1-9. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. Sign in, fetch a fresh CSRF token, and use manual Step 9 idempotency and resilience examples as described in each request. No automated Postman scripts are included.",
+                 "name":  "Emerald Housing Society - Steps 1-10",
+                 "description":  "Combined Society and Member API collection for Steps 1-10. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. Sign in, fetch a fresh CSRF token, and use manual Step 9 resilience/idempotency and Step 10 cache observations as described in each request. No Step 10 test scripts were added.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [
@@ -131,7 +131,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/floors",
-                                                      "description":  "Returns the 18 floor records ordered from 1 to 18. Expected: 200 OK and an array of {\"floorNumber\": number} records."
+                                                      "description":  "Returns the 18 floor records ordered from 1 to 18. Expected: 200 OK and an array of {\"floorNumber\": number} records. Step 10 manual cache check: call once for a likely cache miss, then repeat within 10 minutes to observe the cached response. Redis failure should fall back to PostgreSQL; no cache-control endpoint is exposed."
                                                   }
                                   },
                                   {
@@ -633,7 +633,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats",
-                                                      "description":  "Lists configured flats, sorted by flat number. Expected 200 and an array. Empty flat inventory is valid."
+                                                      "description":  "Lists configured flats, sorted by flat number. Expected 200 and an array. Empty flat inventory is valid. Step 10 caches this reference list for up to 5 minutes; repeat the request to observe the cached response."
                                                   }
                                   },
                                   {
@@ -647,7 +647,7 @@
                                                                      }
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
-                                                      "description":  "The stable read contract used by Member Service. Expected 200 with flatId, flatNumber, floorId, floorNumber and status. Response echoes X-Correlation-ID."
+                                                      "description":  "Admin reference read: expected 200 with flatId, flatNumber, floorId, floorNumber and status; response echoes X-Correlation-ID. Step 10 caches this admin read for up to 2 minutes. Member Service's authenticated flat-assignment validation uses the same endpoint but deliberately takes an uncached authoritative database path."
                                                   }
                                   },
                                   {
@@ -696,7 +696,7 @@
                                                                  ],
                                                       "body":  null,
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}",
-                                                      "description":  "Returns flats on the selected floor in flat-number order. Expected: 200; unknown floor gives 404."
+                                                      "description":  "Returns flats on the selected floor in flat-number order. Expected: 200; unknown floor gives 404. Step 10 caches this list for up to 5 minutes. Repeat the lookup to observe the cached response."
                                                   },
                                       "response":  [
 
@@ -743,7 +743,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
-                                                      "description":  "Updates the flat number and floor while preserving its ID and audit creation time. Expected: 200; invalid data 400; duplicate flat number 409."
+                                                      "description":  "Updates the flat number and floor while preserving its ID and audit creation time. Expected: 200; invalid data 400; duplicate flat number 409. Step 10 publishes invalidation after the database commit for the flat ID, all-flats list, and affected old/new floor lists. Repeat GET Flat By ID and GET Flats By Floor to observe fresh data."
                                                   },
                                       "response":  [
 
@@ -762,7 +762,7 @@
                                                                  ],
                                                       "body":  null,
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}/deactivate",
-                                                      "description":  "Marks the flat INACTIVE and retains it for historical references. Repeated calls are idempotent. Expected: 200."
+                                                      "description":  "Marks the flat INACTIVE and retains it for historical references. Repeated calls are idempotent. Expected: 200. Step 10 invalidates the affected flat and floor-list caches only after commit."
                                                   },
                                       "response":  [
 
@@ -803,7 +803,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
-                                                      "description":  "Validates the member locally, calls Society GET /api/v1/flats/{flatId}, then writes locally. Expected 201 with membershipId/memberId/flatId/relationshipType/startDate. 404 if member or flat is missing, 409 for inactive member or duplicate relationship, 502/503/504 for dependency errors. A failed flat/dependency check is never persisted."
+                                                      "description":  "Validates the member locally, calls Society GET /api/v1/flats/{flatId} through the uncached authoritative validation path, then writes locally. Expected 201 with membershipId/memberId/flatId/relationshipType/startDate. 404 if member or flat is missing, 409 for inactive member or duplicate relationship, 502/503/504 for dependency errors. Redis cache availability or stale data cannot create a false successful assignment; a failed flat/dependency check is never persisted."
                                                   },
                                       "event":  [
                                                     {
@@ -901,7 +901,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
-                                                      "description":  "Society Service returns 404, which Member Service maps to 404 FLAT_NOT_FOUND. No membership is saved."
+                                                      "description":  "Society Service authoritative validation returns 404, which Member Service maps to 404 FLAT_NOT_FOUND. This remains a 404 even if an ordinary cached read was made earlier. No membership is saved."
                                                   }
                                   },
                                   {
@@ -933,7 +933,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
-                                                      "description":  "Manual scenario: stop Society Service before sending. Expected 503 SOCIETY_SERVICE_UNAVAILABLE and no membership write. Restart Society afterward. This request does not stop the service automatically."
+                                                      "description":  "Manual scenario: stop Society Service before sending. Expected 503 SOCIETY_SERVICE_UNAVAILABLE and no membership write. Redis-cached admin reference data cannot make this assignment succeed because Member Service uses authoritative uncached validation. Restart Society afterward. This request does not stop the service automatically."
                                                   }
                                   },
                                   {

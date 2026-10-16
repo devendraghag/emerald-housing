@@ -3,18 +3,32 @@ package com.emerald.society.service;
 import com.emerald.society.dto.FloorResponse;
 import com.emerald.society.exception.FloorNotFoundException;
 import com.emerald.society.repository.FloorRepository;
+import com.emerald.society.config.SocietyCacheConfiguration;
+import com.emerald.society.config.SocietyCacheMetrics;
 import java.util.List;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class FloorService {
     private final FloorRepository floorRepository;
-    public FloorService(FloorRepository floorRepository) { this.floorRepository = floorRepository; }
+    private final SocietyCacheMetrics cacheMetrics;
+    @Autowired
+    public FloorService(FloorRepository floorRepository, SocietyCacheMetrics cacheMetrics) {
+        this.floorRepository = floorRepository;
+        this.cacheMetrics = cacheMetrics;
+    }
+    public FloorService(FloorRepository floorRepository) {
+        this(floorRepository, new SocietyCacheMetrics(new SimpleMeterRegistry()));
+    }
     @PreAuthorize("hasRole('ADMIN')")
+    @Cacheable(cacheNames = SocietyCacheConfiguration.FLOOR_LIST, key = "'all'", sync = true)
     public List<FloorResponse> getFloors() {
-        return floorRepository.findAllByOrderByFloorNumberAsc().stream()
-                .map(floor -> new FloorResponse(floor.getFloorNumber())).toList();
+        return cacheMetrics.recordDatabaseLoad("floors", () -> floorRepository.findAllByOrderByFloorNumberAsc().stream()
+                .map(floor -> new FloorResponse(floor.getFloorNumber())).toList());
     }
     @PreAuthorize("hasRole('ADMIN')")
     public FloorResponse getFloor(int floorNumber) {

@@ -64,6 +64,11 @@ spec:
                 secretKeyRef:
                   name: emerald-security-credentials
                   key: member-to-society-token
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: redis-password
           startupProbe:
             httpGet:
               path: /actuator/health/liveness

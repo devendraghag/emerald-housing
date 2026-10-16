@@ -35,6 +35,9 @@ spec:
         - podSelector:
             matchLabels:
               app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: society-service
       ports:
         - protocol: TCP
           port: 6379

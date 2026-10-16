@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,7 +44,11 @@ public class FlatController {
             @RequestParam(defaultValue = "asc") String direction) {
         return flatService.pageByFloorNumber(floorNumber, page, size, sortBy, direction);
     }
-    @GetMapping("/{flatId}") public FlatResponse get(@PathVariable UUID flatId) { return flatService.get(flatId); }
+    @GetMapping("/{flatId}") public FlatResponse get(@PathVariable UUID flatId, Authentication authentication) {
+        boolean memberValidation = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "SERVICE_MEMBER_FLAT_READ".equals(authority.getAuthority()));
+        return memberValidation ? flatService.get(flatId) : flatService.getCached(flatId);
+    }
     @PostMapping public ResponseEntity<FlatResponse> create(@Valid @RequestBody CreateFlatRequest request) {
         FlatResponse flat = flatService.create(request);
         return ResponseEntity.created(URI.create("/api/v1/flats/" + flat.flatId())).body(flat);
