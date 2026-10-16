@@ -4,6 +4,10 @@ metadata:
   name: emerald-app-config
   namespace: emerald-housing
 data:
+  SPRING_THREADS_VIRTUAL_ENABLED: "true"
+  SPRING_MAIN_KEEP_ALIVE: "true"
+  SOCIETY_HTTP_MAX_CONNECTIONS: "500"
+  SOCIETY_HTTP_ACCEPT_COUNT: "50"
   # Verified from a kind Pod on this Docker Desktop host; use a reachable host name/IP elsewhere.
   POSTGRES_HOST: "host.docker.internal"
   SOCIETY_SERVICE_BASE_URL: "http://society-service:8080"

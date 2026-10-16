@@ -1,4 +1,9 @@
 spring:
+  main:
+    keep-alive: ${SPRING_MAIN_KEEP_ALIVE:true}
+  threads:
+    virtual:
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   application:
     name: member-service
   datasource:

@@ -1,4 +1,9 @@
 spring:
+  main:
+    keep-alive: ${SPRING_MAIN_KEEP_ALIVE:true}
+  threads:
+    virtual:
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   application:
     name: society-service
   datasource:
@@ -29,6 +34,9 @@ spring:
 server:
   port: ${SOCIETY_SERVER_PORT:8081}
   shutdown: graceful
+  tomcat:
+    max-connections: ${SOCIETY_HTTP_MAX_CONNECTIONS:500}
+    accept-count: ${SOCIETY_HTTP_ACCEPT_COUNT:50}
 
 spring.lifecycle:
   timeout-per-shutdown-phase: 20s

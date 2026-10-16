@@ -18,7 +18,7 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 <div class="label">Start here</div><a href="#overview">Overview</a><a href="#words">Simple word guide</a><a href="#technology">Technology</a><a href="#roadmap">Roadmap</a><a href="#run">How to run</a>
 <div class="label">Phases</div><a href="#phase1">1 · Two applications</a><a href="#phase2">2 · Databases</a><a class="sub" href="#flyway">Flyway</a><a href="#phase3">3 · HTTP communication</a><a href="#phase4">4 · Kubernetes names</a><a href="#phase5">5 · Replicas</a><a href="#phase6">6 · Gateway</a><a href="#phase7">7 · Security</a><a href="#phase8">8 · HTTPS edge</a><a href="#phase10">10 · Distributed cache</a>
 <div class="label">Use the system</div><a href="#api-contracts">API reference</a><a href="#manual-k8s">Manual Kubernetes checklist</a>
-<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a><a href="#phase16">16 | Kubernetes orchestration</a></nav></aside>
+<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a><a href="#phase16">16 | Kubernetes orchestration</a><a href="#phase31">31 | Java virtual threads</a></nav></aside>
 <main id="main">
 <header class="hero" id="overview"><div class="phase-no">A beginner's guide</div><h1>Emerald Housing Society</h1><p class="lead">Learn how the project grows from two small Java applications into a system with separate databases, service communication, Kubernetes and an API Gateway.</p><p>Read one phase at a time. Technical words are explained in everyday language, and diagrams show how the pieces fit together.</p><div class="callout good"><strong>Short version:</strong> Society Service looks after the building. Member Service looks after people. Each has its own database. Kubernetes runs the applications and gives them stable names. The Gateway is one front door for API calls.</div><span class="badge">Phases 1–8</span> <span class="badge">Works offline</span> <span class="badge">Light/dark themes</span></header>
 
@@ -1010,8 +1010,126 @@ kubectl delete -k kubernetes/</code></pre>
 <h3>14. System design ideas in everyday language</h3>
 <ul><li><strong>Desired state:</strong> the YAML says how many copies and which settings should exist.</li><li><strong>Reconciliation:</strong> Kubernetes keeps comparing the live cluster with that request and corrects differences.</li><li><strong>Service discovery:</strong> applications use stable Service DNS names rather than memorizing replaceable Pod IP addresses.</li><li><strong>Self-healing:</strong> a Deployment replaces a missing Pod; readiness stops sending new calls to a Pod that is not ready.</li><li><strong>Horizontal scaling:</strong> add or remove application copies. HPA uses CPU here; it does not directly measure API request count.</li><li><strong>Rolling update:</strong> replace old Pods in controlled batches while keeping ready replicas available where capacity allows.</li><li><strong>Resource isolation:</strong> requests reserve scheduling capacity and limits cap container usage, though they still require measured tuning.</li><li><strong>Declarative infrastructure:</strong> Kustomize collects files describing the target resources; it does not itself create a cluster or install external controllers.</li></ul>
 
-<h3>15. Phase 16 completion status</h3>
+<h3>15. Interview practice: explain the choices and their costs</h3>
+<p>In a system design interview, describe each choice in four parts: what this project chose, what benefit it gives, what it costs, and what you would change as traffic or availability needs grow.</p>
+<div class="tablebox"><table><thead><tr><th>Choice in this project</th><th>Benefit</th><th>Cost or tradeoff</th><th>What to discuss as it grows</th></tr></thead><tbody>
+<tr><td>Separate Society and Member databases</td><td>Each service owns its data and can change its schema independently.</td><td>A cross-service operation cannot use one ordinary database transaction.</td><td>Define consistency expectations and recovery behavior for multi-service workflows.</td></tr>
+<tr><td>Synchronous Member-to-Society RestClient call</td><td>Member gets an immediate authoritative answer about a flat.</td><td>Assignment depends on Society being reachable and adds network latency.</td><td>Keep timeouts bounded; consider asynchronous workflows only if the product can accept delayed confirmation.</td></tr>
+<tr><td>Redis cache for Society reference reads</td><td>Repeated reads can avoid repeated PostgreSQL queries.</td><td>Values can be stale until expiry or invalidation; Redis adds another dependency.</td><td>Measure hit rate and database load; keep PostgreSQL authoritative and make invalidation correct.</td></tr>
+<tr><td>Redis-backed Gateway sessions</td><td>Any Gateway replica can find a user session.</td><td>The current Redis deployment is one Pod with ephemeral storage, so it is a failure point and replacement can lose sessions.</td><td>Choose a persistence, backup, and failover design before treating sessions as highly available.</td></tr>
+<tr><td>CPU-based HPA</td><td>Kubernetes can add or remove application replicas automatically.</td><td>CPU does not always track request latency or queueing; more Pods also consume resources and database connections.</td><td>Measure workload, set safe maximum replicas, and budget total database connections.</td></tr>
+<tr><td>NGINX Gateway Fabric before Spring Cloud Gateway</td><td>NGINX handles the external HTTPS edge; Spring Gateway handles application routes.</td><td>There are two routing layers to configure and troubleshoot.</td><td>Keep responsibilities clear and avoid routing public traffic around Spring Gateway.</td></tr>
+<tr><td>Kustomize manifests</td><td>Existing Kubernetes resources can be gathered as a repeatable package.</td><td>Kustomize does not install external prerequisites or create secret values.</td><td>Manage controller/CRD, metrics provider, TLS and secret provisioning separately.</td></tr>
+</tbody></table></div>
+
+<h3>16. Interview practice: walk through failure scenarios</h3>
+<div class="tablebox"><table><thead><tr><th>Failure</th><th>Expected behavior in this design</th><th>Tradeoff or point to explain</th></tr></thead><tbody>
+<tr><td>Society is unavailable during flat assignment</td><td>Member’s bounded HTTP call and resilience rules fail safely; it must not save an unvalidated membership.</td><td>Assignment is unavailable while the required validation dependency is down; independent Member operations can continue.</td></tr>
+<tr><td>A Society Pod becomes unready or disappears</td><td>The Service should stop sending new traffic to its unready endpoint; the Deployment should replace a missing Pod.</td><td>In-flight calls can still fail, and recovery depends on probes, scheduling capacity, and the cluster.</td></tr>
+<tr><td>Redis is unavailable</td><td>Session and rate-limit features can be affected. Society reference reads should use the configured PostgreSQL fallback where possible.</td><td>Redis currently has one ephemeral Pod; its loss can remove sessions and cache entries.</td></tr>
+<tr><td>PostgreSQL is unavailable</td><td>Operations requiring database access cannot safely complete; readiness should prevent database-dependent Pods from receiving normal traffic.</td><td>Database availability is a system dependency; this repository does not configure PostgreSQL HA or recovery.</td></tr>
+<tr><td>A Gateway Pod is replaced</td><td>The Service should route to ready Gateway Pods; another replica can validate the session through shared Redis.</td><td>Redis must remain available, and a request already in flight during termination can fail.</td></tr>
+<tr><td>A flat changes after validation but before membership save</td><td>Society validation and the Member database write are separate operations.</td><td>There is a consistency window; the two services do not share an atomic transaction.</td></tr>
+<tr><td>HPA has no resource metrics provider</td><td>CPU-based autoscaling cannot make decisions until a provider such as metrics-server is available.</td><td>An HPA YAML file alone does not mean autoscaling is operational.</td></tr>
+<tr><td>A rolling update has insufficient spare capacity</td><td>The Deployment requests one extra Pod while keeping existing replicas available.</td><td>The new Pod may remain Pending if the cluster cannot schedule the surge capacity; zero downtime is not guaranteed.</td></tr>
+</tbody></table></div>
+
+<h3>17. Interview practice: explain the scaling plan</h3>
+<ul><li><strong>Scale application replicas:</strong> HPA currently uses CPU. It is simple, but request rate or latency may be a better signal for some workloads. The project has not installed a metrics provider or measured a workload.</li><li><strong>Set replica limits:</strong> HPA ranges are Society 2–4, Member 1–3, Gateway 2–4. The maximums should fit cluster capacity and the databases’ connection budgets.</li><li><strong>Budget database connections:</strong> each additional application replica may create another connection pool. Estimate the maximum possible total before increasing HPA limits.</li><li><strong>Plan Redis availability:</strong> one Redis Pod is easy to learn with, but production session continuity and cache availability need persistence and failover planning.</li><li><strong>Balance cache freshness and load:</strong> shorter TTLs reduce how long stale data may remain but cause more database reads. Invalidation can improve freshness but must cover all affected cache entries.</li><li><strong>Keep retries bounded:</strong> retrying a safe read may recover from a brief fault, but retries during an outage add load. Do not retry unsafe writes or multiply retries across Gateway and Member Service.</li><li><strong>Separate readiness and liveness:</strong> readiness controls whether a Pod receives new calls; liveness determines whether Kubernetes restarts it. Making liveness depend on a remote service can cause restart storms.</li></ul>
+<div class="callout"><strong>A useful interview answer:</strong> “We use a stable Service name so callers survive Pod replacement. We scale replicas within limits, but CPU scaling can increase database connections, so we need capacity measurements. Flat assignment remains synchronous because it needs authoritative validation; if Society is down, we fail safely instead of saving uncertain data.”</div>
+
+<h3>18. Phase 16 completion status</h3>
 <ul><li><strong>Present and reused:</strong> namespace, app Deployments and ClusterIP Services, ConfigMaps, Redis, NetworkPolicies, NGINX Gateway API/TLS routing, probes, resource requests/limits and rolling updates.</li><li><strong>Added:</strong> three CPU-based HPAs and <code>kubernetes/kustomization.yaml</code>; app Deployment replica fields were removed so HPA owns their scale.</li><li><strong>Preserved:</strong> Kubernetes DNS, independent Society/Member databases, RestClient validation, Redis sessions/rate limiting/cache, Spring Security, Resilience4j and NGINX-to-Spring-Gateway routing.</li><li><strong>Not added:</strong> Kafka, observability stack, test frameworks or CI/CD.</li><li><strong>Pending manual verification:</strong> Kustomize build/apply, metrics-server availability, Pod readiness, DNS, EndpointSlices, HPA behavior, rollout, Pod replacement, Redis/session continuity, NGINX HTTPS, NetworkPolicy enforcement and database reachability.</li><li>No Markdown files or automated tests were changed. No tests, Maven, Docker, Helm, Kubernetes deployment or application startup commands were run.</li></ul>
+</section>
+<section class="phase" id="phase31" style="--accent:#147d75">
+<style>#phase31{--accent:#147d75}html[data-theme=dark] #phase31{--accent:#69d2c6}</style>
+<div class="phase-no">Phase 31 · Performance engineering</div>
+<h2>Handle more waiting work with Java virtual threads</h2>
+<p class="lead">Society and Member use Spring MVC and blocking I/O. Java 21 virtual threads can make it cheaper for the JVM to manage many requests that are waiting on HTTP, PostgreSQL, or Redis. They do not make PostgreSQL faster, create more CPU cores, or remove connection limits.</p>
+<div class="callout good"><strong>NEW — PHASE 31:</strong> Society Service and Member Service now read Spring Boot’s virtual-thread setting from <code>SPRING_THREADS_VIRTUAL_ENABLED</code>. It defaults to enabled and can be switched off for a later same-workload comparison. Kubernetes receives the setting through its existing application ConfigMap.</div>
+<div class="callout warning"><strong>Scope finding:</strong> Java 21 and Spring Boot 4.1.1 are already configured. The inspected source does not contain the claimed Step 17 primary/replica routing or custom HikariCP pool settings, nor Step 19 JPA <code>@Version</code> or Redisson locking. This phase does not invent those missing prerequisites. The Gateway is reactive WebFlux and remains unchanged.</div>
+
+<h3>1. Threads in plain language</h3>
+<p>A thread is a path of work the application can run. A traditional platform thread is backed by an operating-system thread and costs more memory and scheduling effort. A virtual thread is managed by the Java Virtual Machine and is much lighter for work that spends time waiting. Spring Boot can assign a virtual thread to suitable synchronous web work, so a waiting request need not hold a costly platform thread for its whole wait.</p>
+<div class="tablebox"><table><thead><tr><th>Platform thread</th><th>Virtual thread</th></tr></thead><tbody><tr><td>Operating-system-backed execution.</td><td>Lightweight JVM-managed execution, available with Java 21+.</td></tr><tr><td>Commonly used in bounded thread pools.</td><td>Useful for many concurrent tasks that block on I/O.</td></tr><tr><td>Thread count and pool capacity can constrain concurrent waiting work.</td><td>Lower thread overhead does not remove limits in HTTP pools, HikariCP, Redis, CPU, or downstream services.</td></tr><tr><td>Can be suitable for CPU work, but CPU still has a finite number of cores.</td><td>Does not make CPU-bound calculations run faster by itself.</td></tr></tbody></table></div>
+
+<h3>2. What changed in this repository</h3>
+<div class="tablebox"><table><thead><tr><th>File</th><th>Change</th><th>Reason</th></tr></thead><tbody>
+<tr><td><code>services/society-service/src/main/resources/application.yml</code></td><td>Added configurable <code>spring.threads.virtual.enabled</code> and <code>spring.main.keep-alive</code>.</td><td>Allows the Spring MVC service to use virtual threads and allows opting back into platform-thread behavior through an environment variable.</td></tr>
+<tr><td><code>services/member-service/src/main/resources/application.yml</code></td><td>Added the same two settings.</td><td>Member’s blocking HTTP and JDBC request path is also Spring MVC.</td></tr>
+<tr><td><code>kubernetes/config/application-config.yaml</code></td><td>Added both environment settings as ConfigMap values.</td><td>Society and Member Deployments already load this ConfigMap via <code>envFrom</code>.</td></tr>
+<tr><td><code>services/*/Dockerfile</code></td><td>No change. Existing runtime images use Eclipse Temurin 21 JRE.</td><td>The Java runtime already supports virtual threads.</td></tr>
+<tr><td><code>server.tomcat.max-connections</code> in Society and Member YAML</td><td>Kept/configured connection ceilings and accept backlogs separately from the thread mode.</td><td>A virtual-thread executor does not mean unlimited incoming connections.</td></tr>
+<tr><td><code>infrastructure/api-gateway/</code></td><td>No change.</td><td>Gateway uses reactive Spring Cloud Gateway/WebFlux; its event-loop model is not converted to one virtual thread per request by this setting.</td></tr>
+</tbody></table></div>
+<pre><code># Added under spring: in each Spring MVC application's application.yml
+main:
+  keep-alive: ${SPRING_MAIN_KEEP_ALIVE:true}
+threads:
+  virtual:
+    enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}</code></pre>
+<p>Environment variable <code>SPRING_THREADS_VIRTUAL_ENABLED=false</code> selects the platform-thread mode for a later comparison. In Kubernetes, <code>SPRING_THREADS_VIRTUAL_ENABLED: "true"</code> and <code>SPRING_MAIN_KEEP_ALIVE: "true"</code> are in <code>kubernetes/config/application-config.yaml</code>. The Gateway has a separate ConfigMap and does not load these settings.</p>
+<p>Society now has configurable Tomcat <code>max-connections</code> and <code>accept-count</code> values, matching the existing Member settings. These bound accepted connections/backlog separately from executor threads. With virtual threads enabled, do not assume a platform-thread pool size caps request concurrency.</p>
+
+<h3>3. Request handling: before and after</h3>
+<div class="diagram"><pre><code>Platform-thread mode (comparison setting)
+HTTP request → Servlet container platform thread → blocking call waits
+                                                → response
+
+Virtual-thread mode (configured for Society and Member)
+HTTP request → virtual thread → blocking call waits → response
+                    |
+                    +-- JVM schedules many lightweight waiting tasks</code></pre></div>
+<p>This is still synchronous application code. Member’s existing <code>RestClient</code> call and the services’ JPA/JDBC calls remain blocking. The difference is the thread model used to handle suitable work, not a change to endpoint paths, DTOs, business rules, or transaction semantics.</p>
+
+<h3>4. Blocking I/O and the real bottlenecks</h3>
+<div class="diagram"><pre><code>Member request virtual thread
+       |
+       +-- RestClient waits for Society HTTP response
+       |
+       +-- JPA request waits for a HikariCP JDBC connection
+                                  |
+                                  v
+                         PostgreSQL connection limit
+
+Many virtual threads can wait cheaply,
+but only the bounded connections and database work proceed.</code></pre></div>
+<p>The existing Member-to-Society client has a 2-second connection timeout and a 3-second read timeout in <code>services/member-service/src/main/resources/application.yml</code>; <code>SocietyRestClientConfig</code> builds the blocking RestClient. Resilience4j’s existing bulkhead and retry rules still control dependency concurrency and attempts. Do not remove those limits because virtual threads are lightweight.</p>
+<p>Spring Boot’s JPA setup normally uses HikariCP when it is on the classpath, but this repository currently has no explicit Hikari pool tuning, no separate primary/replica DataSources, and no read/write router. Virtual threads do not change that. Pool sizing and the Primary/Replica design described in Step 17 remain unimplemented prerequisites.</p>
+
+<h3>5. Spring Security, correlation IDs, and task boundaries</h3>
+<p>The synchronous Servlet request remains on its assigned request thread, which is now a virtual thread when enabled. The existing Member and Society correlation filters put an ID in SLF4J MDC and remove it in a <code>finally</code> block. Spring Security’s servlet context is also thread-bound for the synchronous request. If a future change moves work to another executor or starts asynchronous work, authentication, transaction, MDC, and request context must be propagated explicitly; this configuration does not make arbitrary asynchronous context propagation automatic.</p>
+<p>The Gateway uses reactive security context propagation through Reactor, not the servlet thread-local model. It is intentionally left on WebFlux’s nonblocking request path.</p>
+
+<h3>6. Redis locks and synchronization</h3>
+<p>No Redisson client or distributed <code>RLock</code> implementation exists in the inspected repository, so this phase adds none. Society’s current cache loader uses a small set of JVM-local <code>ReentrantLock</code> objects to reduce duplicate local cache loads; that is not a lock shared across Pods. The synchronous code acquires and releases that lock on the same request thread. If distributed Redisson locking is added later, acquire, protected work, and ownership-checked release must stay in the correct lock-owner thread unless a supported transfer mechanism is deliberately used.</p>
+<div class="diagram"><pre><code>Current Society cache load coordination (per JVM)
+Society Pod A: request → local ReentrantLock → Redis cache / database
+Society Pod B: request → separate local ReentrantLock → Redis cache / database
+
+These local locks do not coordinate Pod A with Pod B.</code></pre></div>
+
+<h3>7. CPU-bound work, pinning, and limits</h3>
+<ul><li><strong>I/O-bound examples:</strong> waiting on PostgreSQL, Redis, or the existing RestClient. Virtual threads can help manage many waiting requests.</li><li><strong>CPU-bound examples:</strong> large calculations or expensive transformations. Virtual threads do not add CPU capacity; CPU and Kubernetes limits still bound throughput.</li><li><strong>Limits remain useful:</strong> Resilience4j bulkheads, rate limits, HTTP timeouts, connection pools, HikariCP, and Pod resource requests/limits keep demand bounded.</li><li><strong>Pinning:</strong> blocking while holding certain monitors or in native code can limit a virtual thread’s ability to unmount, depending on JDK version and operation. Do not assume every synchronized block pins on every modern JDK; inspect with JFR before changing code.</li><li><strong>No unlimited queues:</strong> inexpensive virtual threads are not permission to queue unlimited database work. Keep bulkheads and pool limits.</li></ul>
+<p class="small">Spring Boot’s virtual-thread Tomcat executor changes how request work is scheduled; a configured platform-thread maximum is not the same as a maximum number of concurrent virtual requests. Use connection/backlog settings and downstream limits, and measure safe concurrency for the application.</p>
+
+<h3>8. Java Flight Recorder and future comparison</h3>
+<p>Java Flight Recorder (JFR) is built into the Java runtime and can help inspect thread scheduling, blocking, CPU, allocation, and virtual-thread pinning events where supported. A future manual capture can use a Java 21 JDK on a local process, for example:</p>
+<pre><code># Documentation only — not run
+java -XX:StartFlightRecording=filename=emerald.jfr,duration=60s -jar target/member-service-0.1.0-SNAPSHOT.jar
+# Inspect the recording using JDK Mission Control or the JFR command-line tools.</code></pre>
+<p>The container images are JRE images, so JDK diagnostic tools may not be installed inside them. For container investigation, choose an approved diagnostic approach separately; no JFR recording was captured for this change.</p>
+<p>Compare platform and virtual modes only under the same application version, data set, database/Redis settings, pool limits, replica count, request mix, and traffic pattern. Warm up both modes similarly and repeat measurements. Record values; do not infer a speedup from thread count alone.</p>
+<div class="tablebox"><table><thead><tr><th>Record for each mode</th><th>Why it matters</th><th>Result</th></tr></thead><tbody><tr><td>Throughput (requests/second)</td><td>Completed work rate.</td><td>Measure later</td></tr><tr><td>Average, p95, and p99 response latency</td><td>Typical and tail user waiting time.</td><td>Measure later</td></tr><tr><td>CPU and memory</td><td>Checks resource cost and saturation.</td><td>Measure later</td></tr><tr><td>Thread count and JFR blocking/pinning observations</td><td>Shows scheduling behavior.</td><td>Measure later</td></tr><tr><td>Hikari active/idle/pending connections and database query latency</td><td>Shows whether the database pool or query time is the bottleneck.</td><td>Measure later; current custom pool metrics/config are absent</td></tr><tr><td>RestClient duration, timeouts, bulkhead rejections</td><td>Shows dependency wait and overload behavior.</td><td>Measure later</td></tr></tbody></table></div>
+
+<h3>9. Docker and Kubernetes settings</h3>
+<p>The Society and Member Dockerfiles already build with Temurin 21 and run on a Temurin 21 JRE. No Dockerfile or JVM heap setting was changed. The Kubernetes Deployments load <code>emerald-app-config</code> with <code>envFrom</code>, so the two new ConfigMap values reach their containers. Existing CPU/memory requests, limits, probes, graceful shutdown, and termination grace periods remain in place. The reactive Gateway configuration is separate.</p>
+
+<h3>10. Manual comparison steps</h3>
+<ol><li>Use the same Java 21 build and stable local data for both runs.</li><li>For platform-thread mode, set <code>SPRING_THREADS_VIRTUAL_ENABLED=false</code> for the Society and Member process before starting it.</li><li>For virtual-thread mode, set it to <code>true</code>.</li><li>Keep the Hikari/HTTP limits, Redis, database, endpoint mix, and request volume identical.</li><li>Record throughput, average/p95/p99 latency, CPU, memory, thread count, Hikari active/idle/pending, and downstream timeouts.</li><li>Repeat each mode and compare the measurements. No benchmark, load generator, app start, Maven command, or test was run for this implementation.</li></ol>
+
+<h3>11. Completion status and limits</h3>
+<ul><li><strong>Implemented in source configuration:</strong> Java 21-compatible Spring Boot virtual-thread toggles for the two MVC services, platform-mode override, keep-alive setting, and Kubernetes ConfigMap values.</li><li><strong>Preserved:</strong> blocking RestClient, timeout and Resilience4j limits, Spring Security, correlation filters, Docker Java 21 runtime images, Kubernetes resource limits, and reactive Gateway behavior.</li><li><strong>Not implemented because absent from the repository and outside this final Step 31 scope:</strong> Step 17 primary/replica DataSource routing and custom Hikari settings; Step 19 JPA optimistic versions and Redisson distributed locks. Society cache-load locks are JVM-local only.</li><li><strong>Not measured:</strong> throughput, latency, CPU/memory changes, JFR events, virtual-thread pinning, or production suitability.</li><li>No tests, builds, applications, Docker containers, Kubernetes resources, JFR captures, or benchmarks were run.</li></ul>
 </section>
 <footer><p>Read phases in order. For Kubernetes, open the configuration walkthrough and reveal Cluster, Namespace, then a resource. The matching file settings appear alongside the flow. This standalone page uses no external images, fonts or scripts.</p><p>File line numbers can move if the source files change.</p></footer>
 </main></div>
