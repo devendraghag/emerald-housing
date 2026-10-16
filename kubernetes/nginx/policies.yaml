@@ -1,0 +1,40 @@
+apiVersion: gateway.nginx.org/v1alpha1
+kind: UpstreamSettingsPolicy
+metadata:
+  name: api-gateway-round-robin
+  namespace: emerald-housing
+spec:
+  targetRefs:
+    - group: core
+      kind: Service
+      name: api-gateway
+  loadBalancingMethod: round_robin
+---
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ProxySettingsPolicy
+metadata:
+  name: emerald-edge-upstream-timeouts
+  namespace: emerald-housing
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: emerald-edge
+  timeout:
+    connect: 2s
+    read: 8s
+    send: 8s
+---
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ClientSettingsPolicy
+metadata:
+  name: emerald-edge-client-limits
+  namespace: emerald-housing
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: emerald-edge
+  body:
+    maxSize: 1m
+    timeout: 15s

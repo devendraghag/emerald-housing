@@ -1,11 +1,114 @@
-﻿{
+{
     "info":  {
                  "_postman_id":  "a3b55d97-5679-41bf-8a36-55f0486aa201",
-                 "name":  "Emerald Housing Society - Phases 1–6",
-                 "description":  "Requests for Phase 1–3 Society and Member APIs, plus Step 6 Gateway routing. For local apps, direct requests use societyBaseUrl and memberBaseUrl. In Kubernetes, these backend Services are private ClusterIP endpoints; Pods call them by Service DNS name. Postman on your computer should use Gateway - Step 6 after running: kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing. Then gatewayBaseUrl=http://localhost:8080 reaches the Gateway through that temporary tunnel. Keep the port-forward terminal open. Authentication is not configured. Selected creation requests contain lightweight status checks and save generated IDs; other scenarios are run manually.",
+                 "name":  "Emerald Housing Society - Steps 1-8",
+                 "description":  "Combined Society and Member API collection for Steps 1–7 plus Step 8 NGINX edge access. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. First use Authentication: retrieve CSRF, log in, then retrieve a fresh CSRF token. Postman keeps SESSION and XSRF-TOKEN cookies for emerald.local. Direct societyBaseUrl, memberBaseUrl, and gatewayBaseUrl variables remain for diagnostics only.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [
+                 {
+                     "name":  "Authentication - Step 7",
+                     "description":  "Manual session login and CSRF workflow. No Postman scripts are added. The client cookie jar carries the HttpOnly SESSION cookie; copy CSRF response tokens manually.",
+                     "item":  [
+                                  {
+                                      "name":  "Get CSRF Token",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/auth/csrf",
+                                                      "description":  "Run before login and again after login. Copy the response token into the csrfToken environment variable. Postman should retain the XSRF-TOKEN cookie."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Admin Login",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\"username\":\"{{adminUsername}}\",\"password\":\"{{adminPassword}}\"}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{externalBaseUrl}}/api/v1/auth/login",
+                                                      "description":  "Log in with the privately provisioned administrator. Expected: 200 and minimal admin identity. Invalid credentials: 401. Do not save a real password in an exported collection/environment. Login rotates the session ID and clears the old CSRF token; fetch a new CSRF token after success."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Get Current Admin",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/auth/me",
+                                                      "description":  "Reads the current admin identity from the SESSION cookie. Expected: 200 when logged in; 401 without a valid session."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Protected API Without Login (Manual 401)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                      "description":  "First clear cookies for localhost in Postman, then send this request. Expected: 401. Do not run while a valid SESSION cookie is present."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Protected Mutation Without CSRF Header (Manual 403)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\"fullName\":\"CSRF Check\",\"mobileNumber\":\"9876543210\",\"email\":\"csrf@example.com\"}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                      "description":  "Run while logged in, with cookies present, but intentionally omit X-XSRF-TOKEN. Expected: 403 and no member is created."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Admin Logout",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/auth/logout",
+                                                      "description":  "End the current session. Run after fetching a fresh CSRF token. Expected: 200; subsequent Get Current Admin should return 401."
+                                                  }
+                                  }
+                              ]
+                 },
                  {
                      "name":  "Society Service",
                      "item":  [
@@ -16,7 +119,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/society",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/society",
                                                       "description":  "Returns Emerald Housing Society details. Expected: 200 OK with societyId, societyName, and totalFloors."
                                                   }
                                   },
@@ -27,7 +130,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/floors",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/floors",
                                                       "description":  "Returns the 18 floor records ordered from 1 to 18. Expected: 200 OK and an array of {\"floorNumber\": number} records."
                                                   }
                                   },
@@ -38,7 +141,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/floors/{{floorNumber}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/floors/{{floorNumber}}",
                                                       "description":  "Looks up the floor selected by the floorNumber environment variable. Values 1 through 18 return 200 OK; an integer outside that range returns 404."
                                                   }
                                   },
@@ -49,7 +152,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/floors/99",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/floors/99",
                                                       "description":  "Demonstrates a numeric floor outside the configured 1â€“18 range. Expected: 404 Not Found with code RESOURCE_NOT_FOUND and the common JSON error fields."
                                                   }
                                   },
@@ -61,7 +164,7 @@
 
                                                                  ],
                                                       "url":  "{{societyBaseUrl}}/actuator/health",
-                                                      "description":  "Reads the Society Service Actuator health endpoint. Expected while running: 200 OK and {\"status\":\"UP\"}."
+                                                      "description":  "Direct diagnostic only. Health endpoints are intentionally not published through the NGINX external route; use the documented port-forward or kubectl health checks."
                                                   }
                                   }
                               ]
@@ -77,6 +180,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -88,7 +196,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "Creates an active member. Expected: 201 Created, a Location header, and a response containing the generated memberId, normalized fields, ACTIVE status, createdAt, and updatedAt. Manually copy memberId into the selected environment\u0027s memberId variable for later requests. The default mobile format is a 10-digit Indian number beginning 6â€“9; the number must not already belong to an active member."
                                                   }
                                   },
@@ -99,7 +207,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "Lists members persisted by Member Service in member_db. Expected: 200 OK and a JSON array; an empty database returns []. Results are ordered by creation time descending."
                                                   }
                                   },
@@ -110,7 +218,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}",
                                                       "description":  "Retrieves the member whose UUID is stored in memberId. Expected: 200 OK with MemberResponse; 404 if that UUID is not present; 400 if it is not a valid UUID."
                                                   }
                                   },
@@ -122,6 +230,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -133,7 +246,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}",
                                                       "description":  "Replaces the permitted member fields. Expected: 200 OK. memberId and createdAt remain unchanged; updatedAt is server generated. Use an unused mobile number if changing it, or the same number currently owned by this member."
                                                   }
                                   },
@@ -142,9 +255,13 @@
                                       "request":  {
                                                       "method":  "PATCH",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
+                                                                     }
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/deactivate",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/deactivate",
                                                       "description":  "Logically deactivates the member and retains the record. Expected: 200 OK with status INACTIVE. Repeating the operation is idempotent and does not change updatedAt after the first transition."
                                                   }
                                   },
@@ -156,7 +273,7 @@
 
                                                                  ],
                                                       "url":  "{{memberBaseUrl}}/actuator/health",
-                                                      "description":  "Reads the Member Service Actuator health endpoint. Expected while running: 200 OK and {\"status\":\"UP\"}."
+                                                      "description":  "Direct diagnostic only. Health endpoints are intentionally not published through the NGINX external route; use the documented port-forward or kubectl health checks."
                                                   }
                                   },
                                   {
@@ -167,7 +284,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/page?page=0\u0026size=20\u0026sortBy=createdAt\u0026direction=desc",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/page?page=0\u0026size=20\u0026sortBy=createdAt\u0026direction=desc",
                                                       "description":  "Returns a PageResponse. Page is zero-based, size must be 1-100. Expected: 200."
                                                   },
                                       "response":  [
@@ -188,6 +305,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -199,7 +321,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "Omits required fullName. Expected: 400 Bad Request, code VALIDATION_FAILED, details containing fullName, and the common error fields."
                                                   }
                                   },
@@ -211,6 +333,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -222,7 +349,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "Uses a value that does not match the default configured Indian mobile format. Expected: 400 Bad Request, code VALIDATION_FAILED, with a mobileNumber validation detail."
                                                   }
                                   },
@@ -234,6 +361,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -245,7 +377,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "Supplies a malformed optional email value. Expected: 400 Bad Request, code VALIDATION_FAILED, with an email validation detail."
                                                   }
                                   },
@@ -257,6 +389,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -268,7 +405,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
                                                       "description":  "First create an active member with the environment\u0027s memberMobile value. Repeating that number for another active member returns 409 Conflict, code DUPLICATE_RESOURCE. After deactivation, that number can be reused by a newly created active member."
                                                   }
                                   },
@@ -279,7 +416,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/00000000-0000-0000-0000-000000000001",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/00000000-0000-0000-0000-000000000001",
                                                       "description":  "Uses a syntactically valid UUID that is not generated by this application. Expected: 404 Not Found, code RESOURCE_NOT_FOUND."
                                                   }
                                   },
@@ -290,7 +427,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/not-a-uuid",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/not-a-uuid",
                                                       "description":  "Uses a path value that cannot be converted to UUID. Expected: 400 Bad Request, code INVALID_REQUEST."
                                                   }
                                   },
@@ -301,7 +438,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/floors/99",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/floors/99",
                                                       "description":  "Uses an integer outside the configured 1â€“18 floor range. Expected: 404 Not Found, code RESOURCE_NOT_FOUND. A non-integer path segment instead returns 400 Bad Request."
                                                   }
                                   }
@@ -319,6 +456,11 @@
                                                                      {
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -330,7 +472,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats",
                                                       "description":  "Create a configured flat on a valid floor. Expected 201 with flatId, flatNumber, floorId, floorNumber and status. Duplicate flat numbers in this society return 409. Copy flatId into the environment for subsequent calls."
                                                   },
                                       "event":  [
@@ -353,7 +495,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats",
                                                       "description":  "Lists configured flats, sorted by flat number. Expected 200 and an array. Empty flat inventory is valid."
                                                   }
                                   },
@@ -367,7 +509,7 @@
                                                                          "value":  "{{correlationId}}"
                                                                      }
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/{{flatId}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
                                                       "description":  "The stable read contract used by Member Service. Expected 200 with flatId, flatNumber, floorId, floorNumber and status. Response echoes X-Correlation-ID."
                                                   }
                                   },
@@ -378,7 +520,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/00000000-0000-0000-0000-000000000099",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/00000000-0000-0000-0000-000000000099",
                                                       "description":  "Syntactically valid but unknown flat UUID. Expected 404 with the Society service\u0027s structured RESOURCE_NOT_FOUND error."
                                                   }
                                   },
@@ -389,7 +531,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/not-a-uuid",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/not-a-uuid",
                                                       "description":  "Invalid UUID path value. Expected 400 with a structured INVALID_REQUEST response."
                                                   }
                                   },
@@ -401,7 +543,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/page?page=0\u0026size=20\u0026sortBy=flatNumber\u0026direction=asc",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/page?page=0\u0026size=20\u0026sortBy=flatNumber\u0026direction=asc",
                                                       "description":  "Returns a PageResponse. Allowed sortBy values: flatNumber, status, createdAt, updatedAt. Expected: 200; invalid paging/sort gives 400."
                                                   },
                                       "response":  [
@@ -416,7 +558,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}",
                                                       "description":  "Returns flats on the selected floor in flat-number order. Expected: 200; unknown floor gives 404."
                                                   },
                                       "response":  [
@@ -431,7 +573,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}/page?page=0\u0026size=20\u0026sortBy=flatNumber\u0026direction=asc",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}/page?page=0\u0026size=20\u0026sortBy=flatNumber\u0026direction=asc",
                                                       "description":  "Paginated/sorted flats on the selected floor. Expected: 200."
                                                   },
                                       "response":  [
@@ -447,6 +589,11 @@
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json",
                                                                          "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -458,7 +605,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/{{flatId}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
                                                       "description":  "Updates the flat number and floor while preserving its ID and audit creation time. Expected: 200; invalid data 400; duplicate flat number 409."
                                                   },
                                       "response":  [
@@ -470,10 +617,14 @@
                                       "request":  {
                                                       "method":  "PATCH",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
+                                                                     }
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{societyBaseUrl}}/api/v1/flats/{{flatId}}/deactivate",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}/deactivate",
                                                       "description":  "Marks the flat INACTIVE and retains it for historical references. Repeated calls are idempotent. Expected: 200."
                                                   },
                                       "response":  [
@@ -498,6 +649,11 @@
                                                                      {
                                                                          "key":  "X-Correlation-ID",
                                                                          "value":  "{{correlationId}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -509,7 +665,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
                                                       "description":  "Validates the member locally, calls Society GET /api/v1/flats/{flatId}, then writes locally. Expected 201 with membershipId/memberId/flatId/relationshipType/startDate. 404 if member or flat is missing, 409 for inactive member or duplicate relationship, 502/503/504 for dependency errors. A failed flat/dependency check is never persisted."
                                                   },
                                       "event":  [
@@ -532,7 +688,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
                                                       "description":  "Lists membership history for the selected member. Expected 200 with an array of membership response records."
                                                   }
                                   },
@@ -543,7 +699,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/flats/{{flatId}}/memberships",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}/memberships",
                                                       "description":  "Lists membership records associated with this external flat UUID. Expected 200 with an array."
                                                   }
                                   },
@@ -559,6 +715,11 @@
                                                                      {
                                                                          "key":  "X-Correlation-ID",
                                                                          "value":  "{{correlationId}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -570,7 +731,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
                                                       "description":  "Run after a successful identical assignment. Expected 409 DUPLICATE_MEMBERSHIP. No extra active membership row is created."
                                                   }
                                   },
@@ -586,6 +747,11 @@
                                                                      {
                                                                          "key":  "X-Correlation-ID",
                                                                          "value":  "{{correlationId}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -597,7 +763,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
                                                       "description":  "Society Service returns 404, which Member Service maps to 404 FLAT_NOT_FOUND. No membership is saved."
                                                   }
                                   },
@@ -613,6 +779,11 @@
                                                                      {
                                                                          "key":  "X-Correlation-ID",
                                                                          "value":  "{{correlationId}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -624,7 +795,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
                                                       "description":  "Manual scenario: stop Society Service before sending. Expected 503 SOCIETY_SERVICE_UNAVAILABLE and no membership write. Restart Society afterward. This request does not stop the service automatically."
                                                   }
                                   },
@@ -635,7 +806,7 @@
                                                       "header":  [
 
                                                                  ],
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}",
                                                       "description":  "Run while Society is stopped. Expected 200 from Member Service\u0027s own database; member retrieval does not call Society."
                                                   }
                                   },
@@ -647,7 +818,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats/page?page=0\u0026size=20\u0026sortBy=startDate\u0026direction=desc",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats/page?page=0\u0026size=20\u0026sortBy=startDate\u0026direction=desc",
                                                       "description":  "Returns member membership history in PageResponse form. Expected: 200; missing member 404."
                                                   },
                                       "response":  [
@@ -662,7 +833,7 @@
 
                                                                  ],
                                                       "body":  null,
-                                                      "url":  "{{memberBaseUrl}}/api/v1/flats/{{flatId}}/memberships/page?page=0\u0026size=20\u0026sortBy=startDate\u0026direction=desc",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}/memberships/page?page=0\u0026size=20\u0026sortBy=startDate\u0026direction=desc",
                                                       "description":  "Returns flat membership history in PageResponse form. Expected: 200."
                                                   },
                                       "response":  [
@@ -678,6 +849,11 @@
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json",
                                                                          "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -689,7 +865,7 @@
                                                                                            }
                                                                                }
                                                                },
-                                                      "url":  "{{memberBaseUrl}}/api/v1/members/{{memberId}}/flats/{{membershipId}}/end",
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats/{{membershipId}}/end",
                                                       "description":  "Sets an end date and preserves the membership row. Use a date on/after startDate and not in the future. Repeated call retains the original end date. Expected: 200; invalid date 400; unknown member/membership 404."
                                                   },
                                       "response":  [
@@ -699,88 +875,226 @@
                               ]
                  },
                  {
-                     "name": "Gateway - Step 6",
-                     "description": "The api-gateway Kubernetes Service is ClusterIP, so it is reachable directly by Pods inside the cluster as http://api-gateway:8080. Postman running on your computer is outside the cluster: first run `kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing`, keep that terminal open, and set gatewayBaseUrl to http://localhost:8080. The tunnel is temporary; stop it with Ctrl+C. These requests preserve backend routes; direct Society/Member folders remain useful for local development or troubleshooting.",
-                     "item": [
-                         {
-                             "name": "GET Gateway Health",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [],
-                                 "url": "{{gatewayBaseUrl}}/actuator/health",
-                                 "description": "Checks the Gateway Actuator health endpoint. Expected: 200 and status UP."
-                             }
-                         },
-                         {
-                             "name": "GET Society Through Gateway",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [{"key": "X-Correlation-ID", "value": "{{correlationId}}"}],
-                                 "url": "{{gatewayBaseUrl}}/api/v1/society",
-                                 "description": "Routes to Society Service through Gateway. Expected: 200; X-Correlation-ID and the serving Society Pod X-Instance-ID are returned.",
-                                 "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('Gateway routes to Society Service', function () { pm.response.to.have.status(200); });", "pm.test('Correlation ID is returned', function () { pm.expect(pm.response.headers.has('X-Correlation-ID')).to.be.true; });", "pm.test('Society instance ID is returned', function () { pm.expect(pm.response.headers.has('X-Instance-ID')).to.be.true; });"]}}]
-                             }
-                         },
-                         {
-                             "name": "GET All Flats Through Gateway",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [],
-                                 "url": "{{gatewayBaseUrl}}/api/v1/flats",
-                                 "description": "Routes Society flat inventory through Gateway. Expected: 200 with a JSON array.",
-                                 "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('Gateway routes flat list', function () { pm.response.to.have.status(200); });", "pm.test('Response is a JSON array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"]}}]
-                             }
-                         },
-                         {
-                             "name": "POST Create Member Through Gateway",
-                             "request": {
-                                 "method": "POST",
-                                 "header": [{"key": "Content-Type", "value": "application/json"}],
-                                 "body": {"mode": "raw", "raw": "{\n  \"fullName\": \"Gateway Example Member\",\n  \"mobileNumber\": \"{{memberMobile}}\",\n  \"email\": \"gateway.member@example.com\"\n}", "options": {"raw": {"language": "json"}}},
-                                 "url": "{{gatewayBaseUrl}}/api/v1/members",
-                                 "description": "Creates a member through the member route. Expected: 201. A successful response updates memberId for the other Gateway requests.",
-                                 "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('Member created through Gateway', function () { pm.response.to.have.status(201); });", "if (pm.response.code === 201) { pm.environment.set('memberId', pm.response.json().memberId); }"]}}]
-                             }
-                         },
-                         {
-                             "name": "GET Member Through Gateway",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [],
-                                 "url": "{{gatewayBaseUrl}}/api/v1/members/{{memberId}}",
-                                 "description": "Routes member retrieval to Member Service. Expected: 200 for a current memberId; 404 if it is stale or unknown."
-                             }
-                         },
-                         {
-                             "name": "GET Flat Through Gateway",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [],
-                                 "url": "{{gatewayBaseUrl}}/api/v1/flats/{{flatId}}",
-                                 "description": "Routes flat lookup to Society Service. Expected: 200 for a current flatId; 404 if it does not exist."
-                             }
-                         },
-                         {
-                             "name": "POST Assign Member to Flat Through Gateway",
-                             "request": {
-                                 "method": "POST",
-                                 "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-ID", "value": "{{correlationId}}"}],
-                                 "body": {"mode": "raw", "raw": "{\"flatId\":\"{{flatId}}\",\"relationshipType\":\"{{relationshipType}}\",\"startDate\":\"{{startDate}}\"}", "options": {"raw": {"language": "json"}}},
-                                 "url": "{{gatewayBaseUrl}}/api/v1/members/{{memberId}}/flats",
-                                 "description": "Routes to Member Service; its RestClient then validates the flat through Society Service. Expected: 201 for valid IDs, 404 for missing member/flat, or a controlled dependency error if Society Service is unavailable.",
-                                 "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('Assignment status is successful or a documented API error', function () { pm.expect([201, 400, 404, 409, 502, 503, 504]).to.include(pm.response.code); });", "if (pm.response.code === 201) { pm.environment.set('membershipId', pm.response.json().membershipId); }"]}}]
-                             }
-                         },
-                         {
-                             "name": "GET Member Memberships Through Gateway",
-                             "request": {
-                                 "method": "GET",
-                                 "header": [],
-                                 "url": "{{gatewayBaseUrl}}/api/v1/members/{{memberId}}/flats",
-                                 "description": "Routes to Member Service. Expected: 200 with membership history; use this after a successful assignment to confirm persistence."
-                             }
-                         }
-                     ]
+                     "name":  "Gateway - Step 6",
+                     "description":  "The api-gateway Kubernetes Service is ClusterIP, so it is reachable directly by Pods inside the cluster as http://api-gateway:8080. Postman running on your computer is outside the cluster: first run `kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing`, keep that terminal open, and set gatewayBaseUrl to http://localhost:8080. The tunnel is temporary; stop it with Ctrl+C. These requests preserve backend routes; direct Society/Member folders remain useful for local development or troubleshooting.",
+                     "item":  [
+                                  {
+                                      "name":  "GET Gateway Health",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{gatewayBaseUrl}}/actuator/health",
+                                                      "description":  "Direct diagnostic only. Health endpoints are intentionally not published through the NGINX external route; use the documented port-forward or kubectl health checks."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Society Through Gateway",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-Correlation-ID",
+                                                                         "value":  "{{correlationId}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/society",
+                                                      "description":  "Routes to Society Service through Gateway. Expected: 200; X-Correlation-ID and the serving Society Pod X-Instance-ID are returned.",
+                                                      "event":  [
+                                                                    {
+                                                                        "listen":  "test",
+                                                                        "script":  {
+                                                                                       "type":  "text/javascript",
+                                                                                       "exec":  [
+                                                                                                    "pm.test(\u0027Gateway routes to Society Service\u0027, function () { pm.response.to.have.status(200); });",
+                                                                                                    "pm.test(\u0027Correlation ID is returned\u0027, function () { pm.expect(pm.response.headers.has(\u0027X-Correlation-ID\u0027)).to.be.true; });",
+                                                                                                    "pm.test(\u0027Society instance ID is returned\u0027, function () { pm.expect(pm.response.headers.has(\u0027X-Instance-ID\u0027)).to.be.true; });"
+                                                                                                ]
+                                                                                   }
+                                                                    }
+                                                                ]
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET All Flats Through Gateway",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats",
+                                                      "description":  "Routes Society flat inventory through Gateway. Expected: 200 with a JSON array.",
+                                                      "event":  [
+                                                                    {
+                                                                        "listen":  "test",
+                                                                        "script":  {
+                                                                                       "type":  "text/javascript",
+                                                                                       "exec":  [
+                                                                                                    "pm.test(\u0027Gateway routes flat list\u0027, function () { pm.response.to.have.status(200); });",
+                                                                                                    "pm.test(\u0027Response is a JSON array\u0027, function () { pm.expect(pm.response.json()).to.be.an(\u0027array\u0027); });"
+                                                                                                ]
+                                                                                   }
+                                                                    }
+                                                                ]
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST Create Member Through Gateway",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"fullName\": \"Gateway Example Member\",\n  \"mobileNumber\": \"{{memberMobile}}\",\n  \"email\": \"gateway.member@example.com\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members",
+                                                      "description":  "Creates a member through the member route. Expected: 201. A successful response updates memberId for the other Gateway requests.",
+                                                      "event":  [
+                                                                    {
+                                                                        "listen":  "test",
+                                                                        "script":  {
+                                                                                       "type":  "text/javascript",
+                                                                                       "exec":  [
+                                                                                                    "pm.test(\u0027Member created through Gateway\u0027, function () { pm.response.to.have.status(201); });",
+                                                                                                    "if (pm.response.code === 201) { pm.environment.set(\u0027memberId\u0027, pm.response.json().memberId); }"
+                                                                                                ]
+                                                                                   }
+                                                                    }
+                                                                ]
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Member Through Gateway",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}",
+                                                      "description":  "Routes member retrieval to Member Service. Expected: 200 for a current memberId; 404 if it is stale or unknown."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Flat Through Gateway",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
+                                                      "description":  "Routes flat lookup to Society Service. Expected: 200 for a current flatId; 404 if it does not exist."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST Assign Member to Flat Through Gateway",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Correlation-ID",
+                                                                         "value":  "{{correlationId}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-XSRF-TOKEN",
+                                                                         "value":  "{{csrfToken}}",
+                                                                         "description":  "Current CSRF token from Authentication -\u003e Get CSRF Token."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\"flatId\":\"{{flatId}}\",\"relationshipType\":\"{{relationshipType}}\",\"startDate\":\"{{startDate}}\"}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "description":  "Routes to Member Service; its RestClient then validates the flat through Society Service. Expected: 201 for valid IDs, 404 for missing member/flat, or a controlled dependency error if Society Service is unavailable.",
+                                                      "event":  [
+                                                                    {
+                                                                        "listen":  "test",
+                                                                        "script":  {
+                                                                                       "type":  "text/javascript",
+                                                                                       "exec":  [
+                                                                                                    "pm.test(\u0027Assignment status is successful or a documented API error\u0027, function () { pm.expect([201, 400, 404, 409, 502, 503, 504]).to.include(pm.response.code); });",
+                                                                                                    "if (pm.response.code === 201) { pm.environment.set(\u0027membershipId\u0027, pm.response.json().membershipId); }"
+                                                                                                ]
+                                                                                   }
+                                                                    }
+                                                                ]
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Member Memberships Through Gateway",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                      "description":  "Routes to Member Service. Expected: 200 with membership history; use this after a successful assignment to confirm persistence."
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "NGINX Edge - Step 8",
+                     "description":  "Manual demonstrations of NGINX Gateway Fabric HTTPS entry and HTTP redirect. Trust the local development certificate before sending requests.",
+                     "item":  [
+                                  {
+                                      "name":  "GET HTTP redirects to HTTPS (manual)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{externalHttpBaseUrl}}/api/v1/society",
+                                                      "description":  "Requires the documented local HTTP port-forward. Expected result is HTTP 308 to the matching HTTPS URL. Do not submit credentials over HTTP."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "GET Society through HTTPS edge (manual)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-Correlation-ID",
+                                                                         "type":  "text",
+                                                                         "value":  "{{correlationId}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{externalBaseUrl}}/api/v1/society",
+                                                      "description":  "Calls the public NGINX HTTPS listener, then Spring Cloud Gateway, then Society Service. Sign in first using the Authentication folder when security is enabled."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
                  }
              ]
 }

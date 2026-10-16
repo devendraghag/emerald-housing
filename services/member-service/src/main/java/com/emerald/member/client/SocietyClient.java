@@ -6,6 +6,8 @@ import com.emerald.member.exception.FlatNotFoundException;
 import com.emerald.member.exception.SocietyDependencyException;
 import java.net.http.HttpTimeoutException;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,15 +21,25 @@ import tools.jackson.databind.json.JsonMapper;
 public class SocietyClient {
     private final RestClient client;
     private final JsonMapper jsonMapper;
+    private final String internalToken;
 
-    public SocietyClient(RestClient societyRestClient, JsonMapper jsonMapper) {
+    @Autowired
+    public SocietyClient(RestClient societyRestClient, JsonMapper jsonMapper,
+            @Value("${emerald.security.member-flat-read-token:}") String internalToken) {
         this.client = societyRestClient;
         this.jsonMapper = jsonMapper;
+        this.internalToken = internalToken;
+    }
+
+    /** Retained for existing focused client tests that do not exercise service authentication. */
+    public SocietyClient(RestClient societyRestClient, JsonMapper jsonMapper) {
+        this(societyRestClient, jsonMapper, "");
     }
 
     public SocietyFlatResponse getFlat(UUID flatId) {
         try {
             String responseBody = client.get().uri("/api/v1/flats/{flatId}", flatId)
+                    .header("X-Member-Service-Token", internalToken)
                     .header(CorrelationIdFilter.HEADER, MDC.get("correlationId") == null ? UUID.randomUUID().toString() : MDC.get("correlationId"))
                     .retrieve().body(String.class);
             SocietyFlatResponse result;

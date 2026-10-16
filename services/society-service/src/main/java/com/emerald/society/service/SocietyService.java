@@ -4,6 +4,7 @@ import com.emerald.society.dto.SocietyResponse;
 import com.emerald.society.repository.FloorRepository;
 import com.emerald.society.repository.SocietyRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class SocietyService {
@@ -13,6 +14,7 @@ public class SocietyService {
         this.societyRepository = societyRepository;
         this.floorRepository = floorRepository;
     }
+    @PreAuthorize("hasRole('ADMIN')")
     public SocietyResponse getSociety() {
         var society = societyRepository.findBySocietyCode("EMERALD")
                 .orElseThrow(() -> new IllegalStateException("Configured society is missing"));

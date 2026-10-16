@@ -8,6 +8,7 @@ target/
 .DS_Store
 Thumbs.db
 kubernetes/config/local-secrets.yaml
+local-certs/
 .env
 .env.*
 !.env.example

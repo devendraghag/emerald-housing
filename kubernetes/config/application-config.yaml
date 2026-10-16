@@ -7,6 +7,11 @@ data:
   # Verified from a kind Pod on this Docker Desktop host; use a reachable host name/IP elsewhere.
   POSTGRES_HOST: "host.docker.internal"
   SOCIETY_SERVICE_BASE_URL: "http://society-service:8080"
+  GATEWAY_SESSION_VALIDATION_URL: "http://api-gateway:8080/internal/auth/session"
+  SESSION_COOKIE_NAME: "SESSION"
+  SESSION_COOKIE_SECURE: "false"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
   SOCIETY_SERVER_PORT: "8080"
   MEMBER_SERVER_PORT: "8080"
   INSTANCE_HEADER_ENABLED: "true"

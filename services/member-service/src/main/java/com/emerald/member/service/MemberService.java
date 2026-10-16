@@ -20,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class MemberService {
@@ -27,6 +28,7 @@ public class MemberService {
     public MemberService(MemberRepository members) { this.members = members; }
 
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public MemberResponse create(CreateMemberRequest request) {
         String mobile = normalizeMobile(request.mobileNumber());
         if (members.existsByMobileNumberAndStatus(mobile, MemberStatus.ACTIVE)) throw new DuplicateMobileNumberException();
@@ -37,10 +39,13 @@ public class MemberService {
         } catch (DataIntegrityViolationException ex) { throw new DuplicateMobileNumberException(); }
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public MemberResponse get(UUID id) { return toResponse(find(id)); }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public List<MemberResponse> getAll() { return members.findAllByOrderByCreatedAtDesc().stream().map(MemberService::toResponse).toList(); }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<MemberResponse> getPage(int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
                 Set.of("createdAt", "updatedAt", "fullName", "mobileNumber", "email", "status"));
@@ -48,6 +53,7 @@ public class MemberService {
         return PageResponse.from(result, MemberService::toResponse, sortBy, direction);
     }
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public MemberResponse update(UUID id, UpdateMemberRequest request) {
         MemberEntity member = find(id);
         String mobile = normalizeMobile(request.mobileNumber());
@@ -58,12 +64,14 @@ public class MemberService {
         catch (DataIntegrityViolationException ex) { throw new DuplicateMobileNumberException(); }
     }
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public MemberResponse deactivate(UUID id) {
         MemberEntity member = find(id);
         member.deactivate(Instant.now());
         return toResponse(members.save(member));
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public void requireActive(UUID id) {
         MemberEntity member = find(id);
         if (member.getStatus() != MemberStatus.ACTIVE) throw new InactiveMemberException();

@@ -54,6 +54,16 @@ spec:
                 secretKeyRef:
                   name: emerald-db-credentials
                   key: society-password
+            - name: SESSION_VALIDATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: session-validation-token
+            - name: MEMBER_TO_SOCIETY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: member-to-society-token
           startupProbe:
             httpGet:
               path: /actuator/health/liveness

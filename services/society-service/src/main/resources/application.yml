@@ -47,3 +47,12 @@ app:
   instance:
     id: ${INSTANCE_ID:local}
     header-enabled: ${INSTANCE_HEADER_ENABLED:true}
+
+emerald:
+  security:
+    gateway-session-validation-url: ${GATEWAY_SESSION_VALIDATION_URL:http://localhost:8080/internal/auth/session}
+    session-cookie-name: ${SESSION_COOKIE_NAME:SESSION}
+    session-validation-token: ${SESSION_VALIDATION_TOKEN:}
+    member-flat-read-token: ${MEMBER_TO_SOCIETY_TOKEN:}
+    validation-connect-timeout: ${SESSION_VALIDATION_CONNECT_TIMEOUT:2s}
+    validation-read-timeout: ${SESSION_VALIDATION_READ_TIMEOUT:3s}

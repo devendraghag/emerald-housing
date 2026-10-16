@@ -53,3 +53,16 @@ society:
     base-url: ${SOCIETY_SERVICE_BASE_URL:http://localhost:8081}
     connect-timeout: ${SOCIETY_SERVICE_CONNECT_TIMEOUT:2s}
     read-timeout: ${SOCIETY_SERVICE_READ_TIMEOUT:3s}
+
+emerald:
+  security:
+    gateway-session-validation-url: ${GATEWAY_SESSION_VALIDATION_URL:http://localhost:8080/internal/auth/session}
+    session-cookie-name: ${SESSION_COOKIE_NAME:SESSION}
+    session-validation-token: ${SESSION_VALIDATION_TOKEN:}
+    gateway-authentication-token: ${GATEWAY_AUTHENTICATION_TOKEN:}
+    member-flat-read-token: ${MEMBER_TO_SOCIETY_TOKEN:}
+    validation-connect-timeout: ${SESSION_VALIDATION_CONNECT_TIMEOUT:2s}
+    validation-read-timeout: ${SESSION_VALIDATION_READ_TIMEOUT:3s}
+    provisioning:
+      username: ${ADMIN_PROVISIONING_USERNAME:}
+      password: ${ADMIN_PROVISIONING_PASSWORD:}

@@ -39,6 +39,22 @@ spec:
           envFrom:
             - configMapRef:
                 name: api-gateway-config
+          env:
+            - name: GATEWAY_AUTHENTICATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: gateway-authentication-token
+            - name: SESSION_VALIDATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: session-validation-token
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: redis-password
           startupProbe:
             httpGet:
               path: /actuator/health/liveness

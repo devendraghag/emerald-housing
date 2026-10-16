@@ -23,6 +23,25 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: redis-ingress-from-gateway
+  namespace: emerald-housing
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: member-ingress-from-gateway
   namespace: emerald-housing
 spec:
@@ -35,6 +54,31 @@ spec:
         - podSelector:
             matchLabels:
               app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-ingress-from-applications-and-nginx
+  namespace: emerald-housing
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: member-service
+        - podSelector:
+            matchLabels:
+              app: society-service
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: emerald-edge
       ports:
         - protocol: TCP
           port: 8080

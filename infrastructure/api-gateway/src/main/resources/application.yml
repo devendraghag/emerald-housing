@@ -1,6 +1,15 @@
 spring:
   application:
     name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  session:
+    timeout: ${SESSION_TIMEOUT:30m}
+    redis:
+      namespace: emerald:gateway:session
   cloud:
     gateway:
       server:
@@ -20,9 +29,20 @@ spring:
               predicates:
                 - Path=/api/v1/society,/api/v1/society/**,/api/v1/floors,/api/v1/floors/**,/api/v1/flats,/api/v1/flats/**
 
+emerald:
+  security:
+    member-credential-url: ${MEMBER_CREDENTIAL_URL:http://localhost:8082/internal/auth/credentials}
+    gateway-authentication-token: ${GATEWAY_AUTHENTICATION_TOKEN:}
+    session-validation-token: ${SESSION_VALIDATION_TOKEN:}
+    session-cookie-name: ${SESSION_COOKIE_NAME:SESSION}
+    session-cookie-secure: ${SESSION_COOKIE_SECURE:false}
+    credential-connect-timeout: ${CREDENTIAL_CONNECT_TIMEOUT:2s}
+    credential-response-timeout: ${CREDENTIAL_RESPONSE_TIMEOUT:3s}
+
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:NONE}
 
 spring.lifecycle:
   timeout-per-shutdown-phase: 20s
@@ -37,12 +57,14 @@ management:
       show-details: never
       probes:
         enabled: true
+      group:
+        readiness:
+          include: readinessState,redis
   health:
     livenessstate:
       enabled: true
     readinessstate:
       enabled: true
-
 logging:
   level:
     root: INFO

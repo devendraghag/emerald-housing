@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class FlatService {
@@ -29,16 +30,19 @@ public class FlatService {
         this.flats = flats; this.floors = floors; this.societies = societies;
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SERVICE_MEMBER_FLAT_READ')")
     public FlatResponse get(UUID id) {
         var flat = flats.findById(id).orElseThrow(() -> new FlatNotFoundException(id));
         var floor = floors.findById(flat.getFloorId()).orElseThrow(() -> new IllegalStateException("Flat floor is missing"));
         return response(flat, floor.getFloorNumber());
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public List<FlatResponse> list() {
         return flats.findAllByOrderByFlatNumberAsc().stream().map(this::responseWithFloor).toList();
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public List<FlatResponse> listByFloorNumber(int floorNumber) {
         var floor = floors.findByFloorNumber(floorNumber)
                 .orElseThrow(() -> new FloorEntityNotFoundException(floorNumber));
@@ -46,12 +50,14 @@ public class FlatService {
                 .map(flat -> response(flat, floorNumber)).toList();
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<FlatResponse> page(int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction, Set.of("flatNumber", "status", "createdAt", "updatedAt"));
         Page<FlatEntity> result = flats.findAll(pageable);
         return PageResponse.from(result, this::responseWithFloor, sortBy, direction);
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<FlatResponse> pageByFloorNumber(int floorNumber, int page, int size, String sortBy, String direction) {
         var floor = floors.findByFloorNumber(floorNumber)
                 .orElseThrow(() -> new FloorEntityNotFoundException(floorNumber));
@@ -60,6 +66,7 @@ public class FlatService {
                 flat -> response(flat, floorNumber), sortBy, direction);
     }
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public FlatResponse create(CreateFlatRequest request) {
         var floor = floors.findByFloorNumber(request.floorNumber())
                 .orElseThrow(() -> new FloorEntityNotFoundException(request.floorNumber()));
@@ -70,6 +77,7 @@ public class FlatService {
         return response(flat, floor.getFloorNumber());
     }
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public FlatResponse update(UUID id, UpdateFlatRequest request) {
         var flat = flats.findById(id).orElseThrow(() -> new FlatNotFoundException(id));
         var floor = floors.findByFloorNumber(request.floorNumber())
@@ -78,6 +86,7 @@ public class FlatService {
         return response(flats.saveAndFlush(flat), floor.getFloorNumber());
     }
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public FlatResponse deactivate(UUID id) {
         var flat = flats.findById(id).orElseThrow(() -> new FlatNotFoundException(id));
         flat.deactivate(Instant.now());

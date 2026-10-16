@@ -54,6 +54,31 @@ spec:
                 secretKeyRef:
                   name: emerald-db-credentials
                   key: member-password
+            - name: SESSION_VALIDATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: session-validation-token
+            - name: GATEWAY_AUTHENTICATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: gateway-authentication-token
+            - name: MEMBER_TO_SOCIETY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: member-to-society-token
+            - name: ADMIN_PROVISIONING_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: admin-username
+            - name: ADMIN_PROVISIONING_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: admin-password
           startupProbe:
             httpGet:
               path: /actuator/health/liveness

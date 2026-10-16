@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: emerald-edge
+  namespace: emerald-housing
+spec:
+  gatewayClassName: nginx
+  infrastructure:
+    labels:
+      app.kubernetes.io/part-of: emerald-housing
+      app.kubernetes.io/component: nginx-edge
+  listeners:
+    - name: http
+      hostname: emerald.local
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      hostname: emerald.local
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: emerald-local-tls
+        options:
+          nginx.org/ssl-protocols: "TLSv1.2 TLSv1.3"
+      allowedRoutes:
+        namespaces:
+          from: Same

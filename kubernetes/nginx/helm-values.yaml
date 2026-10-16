@@ -1,0 +1,4 @@
+nginxGateway:
+  # Limit Gateway API reconciliation to the application namespace.
+  watchNamespaces:
+    - emerald-housing

@@ -9,6 +9,7 @@ import com.emerald.member.dto.EndMembershipRequest;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class MembershipService {
@@ -18,20 +19,26 @@ public class MembershipService {
     public MembershipService(MemberService members, SocietyClient societyClient, MembershipWriter writer) {
         this.members=members; this.societyClient=societyClient; this.writer=writer;
     }
+    @PreAuthorize("hasRole('ADMIN')")
     public MembershipResponse assign(UUID memberId, CreateMembershipRequest request) {
         members.requireActive(memberId);
         var flat = societyClient.getFlat(request.flatId());
         if (!"ACTIVE".equals(flat.status())) throw new FlatNotEligibleException();
         return writer.persist(memberId, request);
     }
+    @PreAuthorize("hasRole('ADMIN')")
     public List<MembershipResponse> byMember(UUID id) { return writer.byMember(id); }
+    @PreAuthorize("hasRole('ADMIN')")
     public List<MembershipResponse> byFlat(UUID id) { return writer.byFlat(id); }
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<MembershipResponse> pageByMember(UUID id, int page, int size, String sortBy, String direction) {
         return writer.pageByMember(id, page, size, sortBy, direction);
     }
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<MembershipResponse> pageByFlat(UUID id, int page, int size, String sortBy, String direction) {
         return writer.pageByFlat(id, page, size, sortBy, direction);
     }
+    @PreAuthorize("hasRole('ADMIN')")
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
         return writer.end(memberId, membershipId, request);
     }
