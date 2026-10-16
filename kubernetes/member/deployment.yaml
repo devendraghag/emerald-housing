@@ -6,7 +6,6 @@ metadata:
   labels:
     app.kubernetes.io/name: member-service
 spec:
-  replicas: 1
   revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate

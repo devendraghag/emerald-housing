@@ -18,7 +18,7 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 <div class="label">Start here</div><a href="#overview">Overview</a><a href="#words">Simple word guide</a><a href="#technology">Technology</a><a href="#roadmap">Roadmap</a><a href="#run">How to run</a>
 <div class="label">Phases</div><a href="#phase1">1 · Two applications</a><a href="#phase2">2 · Databases</a><a class="sub" href="#flyway">Flyway</a><a href="#phase3">3 · HTTP communication</a><a href="#phase4">4 · Kubernetes names</a><a href="#phase5">5 · Replicas</a><a href="#phase6">6 · Gateway</a><a href="#phase7">7 · Security</a><a href="#phase8">8 · HTTPS edge</a><a href="#phase10">10 · Distributed cache</a>
 <div class="label">Use the system</div><a href="#api-contracts">API reference</a><a href="#manual-k8s">Manual Kubernetes checklist</a>
-<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a></nav></aside>
+<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a><a href="#phase16">16 | Kubernetes orchestration</a></nav></aside>
 <main id="main">
 <header class="hero" id="overview"><div class="phase-no">A beginner's guide</div><h1>Emerald Housing Society</h1><p class="lead">Learn how the project grows from two small Java applications into a system with separate databases, service communication, Kubernetes and an API Gateway.</p><p>Read one phase at a time. Technical words are explained in everyday language, and diagrams show how the pieces fit together.</p><div class="callout good"><strong>Short version:</strong> Society Service looks after the building. Member Service looks after people. Each has its own database. Kubernetes runs the applications and gives them stable names. The Gateway is one front door for API calls.</div><span class="badge">Phases 1–8</span> <span class="badge">Works offline</span> <span class="badge">Light/dark themes</span></header>
 
@@ -835,6 +835,183 @@ Member Service        Society Service (multiple Pods)
 Member flat assignment always asks Society over its existing
 authenticated HTTP path; that validation reads society_db directly.</code></pre></div>
 <p class="small">Phase 10 changes are source/configuration work only. No application, Redis instance, Postman collection, benchmark, Maven build, test suite, Docker build, or Kubernetes deployment was run for this change.</p>
+</section>
+<section class="phase" id="phase16" style="--accent:#355f9c">
+<style>#phase16{--accent:#355f9c}html[data-theme=dark] #phase16{--accent:#91b8ff}</style>
+<div class="phase-no">Phase 16 · Kubernetes orchestration</div>
+<h2>Let Kubernetes run and look after the applications</h2>
+<p class="lead">Kubernetes is the coordinator for containers. It compares the requested setup with what is running, creates or replaces Pods, gives applications steady Service names, and can change replica counts when CPU demand changes. This phase consolidates the repository’s existing Kubernetes resources and adds autoscaling and one Kustomize entry point.</p>
+<div class="callout good"><strong>UPDATED — PHASE 16:</strong> The Society, Member and API Gateway Deployments now get their replica counts from three HorizontalPodAutoscalers (HPAs). Their minimums preserve 2 Society, 1 Member and 2 Gateway Pods. <code>kubernetes/kustomization.yaml</code> gathers the existing resources and the new HPAs for one declarative package.</div>
+<div class="callout warning"><strong>Static configuration only:</strong> The manifests were inspected, not applied. HPA needs a resource metrics provider such as metrics-server; the repository does not install one. Readiness, DNS, traffic distribution, recovery, and autoscaling still need manual cluster verification.</div>
+
+<h3>1. What Kubernetes does</h3>
+<p>Docker packages an application and its runtime into an image. Kubernetes runs those images as containers inside Pods and continually reconciles the cluster toward the desired state written in YAML. The control plane accepts the desired state; worker nodes run the Pods. If one Pod disappears, a Deployment and its ReplicaSet create another. Kubernetes is therefore an orchestrator, while Docker Compose starts a declared group of containers on one Docker host. Compose is useful locally; Kubernetes adds cluster scheduling, Services, rolling updates, self-healing and autoscaling.</p>
+<div class="diagram"><pre><code>Desired YAML (what we ask for)
+       |
+       v
+Kubernetes control plane — schedules and reconciles
+       |
+       +---- worker node: Society Pod(s)
+       +---- worker node: Member Pod(s)
+       +---- worker node: Gateway Pod(s)
+                    |
+                    v
+          Services and EndpointSlices
+          point to ready Pod addresses</code></pre></div>
+
+<h3>2. Current Emerald Housing cluster picture</h3>
+<div class="diagram"><pre><code>kind cluster: emerald-housing
+└── Namespace: emerald-housing
+    ├── NGINX Gateway Fabric data plane
+    │     └── Gateway API: emerald-edge → HTTPS HTTPRoute → api-gateway:8080
+    ├── Deployment api-gateway → HPA 2–4 → ClusterIP Service api-gateway:8080
+    │     ├── Spring Cloud Gateway → member-service:8080
+    │     └── Spring Cloud Gateway → society-service:8080
+    ├── Deployment member-service → HPA 1–3 → ClusterIP Service member-service:8080
+    │     ├── member_db (external PostgreSQL at configured POSTGRES_HOST)
+    │     └── RestClient → society-service:8080
+    ├── Deployment society-service → HPA 2–4 → ClusterIP Service society-service:8080
+    │     ├── society_db (same PostgreSQL host, separate database)
+    │     └── Redis Service redis:6379 (cache)
+    └── Deployment redis → ClusterIP Service redis:6379
+          └── Redis also stores Gateway sessions and rate-limit state</code></pre></div>
+<p>Redis is one replica backed by an <code>emptyDir</code> in the current manifest. It is private, but its data is lost if the Redis Pod is replaced. That means Redis-backed sessions and cache entries can be lost on Redis replacement; the current setup is a learning configuration, not highly available Redis. PostgreSQL is outside this namespace in the current setup and is reached through <code>POSTGRES_HOST</code>.</p>
+
+<h3>3. Pods, Deployments and ReplicaSets</h3>
+<p>A Pod is the smallest scheduled unit and contains the application container. A Pod name and IP can change after replacement, so callers use a Service name instead. A Deployment declares which image and Pod template to run. Its ReplicaSet maintains the number requested by the Deployment’s scale. Here, the HPA writes that scale so a fixed <code>spec.replicas</code> in the Deployment cannot continually reset it.</p>
+<div class="tablebox"><table><thead><tr><th>Resource</th><th>Repository example</th><th>Job</th></tr></thead><tbody>
+<tr><td>Pod</td><td>Created from a Deployment template</td><td>Runs the container; replaceable and temporary.</td></tr><tr><td>ReplicaSet</td><td>Managed by each Deployment</td><td>Keeps the desired number of matching Pods.</td></tr><tr><td>Deployment</td><td><code>society-service</code>, <code>member-service</code>, <code>api-gateway</code></td><td>Declares image, template, rollout, probes and resources.</td></tr><tr><td>HPA</td><td>New files under <code>kubernetes/autoscaling/</code></td><td>Adjusts a target Deployment’s replica count using CPU metrics.</td></tr></tbody></table></div>
+
+<h3>4. Services and Kubernetes DNS</h3>
+<p>The Service files select Pods by labels: Society selects <code>app: society-service</code>, Member selects <code>app: member-service</code>, and Gateway selects <code>app: api-gateway</code>. Their selectors match the Deployment Pod-template labels. Each Service is <code>ClusterIP</code>, so it provides an in-cluster address rather than a public backend endpoint. Kubernetes maintains EndpointSlices for ready matching Pods and DNS resolves the Service name. For example, Member continues to use <code>http://society-service:8080</code> when Society Pods are replaced.</p>
+<div class="diagram"><pre><code>Member Pod
+   | GET http://society-service:8080/...
+   v
+Service society-service:8080  (stable DNS name / ClusterIP)
+   |
+   +--> EndpointSlice: ready Society Pod IP A
+   `--> EndpointSlice: ready Society Pod IP B
+         Pod IPs may change; the caller keeps the Service name.</code></pre></div>
+
+<h3>5. Actual Kubernetes files and their purpose</h3>
+<div class="tablebox"><table><thead><tr><th>File</th><th>Resource / purpose</th><th>Important current settings</th></tr></thead><tbody>
+<tr><td><code>kubernetes/namespace.yaml</code></td><td>Creates the <code>emerald-housing</code> namespace.</td><td>Labels the namespace as part of Emerald Housing.</td></tr>
+<tr><td><code>kubernetes/society/deployment.yaml</code></td><td>Society application Deployment.</td><td>Image <code>emerald/society-service:step4-audit</code>; HTTP 8080; requests 100m CPU/256Mi, limits 750m/640Mi; non-root UID 10001; RollingUpdate, maxUnavailable 0, maxSurge 1; 30-second termination grace.</td></tr>
+<tr><td><code>kubernetes/member/deployment.yaml</code></td><td>Member application Deployment.</td><td>Image <code>emerald/member-service:step4-audit</code>; HTTP 8080; requests 100m/256Mi, limits 750m/640Mi; non-root; same rollout and termination policy. Secret references provide database, session, internal-call and admin-provisioning credentials.</td></tr>
+<tr><td><code>kubernetes/gateway/deployment.yaml</code></td><td>Spring Cloud Gateway Deployment.</td><td>Image <code>emerald/api-gateway:step6-audit</code>; HTTP 8080; requests 100m/192Mi, limits 750m/512Mi; non-root; same rollout and termination policy.</td></tr>
+<tr><td><code>kubernetes/society/service.yaml</code>, <code>member/service.yaml</code>, <code>gateway/service.yaml</code></td><td>Private ClusterIP endpoints.</td><td>Service port 8080 to the named container port <code>http</code>; selectors match app labels.</td></tr>
+<tr><td><code>kubernetes/config/application-config.yaml</code></td><td><code>emerald-app-config</code> ConfigMap.</td><td>Non-secret URLs, ports, cache TTLs, timeout and resilience values. In particular, <code>SOCIETY_SERVICE_BASE_URL=http://society-service:8080</code> and <code>REDIS_HOST=redis</code>.</td></tr>
+<tr><td><code>kubernetes/gateway/config.yaml</code></td><td><code>api-gateway-config</code> ConfigMap.</td><td>Gateway’s Member/Society Service URLs, session behavior, forward-header strategy, timeouts and rate limits.</td></tr>
+<tr><td><code>kubernetes/redis/deployment.yaml</code> and <code>service.yaml</code></td><td>Private single Redis Pod and ClusterIP Service.</td><td>Redis 7.4 Alpine, port 6379, password from Secret, 128 MB max memory with <code>noeviction</code>; current storage is ephemeral <code>emptyDir</code>.</td></tr>
+<tr><td><code>kubernetes/networkpolicies.yaml</code></td><td>Restricts selected Pod ingress.</td><td>Allows app-to-app paths on 8080 and Gateway/Society to Redis on 6379. These are ingress policies; they do not define egress restrictions.</td></tr>
+<tr><td><code>kubernetes/nginx/gatewayclass.yaml</code>, <code>gateway.yaml</code>, <code>httproutes.yaml</code>, <code>policies.yaml</code></td><td>NGINX Gateway Fabric entry point.</td><td><code>emerald-edge</code>, <code>emerald.local</code>, HTTP-to-HTTPS 308 redirect, TLS termination via externally-created <code>emerald-local-tls</code>, HTTPS API forwarding to <code>api-gateway:8080</code>, round-robin upstream policy.</td></tr>
+<tr><td><code>kubernetes/kind-config.yaml</code></td><td>Local kind cluster shape.</td><td>One control-plane and one worker node.</td></tr>
+<tr><td><code>kubernetes/kustomization.yaml</code></td><td>New Kustomize package root.</td><td>References the existing app, Redis, NetworkPolicy and Gateway API files plus the new HPAs; does not manufacture credentials or install controllers.</td></tr>
+<tr><td><code>kubernetes/autoscaling/*-hpa.yaml</code></td><td>New HPA resources.</td><td>CPU target 70%; minimums Society 2, Member 1, Gateway 2; maximums 4, 3, 4.</td></tr>
+</tbody></table></div>
+
+<h3>6. Probes: startup, readiness and liveness</h3>
+<p>Society and Member probe <code>/actuator/health/liveness</code> during startup and liveness; their readiness probes call <code>/actuator/health/readiness</code>, whose application configuration includes the database. Gateway uses the same liveness and readiness paths; its readiness group includes Redis. Redis uses authenticated <code>redis-cli ping</code> for all three probes. A startup probe gives an application time to launch (36 checks every 5 seconds for the backends, up to about 180 seconds; Gateway allows 24 checks, about 120 seconds). Readiness keeps an unready Pod out of Service endpoints; liveness restarts a stuck container; startup delays liveness until initialization has had time. Probe values are in each workload’s Deployment YAML.</p>
+<pre><code># Society and Member Deployment probe pattern (Gateway has the same paths)
+startupProbe:
+  httpGet: { path: /actuator/health/liveness, port: http }
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 36
+readinessProbe:
+  httpGet: { path: /actuator/health/readiness, port: http }
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 3
+livenessProbe:
+  httpGet: { path: /actuator/health/liveness, port: http }
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3</code></pre>
+<p>The application startup path runs Spring Boot and Flyway before readiness can succeed. Society and Member readiness includes PostgreSQL, so Flyway/database initialization must finish before they receive normal Service traffic. Liveness uses the process liveness state, not a remote Society check, which helps avoid restart storms during a dependency outage.</p>
+
+<h3>7. Resource requests and limits</h3>
+<p>Requests are the scheduling baseline and the denominator used for CPU utilization in these HPAs. Limits cap CPU and memory consumption. For example, the Society HPA’s 70% CPU target is relative to its 100m CPU request, not a promise about a specific request rate. The current values are conservative learning defaults, not measured production sizing. Java’s container-aware heap still must fit inside the Pod memory limit after non-heap memory is included. Actual sizing needs runtime measurement; this task did not run the services.</p>
+
+<h3>8. Horizontal Pod Autoscaling</h3>
+<p>Each <code>autoscaling/v2</code> HPA reads CPU usage and adjusts the matching Deployment between its configured minimum and maximum. Scale-up can add up to 100% or two Pods per 60 seconds. Scale-down waits 300 seconds and is limited to 25% or one Pod per 60 seconds, using the more conservative permitted change. These are learning defaults to reduce oscillation. HPA needs the Kubernetes resource metrics API, commonly provided by metrics-server; no metrics provider is installed by these manifests. When an HPA manages a Deployment, omit that Deployment’s fixed <code>spec.replicas</code> so a later apply does not fight the HPA. The HPA min/max values own the scale range.</p>
+<pre><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: society-service
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70</code></pre>
+<p>Actual HPA files are <code>kubernetes/autoscaling/society-hpa.yaml</code>, <code>member-hpa.yaml</code> and <code>gateway-hpa.yaml</code>. Society keeps at least two replicas for the existing multi-Pod design; Gateway keeps at least two; Member starts at one but can grow to three. HPA actions remain unverified until a metrics provider and cluster are available.</p>
+
+<h3>9. ConfigMaps, Secrets and network boundaries</h3>
+<p>ConfigMaps hold non-sensitive values. Deployments load the shared app ConfigMap with <code>envFrom</code> and use a separate Gateway ConfigMap. Sensitive database, Redis, session-validation, internal-service and admin-provisioning values come from Secret references. The manifests expect Secrets named <code>emerald-db-credentials</code> and <code>emerald-security-credentials</code>; they do not create those values. The TLS Secret <code>emerald-local-tls</code> is also supplied separately. Base64 encoding is not encryption: protect Secret access with RBAC and appropriate cluster-level encryption. No secret values or TLS private keys are committed by this Kustomize package.</p>
+<p>All three application Services and Redis are ClusterIP. NGINX Gateway Fabric terminates external TLS and forwards API traffic only to the Gateway Service. Spring Cloud Gateway then routes to Member or Society. NetworkPolicies limit selected ingress paths, while the current policies leave egress governed by the cluster’s default behavior. Policy enforcement depends on a CNI that supports NetworkPolicy. No direct external backend, Redis, or PostgreSQL Service is created here.</p>
+
+<h3>10. NGINX Gateway API, rolling updates and self-healing</h3>
+<p><code>GatewayClass nginx</code> identifies the NGINX controller. <code>Gateway emerald-edge</code> declares HTTP/HTTPS listeners for <code>emerald.local</code>; TLS ends at the HTTPS listener. HTTPRoute redirects HTTP to HTTPS and forwards <code>/api/</code> requests to the existing <code>api-gateway</code> Service. NGINX’s upstream policy is round-robin across eligible Gateway endpoints. Spring Cloud Gateway remains the application router; NGINX does not route around it to backend services.</p>
+<pre><code># Existing HTTPRoute backend reference
+backendRefs:
+  - name: api-gateway
+    port: 8080
+    weight: 1
+
+# Existing Deployment rollout settings
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1</code></pre>
+<p>Society, Member and Gateway Deployments use RollingUpdate with <code>maxUnavailable: 0</code> and <code>maxSurge: 1</code>. Kubernetes creates a replacement during rollout, waits for readiness before it receives normal Service traffic, and then removes an old Pod. A Deployment also recreates a deleted Pod to meet the HPA-selected count. A rollout can still interrupt an in-flight request; this configuration is not a zero-downtime guarantee.</p>
+
+<h3>11. Kustomize package and safe apply prerequisites</h3>
+<p>The repository has no prior Kustomize root or Helm chart, so this change adds one Kustomize root at <code>kubernetes/kustomization.yaml</code>. It references the existing resources without copying them. The package includes the namespace, ConfigMaps, Deployments, Services, Redis, NetworkPolicies, Gateway API objects and HPAs. The Gateway API/NGINX custom resource definitions and controller must already be installed for those custom resources to be accepted. Create the referenced DB/security/TLS Secrets first, and make PostgreSQL reachable at the configured <code>host.docker.internal</code> address in this kind setup. Images must be built and loaded separately using the existing <code>scripts/kubernetes/build-load-images.ps1</code>; its defaults match the tags in the application Deployments. None of these prerequisites was executed here.</p>
+<pre><code># Documentation only — not run for this change
+kubectl apply -f kubernetes/namespace.yaml
+# Create the required Secrets using local values; do not commit them.
+kubectl apply -k kubernetes/
+kubectl get deployments,pods,services,endpointslices -n emerald-housing
+kubectl get hpa -n emerald-housing</code></pre>
+
+<h3>12. Manual inspection, rollout and recovery guide</h3>
+<pre><code># Documentation only — run manually when the cluster is ready
+kind get clusters
+kubectl get namespaces
+kubectl get deployments,pods,services,endpointslices -n emerald-housing -o wide
+kubectl describe deployment society-service -n emerald-housing
+kubectl get hpa -n emerald-housing
+kubectl describe hpa society-service -n emerald-housing
+kubectl top pods -n emerald-housing             # requires a resource metrics provider
+kubectl rollout status deployment/society-service -n emerald-housing
+kubectl rollout history deployment/api-gateway -n emerald-housing
+kubectl get events -n emerald-housing --sort-by=.lastTimestamp
+kubectl logs deployment/member-service -n emerald-housing --all-pods=true
+# Delete one Pod to observe Deployment replacement (manual exercise only):
+kubectl delete pod &lt;pod-name&gt; -n emerald-housing
+# Local diagnostic access to the private Gateway Service:
+kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing
+# Remove resources only after checking what data/volumes they own:
+kubectl delete -k kubernetes/</code></pre>
+<p class="small">The last command removes the Kustomize-managed resources. It is included as a learning reference, not as a cleanup recommendation; inspect persistent data and externally managed Gateway/Secret resources before cleanup.</p>
+
+<h3>13. Docker Compose and Kubernetes</h3>
+<div class="tablebox"><table><thead><tr><th>Topic</th><th>Docker Compose</th><th>Kubernetes in this repository</th></tr></thead><tbody>
+<tr><td>Startup</td><td>Compose starts services on a Docker host.</td><td>Deployments schedule Pods and reconcile desired replicas.</td></tr><tr><td>Networking</td><td>Compose service names on a Docker network.</td><td>ClusterIP Services and Kubernetes DNS names.</td></tr><tr><td>Scaling</td><td>Manual Compose replica behavior depends on published ports and setup.</td><td>Service balances ready Pod endpoints; HPA changes replica count from CPU metrics.</td></tr><tr><td>Health and recovery</td><td>Container health checks/restart policies.</td><td>Startup/readiness/liveness probes, ReplicaSets and Deployment reconciliation.</td></tr><tr><td>Configuration</td><td>Compose environment and mounted files.</td><td>ConfigMaps and Secret references.</td></tr><tr><td>Rollouts</td><td>Usually recreate or replace containers.</td><td>RollingUpdate strategy with readiness-gated endpoints.</td></tr><tr><td>External entry</td><td>Compose-specific NGINX reverse proxy.</td><td>NGINX Gateway Fabric, Gateway API and TLS Secret.</td></tr></tbody></table></div>
+
+<h3>14. System design ideas in everyday language</h3>
+<ul><li><strong>Desired state:</strong> the YAML says how many copies and which settings should exist.</li><li><strong>Reconciliation:</strong> Kubernetes keeps comparing the live cluster with that request and corrects differences.</li><li><strong>Service discovery:</strong> applications use stable Service DNS names rather than memorizing replaceable Pod IP addresses.</li><li><strong>Self-healing:</strong> a Deployment replaces a missing Pod; readiness stops sending new calls to a Pod that is not ready.</li><li><strong>Horizontal scaling:</strong> add or remove application copies. HPA uses CPU here; it does not directly measure API request count.</li><li><strong>Rolling update:</strong> replace old Pods in controlled batches while keeping ready replicas available where capacity allows.</li><li><strong>Resource isolation:</strong> requests reserve scheduling capacity and limits cap container usage, though they still require measured tuning.</li><li><strong>Declarative infrastructure:</strong> Kustomize collects files describing the target resources; it does not itself create a cluster or install external controllers.</li></ul>
+
+<h3>15. Phase 16 completion status</h3>
+<ul><li><strong>Present and reused:</strong> namespace, app Deployments and ClusterIP Services, ConfigMaps, Redis, NetworkPolicies, NGINX Gateway API/TLS routing, probes, resource requests/limits and rolling updates.</li><li><strong>Added:</strong> three CPU-based HPAs and <code>kubernetes/kustomization.yaml</code>; app Deployment replica fields were removed so HPA owns their scale.</li><li><strong>Preserved:</strong> Kubernetes DNS, independent Society/Member databases, RestClient validation, Redis sessions/rate limiting/cache, Spring Security, Resilience4j and NGINX-to-Spring-Gateway routing.</li><li><strong>Not added:</strong> Kafka, observability stack, test frameworks or CI/CD.</li><li><strong>Pending manual verification:</strong> Kustomize build/apply, metrics-server availability, Pod readiness, DNS, EndpointSlices, HPA behavior, rollout, Pod replacement, Redis/session continuity, NGINX HTTPS, NetworkPolicy enforcement and database reachability.</li><li>No Markdown files or automated tests were changed. No tests, Maven, Docker, Helm, Kubernetes deployment or application startup commands were run.</li></ul>
 </section>
 <footer><p>Read phases in order. For Kubernetes, open the configuration walkthrough and reveal Cluster, Namespace, then a resource. The matching file settings appear alongside the flow. This standalone page uses no external images, fonts or scripts.</p><p>File line numbers can move if the source files change.</p></footer>
 </main></div>
