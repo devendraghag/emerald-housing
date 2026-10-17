@@ -18,10 +18,15 @@ spec:
       app: api-gateway-canary
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8080"
       labels:
         app: api-gateway-canary
         app.kubernetes.io/name: api-gateway-canary
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
@@ -40,6 +45,8 @@ spec:
             - configMapRef:
                 name: api-gateway-config
           env:
+            - name: INSTANCE_ID
+              value: api-gateway-canary
             - name: GATEWAY_AUTHENTICATION_TOKEN
               valueFrom:
                 secretKeyRef:

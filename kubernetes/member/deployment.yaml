@@ -25,6 +25,7 @@ spec:
         app: member-service
         app.kubernetes.io/name: member-service
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

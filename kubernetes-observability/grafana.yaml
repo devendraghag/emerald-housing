@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: emerald-housing
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        editable: false
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo:3200
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: emerald-housing
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: Emerald
+        orgId: 1
+        folder: Emerald Housing
+        type: file
+        disableDeletion: true
+        editable: false
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emerald-service-dashboard
+  namespace: emerald-housing
+data:
+  service-overview.json: |
+    {
+      "id": null,
+      "uid": "emerald-service-overview",
+      "title": "Emerald Housing Service Overview",
+      "tags": ["emerald", "spring-boot"],
+      "timezone": "browser",
+      "schemaVersion": 41,
+      "version": 1,
+      "refresh": "15s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "HTTP requests per second by service",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [{"expr": "sum by (app) (rate(http_server_requests_seconds_count{namespace=\"emerald-housing\"}[5m]))", "legendFormat": "{{app}}", "refId": "A"}]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "HTTP 5xx responses per second",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [{"expr": "sum by (app) (rate(http_server_requests_seconds_count{namespace=\"emerald-housing\",status=~\"5..\"}[5m]))", "legendFormat": "{{app}}", "refId": "A"}]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "HTTP p95 latency by service",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [{"expr": "histogram_quantile(0.95, sum by (le, app) (rate(http_server_requests_seconds_bucket{namespace=\"emerald-housing\"}[5m])))", "legendFormat": "{{app}}", "refId": "A"}]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Active Hikari connections by Pod",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [{"expr": "sum by (app, pod, pool) (hikaricp_connections_active{namespace=\"emerald-housing\"})", "legendFormat": "{{app}} / {{pod}} / {{pool}}", "refId": "A"}]
+        },
+        {
+          "id": 5,
+          "type": "logs",
+          "title": "Recent application logs",
+          "datasource": {"type": "loki", "uid": "loki"},
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 16},
+          "targets": [{"expr": "{namespace=\"emerald-housing\", container=~\"member-service|society-service|api-gateway\"}", "refId": "A"}]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: emerald-housing
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grafana
+          image: grafana/grafana:13.2.4
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-observability-credentials
+                  key: grafana-admin-password
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: emerald-service-dashboard
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: emerald-housing
+spec:
+  type: ClusterIP
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

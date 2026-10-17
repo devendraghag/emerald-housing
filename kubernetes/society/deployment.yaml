@@ -25,6 +25,7 @@ spec:
         app: society-service
         app.kubernetes.io/name: society-service
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

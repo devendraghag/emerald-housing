@@ -25,6 +25,7 @@ spec:
         app: api-gateway
         app.kubernetes.io/name: api-gateway
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

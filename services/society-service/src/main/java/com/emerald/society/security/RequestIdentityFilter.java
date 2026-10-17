@@ -36,7 +36,8 @@ public class RequestIdentityFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/actuator/health");
+        return request.getRequestURI().startsWith("/actuator/health")
+                || request.getRequestURI().equals("/actuator/prometheus");
     }
 
     @Override

@@ -31,6 +31,8 @@ class CorrelationAndErrorFilterTest {
                 .isEqualTo("request-123");
         assertThat(exchange.getResponse().getHeaders().getFirst(CorrelationAndErrorFilter.CORRELATION_HEADER))
                 .isEqualTo("request-123");
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-Gateway-Instance"))
+                .isEqualTo("api-gateway");
     }
 
     @Test

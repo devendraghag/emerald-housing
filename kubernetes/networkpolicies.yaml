@@ -40,9 +40,6 @@ spec:
               app: api-gateway
         - podSelector:
             matchLabels:
-              app: prometheus
-        - podSelector:
-            matchLabels:
               app: member-service
       ports:
         - protocol: TCP
@@ -105,3 +102,14 @@ spec:
             matchLabels:
               app: member-service
         - podSelector:
+            matchLabels:
+              app: society-service
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: emerald-edge
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080

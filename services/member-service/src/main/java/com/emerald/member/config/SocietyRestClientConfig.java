@@ -11,12 +11,13 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class SocietyRestClientConfig {
     @Bean
-    RestClient societyRestClient(@Value("${society.service.base-url}") String baseUrl,
+    RestClient societyRestClient(RestClient.Builder builder,
+            @Value("${society.service.base-url}") String baseUrl,
             @Value("${society.service.connect-timeout:2s}") Duration connectTimeout,
             @Value("${society.service.read-timeout:3s}") Duration readTimeout) {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(readTimeout);
-        return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+        return builder.baseUrl(baseUrl).requestFactory(factory).build();
     }
 }

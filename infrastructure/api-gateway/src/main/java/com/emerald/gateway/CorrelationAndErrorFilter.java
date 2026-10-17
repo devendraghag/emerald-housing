@@ -8,6 +8,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -30,9 +32,18 @@ public class CorrelationAndErrorFilter implements WebFilter {
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     private final JsonMapper jsonMapper;
+    private final String instanceId;
 
-    public CorrelationAndErrorFilter(JsonMapper jsonMapper) {
+    @Autowired
+    public CorrelationAndErrorFilter(JsonMapper jsonMapper,
+            @Value("${INSTANCE_ID:api-gateway}") String instanceId) {
         this.jsonMapper = jsonMapper;
+        this.instanceId = instanceId;
+    }
+
+    /** Retains the direct construction used by the focused filter tests. */
+    public CorrelationAndErrorFilter(JsonMapper jsonMapper) {
+        this(jsonMapper, "api-gateway");
     }
 
     @Override
@@ -49,8 +60,14 @@ public class CorrelationAndErrorFilter implements WebFilter {
                 .response(exchange.getResponse())
                 .build();
         exchange.getResponse().getHeaders().set(CORRELATION_HEADER, correlationId);
+        if (instanceId != null && !instanceId.isBlank()) {
+            exchange.getResponse().getHeaders().set("X-Gateway-Instance", instanceId);
+        }
         exchange.getResponse().beforeCommit(() -> {
             exchange.getResponse().getHeaders().set(CORRELATION_HEADER, correlationId);
+            if (instanceId != null && !instanceId.isBlank()) {
+                exchange.getResponse().getHeaders().set("X-Gateway-Instance", instanceId);
+            }
             return Mono.empty();
         });
 
