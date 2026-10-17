@@ -1,10 +1,6 @@
 spring:
   application:
     name: society-service
-  datasource:
-    url: ${SOCIETY_DB_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/society_db}
-    username: ${SOCIETY_DB_USERNAME:emerald}
-    password: ${SOCIETY_DB_PASSWORD:emerald_local}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -12,19 +8,62 @@ spring:
     show-sql: ${JPA_SHOW_SQL:false}
   flyway:
     enabled: true
+
+app:
+  datasource:
+    writer:
+      jdbc-url: ${SOCIETY_DB_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/society_db}
+      username: ${SOCIETY_DB_USERNAME:emerald}
+      password: ${SOCIETY_DB_PASSWORD:emerald_local}
+      maximum-pool-size: ${SOCIETY_DB_POOL_MAX_SIZE:8}
+      minimum-idle: ${SOCIETY_DB_POOL_MIN_IDLE:1}
+      connection-timeout: ${SOCIETY_DB_POOL_CONNECTION_TIMEOUT:2000}
+      validation-timeout: ${SOCIETY_DB_POOL_VALIDATION_TIMEOUT:1000}
+      idle-timeout: ${SOCIETY_DB_POOL_IDLE_TIMEOUT:600000}
+      max-lifetime: ${SOCIETY_DB_POOL_MAX_LIFETIME:1800000}
+    reader:
+      enabled: ${SOCIETY_DB_REPLICA_ENABLED:false}
+      jdbc-url: ${SOCIETY_DB_REPLICA_URL:}
+      username: ${SOCIETY_DB_REPLICA_USERNAME:${SOCIETY_DB_USERNAME:emerald}}
+      password: ${SOCIETY_DB_REPLICA_PASSWORD:${SOCIETY_DB_PASSWORD:emerald_local}}
+      maximum-pool-size: ${SOCIETY_DB_REPLICA_POOL_MAX_SIZE:4}
+      minimum-idle: ${SOCIETY_DB_REPLICA_POOL_MIN_IDLE:1}
+      connection-timeout: ${SOCIETY_DB_POOL_CONNECTION_TIMEOUT:2000}
+      validation-timeout: ${SOCIETY_DB_POOL_VALIDATION_TIMEOUT:1000}
+      idle-timeout: ${SOCIETY_DB_POOL_IDLE_TIMEOUT:600000}
+      max-lifetime: ${SOCIETY_DB_POOL_MAX_LIFETIME:1800000}
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      connect-timeout: ${SOCIETY_REDIS_CONNECT_TIMEOUT:500ms}
-      timeout: ${SOCIETY_REDIS_COMMAND_TIMEOUT:500ms}
+      host: ${SOCIETY_CACHE_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${SOCIETY_CACHE_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${SOCIETY_CACHE_REDIS_PASSWORD:${REDIS_PASSWORD:}}
+      connect-timeout: ${SOCIETY_CACHE_REDIS_CONNECT_TIMEOUT:${SOCIETY_REDIS_CONNECT_TIMEOUT:500ms}}
+      timeout: ${SOCIETY_CACHE_REDIS_COMMAND_TIMEOUT:${SOCIETY_REDIS_COMMAND_TIMEOUT:500ms}}
       lettuce:
         pool:
-          max-active: ${SOCIETY_REDIS_POOL_MAX_ACTIVE:12}
-          max-idle: ${SOCIETY_REDIS_POOL_MAX_IDLE:8}
-          min-idle: ${SOCIETY_REDIS_POOL_MIN_IDLE:1}
-          max-wait: ${SOCIETY_REDIS_POOL_MAX_WAIT:500ms}
+          max-active: ${SOCIETY_CACHE_REDIS_POOL_MAX_ACTIVE:${SOCIETY_REDIS_POOL_MAX_ACTIVE:12}}
+          max-idle: ${SOCIETY_CACHE_REDIS_POOL_MAX_IDLE:${SOCIETY_REDIS_POOL_MAX_IDLE:8}}
+          min-idle: ${SOCIETY_CACHE_REDIS_POOL_MIN_IDLE:${SOCIETY_REDIS_POOL_MIN_IDLE:1}}
+          max-wait: ${SOCIETY_CACHE_REDIS_POOL_MAX_WAIT:${SOCIETY_REDIS_POOL_MAX_WAIT:500ms}}
+  instance:
+    id: ${INSTANCE_ID:local}
+    header-enabled: ${INSTANCE_HEADER_ENABLED:true}
+
+society:
+  cache:
+    ttl:
+      jitter: ${SOCIETY_CACHE_TTL_JITTER:30s}
+      not-found: ${SOCIETY_CACHE_TTL_NOT_FOUND:30s}
+    load-lock:
+      wait: ${SOCIETY_CACHE_LOAD_LOCK_WAIT:2s}
+      lease: ${SOCIETY_CACHE_LOAD_LOCK_LEASE:30s}
+      retry: ${SOCIETY_CACHE_LOAD_LOCK_RETRY:25ms}
+    redis-fallback:
+      max-concurrent-loads: ${SOCIETY_CACHE_REDIS_FALLBACK_MAX_CONCURRENT_LOADS:16}
+    warmup:
+      enabled: ${SOCIETY_CACHE_WARMUP_ENABLED:true}
+    redis:
+      memory-scrape-interval: ${SOCIETY_CACHE_REDIS_MEMORY_SCRAPE_INTERVAL:30s}
 
 server:
   port: ${SOCIETY_SERVER_PORT:8081}
@@ -40,7 +79,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: never
@@ -57,15 +96,21 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
+    export:
+      otlp:
+        enabled: ${TRACING_OTLP_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
 
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [correlationId=%X{correlationId:-}] %logger{36} - %msg%n%ex"
-
-app:
-  instance:
-    id: ${INSTANCE_ID:local}
-    header-enabled: ${INSTANCE_HEADER_ENABLED:true}
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [correlationId=%X{correlationId:-}] [traceId=%X{traceId:-},spanId=%X{spanId:-}] %logger{36} - %msg%n%ex"
 
 emerald:
   security:

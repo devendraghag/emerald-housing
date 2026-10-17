@@ -32,9 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 class MemberMembershipIntegrationTest {
     @Container static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
     @DynamicPropertySource static void database(DynamicPropertyRegistry properties) {
-        properties.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        properties.add("spring.datasource.username", POSTGRES::getUsername);
-        properties.add("spring.datasource.password", POSTGRES::getPassword);
+        properties.add("app.datasource.writer.jdbc-url", POSTGRES::getJdbcUrl);
+        properties.add("app.datasource.writer.username", POSTGRES::getUsername);
+        properties.add("app.datasource.writer.password", POSTGRES::getPassword);
     }
     @Autowired MemberService members;
     @Autowired MembershipService assignments;

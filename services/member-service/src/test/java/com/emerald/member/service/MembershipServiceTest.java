@@ -12,6 +12,7 @@ import com.emerald.member.dto.SocietyFlatResponse;
 import com.emerald.member.exception.FlatNotFoundException;
 import com.emerald.member.exception.MemberNotFoundException;
 import com.emerald.member.exception.SocietyDependencyException;
+import com.emerald.member.lock.RedisMembershipLock;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ class MembershipServiceTest {
     @Mock MemberService members;
     @Mock SocietyClient society;
     @Mock MembershipWriter writer;
+    @Mock RedisMembershipLock membershipLock;
     @InjectMocks MembershipService service;
 
     @Test void validFlatIsCheckedBeforeMembershipIsPersisted() {
@@ -32,6 +34,8 @@ class MembershipServiceTest {
         var request = new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.now());
         var response = new MembershipResponse(UUID.randomUUID(), memberId, flatId, RelationshipType.OWNER, request.startDate(), null);
         when(society.getFlat(flatId)).thenReturn(new SocietyFlatResponse(flatId, "A-1", floorId, 1, "ACTIVE"));
+        when(membershipLock.<MembershipResponse>withMemberLock(eq(memberId), any()))
+                .thenAnswer(invocation -> invocation.<java.util.function.Supplier<MembershipResponse>>getArgument(1).get());
         when(writer.persist(memberId, request)).thenReturn(response);
         assertSame(response, service.assign(memberId, request));
         verify(members).requireActive(memberId);

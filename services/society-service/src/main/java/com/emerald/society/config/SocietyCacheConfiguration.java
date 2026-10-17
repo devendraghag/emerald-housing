@@ -9,9 +9,12 @@ import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurer;
@@ -22,6 +25,7 @@ import org.springframework.cache.interceptor.CacheOperationInvocationContext;
 import org.springframework.cache.support.NoOpCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -33,19 +37,42 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableCaching
+@EnableScheduling
 public class SocietyCacheConfiguration implements CachingConfigurer {
     public static final String FLOOR_LIST = "societyFloors";
     public static final String FLAT_BY_ID = "societyFlatById";
     public static final String FLATS_BY_FLOOR = "societyFlatsByFloor";
     public static final String ALL_FLATS = "societyFlats";
+    private static final String LOAD_LOCK_PREFIX = "society:cache:load-lock:";
+    private static final DefaultRedisScript<Long> RELEASE_IF_OWNED = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                    "return redis.call('del', KEYS[1]) else return 0 end", Long.class);
 
     private final CacheErrorHandler cacheErrorHandler;
     private final ObjectProvider<CacheManager> cacheManagers;
     private final SocietyCacheMetrics cacheMetrics;
+    private final StringRedisTemplate redis;
+    private final Duration loadLockWait;
+    private final Duration loadLockLease;
+    private final Duration loadLockRetry;
 
-    public SocietyCacheConfiguration(SocietyCacheMetrics cacheMetrics, ObjectProvider<CacheManager> cacheManagers) {
+    public SocietyCacheConfiguration(SocietyCacheMetrics cacheMetrics, ObjectProvider<CacheManager> cacheManagers,
+            StringRedisTemplate redis,
+            @Value("${society.cache.load-lock.wait:2s}") Duration loadLockWait,
+            @Value("${society.cache.load-lock.lease:30s}") Duration loadLockLease,
+            @Value("${society.cache.load-lock.retry:25ms}") Duration loadLockRetry) {
         this.cacheMetrics = cacheMetrics;
         this.cacheManagers = cacheManagers;
+        this.redis = redis;
+        if (loadLockWait.isNegative() || loadLockWait.isZero()
+                || loadLockLease.isNegative() || loadLockLease.isZero()
+                || loadLockRetry.isNegative() || loadLockRetry.isZero()
+                || loadLockRetry.compareTo(loadLockWait) > 0) {
+            throw new IllegalArgumentException("Cache load-lock durations must be positive and retry must not exceed wait");
+        }
+        this.loadLockWait = loadLockWait;
+        this.loadLockLease = loadLockLease;
+        this.loadLockRetry = loadLockRetry;
         this.cacheErrorHandler = new CacheErrorHandler() {
             @Override
             public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
@@ -74,21 +101,22 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
             @Value("${society.cache.ttl.floors:10m}") Duration floorTtl,
             @Value("${society.cache.ttl.flats-by-floor:5m}") Duration flatsByFloorTtl,
             @Value("${society.cache.ttl.flat-by-id:2m}") Duration flatByIdTtl,
-            @Value("${society.cache.ttl.all-flats:5m}") Duration allFlatsTtl) {
+            @Value("${society.cache.ttl.all-flats:5m}") Duration allFlatsTtl,
+            @Value("${society.cache.ttl.jitter:30s}") Duration ttlJitter) {
         JavaType floorListType = jsonMapper.getTypeFactory().constructCollectionType(List.class, FloorResponse.class);
         JavaType flatListType = jsonMapper.getTypeFactory().constructCollectionType(List.class, FlatResponse.class);
-        RedisCacheConfiguration defaults = cacheConfig(flatByIdTtl,
+        RedisCacheConfiguration defaults = cacheConfig(flatByIdTtl, ttlJitter,
                 new JacksonJsonRedisSerializer<>(jsonMapper, FlatResponse.class));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaults)
-                .withCacheConfiguration(FLOOR_LIST, cacheConfig(floorTtl,
+                .withCacheConfiguration(FLOOR_LIST, cacheConfig(floorTtl, ttlJitter,
                         new JacksonJsonRedisSerializer<>(jsonMapper, floorListType)))
-                .withCacheConfiguration(FLAT_BY_ID, cacheConfig(flatByIdTtl,
+                .withCacheConfiguration(FLAT_BY_ID, cacheConfig(flatByIdTtl, ttlJitter,
                         new JacksonJsonRedisSerializer<>(jsonMapper, FlatResponse.class)))
-                .withCacheConfiguration(FLATS_BY_FLOOR, cacheConfig(flatsByFloorTtl,
+                .withCacheConfiguration(FLATS_BY_FLOOR, cacheConfig(flatsByFloorTtl, ttlJitter,
                         new JacksonJsonRedisSerializer<>(jsonMapper, flatListType)))
-                .withCacheConfiguration(ALL_FLATS, cacheConfig(allFlatsTtl,
+                .withCacheConfiguration(ALL_FLATS, cacheConfig(allFlatsTtl, ttlJitter,
                         new JacksonJsonRedisSerializer<>(jsonMapper, flatListType)))
                 .initialCacheNames(Set.of(FLOOR_LIST, FLAT_BY_ID, FLATS_BY_FLOOR, ALL_FLATS))
                 .disableCreateOnMissingCache()
@@ -111,19 +139,28 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
             CacheManager manager = cacheManagers.getObject();
             return names.stream().map(name -> instrumentedCaches.computeIfAbsent(name, cacheName -> {
                 Cache cache = manager.getCache(cacheName);
-                return cache == null ? null : new InstrumentedCache(cache, cacheMetrics);
+                return cache == null ? null : new InstrumentedCache(cache, cacheMetrics, redis,
+                        loadLockWait, loadLockLease, loadLockRetry);
             })).filter(java.util.Objects::nonNull).toList();
         };
     }
 
     private static final class InstrumentedCache implements Cache {
-        private static final ReentrantLock[] LOAD_LOCKS = createLoadLocks();
         private final Cache delegate;
         private final SocietyCacheMetrics metrics;
+        private final StringRedisTemplate redis;
+        private final Duration loadLockWait;
+        private final Duration loadLockLease;
+        private final Duration loadLockRetry;
 
-        private InstrumentedCache(Cache delegate, SocietyCacheMetrics metrics) {
+        private InstrumentedCache(Cache delegate, SocietyCacheMetrics metrics, StringRedisTemplate redis,
+                Duration loadLockWait, Duration loadLockLease, Duration loadLockRetry) {
             this.delegate = delegate;
             this.metrics = metrics;
+            this.redis = redis;
+            this.loadLockWait = loadLockWait;
+            this.loadLockLease = loadLockLease;
+            this.loadLockRetry = loadLockRetry;
         }
 
         @Override public String getName() { return delegate.getName(); }
@@ -133,7 +170,7 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
         public ValueWrapper get(Object key) {
             if (metrics.shouldBypassRedis()) return null;
             try {
-                return metrics.recordCacheRead(getName(), () -> delegate.get(key));
+                return metrics.recordCacheRead(getName(), key, () -> delegate.get(key));
             } catch (RuntimeException exception) {
                 metrics.recordRedisFailure("get", exception);
                 return null;
@@ -144,7 +181,7 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
         public <T> T get(Object key, Class<T> type) {
             if (metrics.shouldBypassRedis()) return null;
             try {
-                return metrics.recordCacheRead(getName(), () -> delegate.get(key, type));
+                return metrics.recordCacheRead(getName(), key, () -> delegate.get(key, type));
             } catch (RuntimeException exception) {
                 metrics.recordRedisFailure("get", exception);
                 return null;
@@ -156,21 +193,52 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
         public <T> T get(Object key, Callable<T> valueLoader) {
             ValueWrapper cached = get(key);
             if (cached != null) return (T) cached.get();
-            ReentrantLock lock = LOAD_LOCKS[Math.floorMod((getName() + key).hashCode(), LOAD_LOCKS.length)];
-            boolean locked;
+            if (metrics.shouldBypassRedis()) return load(valueLoader, key, false);
+
+            String lockKey = LOAD_LOCK_PREFIX + getName() + ":" + key;
+            String ownerToken = UUID.randomUUID().toString();
+            long deadline = System.nanoTime() + loadLockWait.toNanos();
+            boolean acquired = false;
             try {
-                locked = lock.tryLock(10, TimeUnit.MILLISECONDS);
+                while (true) {
+                    if (metrics.shouldBypassRedis()) return load(valueLoader, key, false);
+                    try {
+                        Boolean result = redis.opsForValue().setIfAbsent(lockKey, ownerToken, loadLockLease);
+                        acquired = Boolean.TRUE.equals(result);
+                    } catch (RuntimeException exception) {
+                        metrics.recordRedisFailure("load-lock", exception);
+                        return load(valueLoader, key, false);
+                    }
+
+                    if (acquired) {
+                        cached = readAfterLock(key);
+                        if (cached != null) return (T) cached.get();
+                        return load(valueLoader, key, true);
+                    }
+
+                    cached = readAfterLock(key);
+                    if (cached != null) return (T) cached.get();
+
+                    long remainingNanos = deadline - System.nanoTime();
+                    if (remainingNanos <= 0) {
+                        metrics.recordLoadLockTimeout(getName());
+                        return load(valueLoader, key, false);
+                    }
+                    TimeUnit.NANOSECONDS.sleep(Math.min(remainingNanos, loadLockRetry.toNanos()));
+                }
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 return load(valueLoader, key, false);
-            }
-            if (!locked) return load(valueLoader, key, false);
-            try {
-                cached = readAfterLock(key);
-                if (cached != null) return (T) cached.get();
-                return load(valueLoader, key, true);
             } finally {
-                lock.unlock();
+                if (acquired) releaseLoadLock(lockKey, ownerToken);
+            }
+        }
+
+        private void releaseLoadLock(String lockKey, String ownerToken) {
+            try {
+                redis.execute(RELEASE_IF_OWNED, java.util.List.of(lockKey), ownerToken);
+            } catch (RuntimeException exception) {
+                metrics.recordRedisFailure("load-lock-release", exception);
             }
         }
 
@@ -243,17 +311,19 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
             }
         }
 
-        private static ReentrantLock[] createLoadLocks() {
-            ReentrantLock[] locks = new ReentrantLock[64];
-            java.util.Arrays.setAll(locks, index -> new ReentrantLock());
-            return locks;
-        }
     }
 
-    private static RedisCacheConfiguration cacheConfig(Duration ttl,
+    private static RedisCacheConfiguration cacheConfig(Duration ttl, Duration jitter,
             JacksonJsonRedisSerializer<?> valueSerializer) {
+        if (ttl.isNegative() || ttl.isZero() || jitter.isNegative() || jitter.compareTo(ttl) >= 0) {
+            throw new IllegalArgumentException("Cache TTL must be positive and jitter must be smaller than the TTL");
+        }
         return RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(ttl)
+                .entryTtl((key, value) -> {
+                    long jitterMillis = jitter.toMillis();
+                    long reduction = jitterMillis == 0 ? 0 : ThreadLocalRandom.current().nextLong(jitterMillis + 1);
+                    return Duration.ofMillis(ttl.toMillis() - reduction);
+                })
                 .disableCachingNullValues()
                 .computePrefixWith(cacheName -> "society:cache:" + cacheName + "::")
                 .serializeKeysWith(SerializationPair.fromSerializer(new StringRedisSerializer()))

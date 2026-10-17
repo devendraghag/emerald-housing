@@ -16,6 +16,9 @@ spec:
         - podSelector:
             matchLabels:
               app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: prometheus
       ports:
         - protocol: TCP
           port: 8080
@@ -23,7 +26,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: redis-ingress-from-gateway
+  name: redis-ingress-from-member-and-gateway
   namespace: emerald-housing
 spec:
   podSelector:
@@ -35,6 +38,28 @@ spec:
         - podSelector:
             matchLabels:
               app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: prometheus
+        - podSelector:
+            matchLabels:
+              app: member-service
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-cache-ingress-from-society
+  namespace: emerald-housing
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-cache
+  policyTypes: [Ingress]
+  ingress:
+    - from:
         - podSelector:
             matchLabels:
               app: society-service
@@ -57,6 +82,9 @@ spec:
         - podSelector:
             matchLabels:
               app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: prometheus
       ports:
         - protocol: TCP
           port: 8080
@@ -77,11 +105,3 @@ spec:
             matchLabels:
               app: member-service
         - podSelector:
-            matchLabels:
-              app: society-service
-        - podSelector:
-            matchLabels:
-              gateway.networking.k8s.io/gateway-name: emerald-edge
-      ports:
-        - protocol: TCP
-          port: 8080

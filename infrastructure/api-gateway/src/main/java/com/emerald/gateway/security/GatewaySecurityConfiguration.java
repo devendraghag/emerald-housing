@@ -54,7 +54,7 @@ public class GatewaySecurityConfiguration {
                         .accessDeniedHandler((exchange, denied) -> errors.write(exchange,
                                 HttpStatus.FORBIDDEN, "CSRF_TOKEN_INVALID", "A valid CSRF token is required")))
                 .authorizeExchange(authorize -> authorize
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/api/v1/auth/csrf",
+                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus", "/api/v1/auth/csrf",
                                 "/api/v1/auth/login", "/internal/auth/session").permitAll()
                         .pathMatchers("/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/**").hasRole("ADMIN")

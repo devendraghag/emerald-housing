@@ -2,7 +2,7 @@
     "info":  {
                  "_postman_id":  "a3b55d97-5679-41bf-8a36-55f0486aa201",
                  "name":  "Emerald Housing Society - API and Phase 19",
-                 "description":  "Society and Member API collection for current routes, session authentication, CSRF, idempotency, resilience, caching, and Phase 19 membership concurrency. externalBaseUrl defaults to a local Gateway; edgeBaseUrl is for HTTPS through NGINX. Sign in and fetch a fresh CSRF token before protected requests.",
+                 "description":  "Society and Member API collection for current routes, session authentication, CSRF, idempotency, resilience, distributed caching, and Phase 19 membership concurrency. externalBaseUrl defaults to a local Gateway; edgeBaseUrl is for HTTPS through NGINX. Sign in and fetch a fresh CSRF token before protected requests. Phase 10 cache diagnostics are manual; no request flushes or deletes cache keys.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [
@@ -131,7 +131,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/floors",
-                                                      "description":  "Returns the 18 floor records ordered from 1 to 18. Expected: 200 OK and an array of {\"floorNumber\": number} records. Step 10 manual cache check: call once for a likely cache miss, then repeat within 10 minutes to observe the cached response. Redis failure should fall back to PostgreSQL; no cache-control endpoint is exposed."
+                                                      "description":  "Returns the 18 floor records ordered from 1 to 18. Expected: 200 OK and an array of {\"floorNumber\": number} records. Each Society Pod attempts a startup warmup; if cold, the first read loads PostgreSQL and populates dedicated redis-cache. Repeat to observe a hit. Cache TTL is 10 minutes with up to 30 seconds of downward jitter. On cache Redis outage, fallback database loads are limited to 16 concurrent per Pod; overload returns 503 CACHE_FALLBACK_OVERLOADED."
                                                   }
                                   },
                                   {
@@ -165,6 +165,28 @@
                                                                  ],
                                                       "url":  "{{societyBaseUrl}}/actuator/health",
                                                       "description":  "Direct diagnostic only. Health endpoints are intentionally not published through the NGINX external route; use the documented port-forward or kubectl health checks."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Society Cache Redis Memory Ratio",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{societyBaseUrl}}/actuator/metrics/society.cache.redis.memory.used.ratio",
+                                                      "description":  "Direct Society diagnostic; sign in as Admin first so Postman has the SESSION cookie. Expected: Actuator metric response with the cache Redis used/max memory ratio, sampled every 30 seconds. Review per Pod and configure alert thresholds in your metrics platform; this request does not create alerts. Metrics may be unavailable before Society is updated with the Phase 10 changes."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET Society Hot Cache Keys",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{societyBaseUrl}}/actuator/metrics/society.cache.key.accesses",
+                                                      "description":  "Direct Society diagnostic; sign in as Admin first so Postman has the SESSION cookie. Shows bounded per-Pod cache-key access gauges (key_hash tags, at most 256 tracked keys per Pod). Compare across Society Pods to spot a disproportionately popular key. This provides visibility; it does not automatically replicate or rebalance hot keys."
                                                   }
                                   }
                               ]
@@ -633,7 +655,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats",
-                                                      "description":  "Lists configured flats, sorted by flat number. Expected 200 and an array. Empty flat inventory is valid. Step 10 caches this reference list for up to 5 minutes; repeat the request to observe the cached response."
+                                                      "description":  "Lists configured flats, sorted by flat number. Expected 200 and an array. Empty flat inventory is valid. This response uses the dedicated Society cache Redis with a 5-minute base TTL and up to 30 seconds of downward jitter. A Redis miss uses PostgreSQL; a distributed per-key lock coordinates concurrent Society Pods."
                                                   }
                                   },
                                   {
@@ -647,7 +669,7 @@
                                                                      }
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
-                                                      "description":  "Admin reference read: expected 200 with flatId, flatNumber, floorId, floorNumber and status; response echoes X-Correlation-ID. Step 10 caches this admin read for up to 2 minutes. Member Service's authenticated flat-assignment validation uses the same endpoint but deliberately takes an uncached authoritative database path."
+                                                      "description":  "Admin reference read: expected 200 with flatId, flatNumber, floorId, floorNumber and status; response echoes X-Correlation-ID. This Admin read is cached in dedicated redis-cache for a 2-minute base TTL with up to 30 seconds of downward jitter. Member Service's authenticated flat-assignment validation deliberately takes an uncached authoritative database path."
                                                   }
                                   },
                                   {
@@ -658,7 +680,7 @@
 
                                                                  ],
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/00000000-0000-0000-0000-000000000099",
-                                                      "description":  "Syntactically valid but unknown flat UUID. Expected 404 with the Society service\u0027s structured RESOURCE_NOT_FOUND error."
+                                                      "description":  "Syntactically valid but unknown flat UUID. Expected 404 with the Society service's structured RESOURCE_NOT_FOUND error. Repeat within 30 seconds: the Admin cached-read path uses a short-lived negative marker, so PostgreSQL is not queried again. Member assignment validation does not use this negative cache."
                                                   }
                                   },
                                   {
@@ -696,7 +718,7 @@
                                                                  ],
                                                       "body":  null,
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/by-floor/{{floorNumber}}",
-                                                      "description":  "Returns flats on the selected floor in flat-number order. Expected: 200; unknown floor gives 404. Step 10 caches this list for up to 5 minutes. Repeat the lookup to observe the cached response."
+                                                      "description":  "Returns flats on the selected floor in flat-number order. Expected: 200; unknown floor gives 404. Uses dedicated redis-cache with a 5-minute base TTL and up to 30 seconds of downward jitter. On simultaneous cold misses, Society Pods coordinate through a short Redis lock; a waiter can load without caching after its 2-second wait expires."
                                                   },
                                       "response":  [
 
@@ -743,7 +765,7 @@
                                                                                }
                                                                },
                                                       "url":  "{{externalBaseUrl}}/api/v1/flats/{{flatId}}",
-                                                      "description":  "Updates the flat number and floor while preserving its ID and audit creation time. Expected: 200; invalid data 400; duplicate flat number 409. Step 10 publishes invalidation after the database commit for the flat ID, all-flats list, and affected old/new floor lists. Repeat GET Flat By ID and GET Flats By Floor to observe fresh data."
+                                                      "description":  "Updates the flat number and floor while preserving its ID and audit creation time. Expected: 200; invalid data 400; duplicate flat number 409. Cache invalidation runs after commit for the flat ID, negative marker, all-flats list, and affected old/new floor lists. Repeat GET Flat By ID and GET Flats By Floor to observe fresh data."
                                                   },
                                       "response":  [
 

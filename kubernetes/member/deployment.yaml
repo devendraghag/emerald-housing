@@ -17,6 +17,10 @@ spec:
       app: member-service
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8080"
       labels:
         app: member-service
         app.kubernetes.io/name: member-service
@@ -53,6 +57,18 @@ spec:
                 secretKeyRef:
                   name: emerald-db-credentials
                   key: member-password
+            - name: MEMBER_DB_REPLICA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-db-credentials
+                  key: member-replica-username
+                  optional: true
+            - name: MEMBER_DB_REPLICA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-db-credentials
+                  key: member-replica-password
+                  optional: true
             - name: SESSION_VALIDATION_TOKEN
               valueFrom:
                 secretKeyRef:

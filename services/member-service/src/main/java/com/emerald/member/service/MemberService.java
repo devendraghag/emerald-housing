@@ -48,7 +48,7 @@ public class MemberService {
     private final IdempotencyRecordRepository idempotencyRecords;
     private final JsonMapper jsonMapper;
     private final TransactionTemplate idempotencyTransaction;
-    private final TransactionTemplate idempotencyReadTransaction;
+    private final TransactionTemplate idempotencyLookupTransaction;
     private final Duration idempotencyTtl;
     private final Counter idempotencyReplayCounter;
     private final Counter idempotencyConflictCounter;
@@ -68,9 +68,9 @@ public class MemberService {
         this.idempotencyConflictCounter = meterRegistry.counter("emerald.idempotency.conflicts");
         this.idempotencyTransaction = new TransactionTemplate(transactionManager);
         this.idempotencyTransaction.setTimeout(15);
-        this.idempotencyReadTransaction = new TransactionTemplate(transactionManager);
-        this.idempotencyReadTransaction.setReadOnly(true);
-        this.idempotencyReadTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // This conflict lookup must see a just-committed idempotency record, so route it to the primary.
+        this.idempotencyLookupTransaction = new TransactionTemplate(transactionManager);
+        this.idempotencyLookupTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /** Retains the original service construction used by existing focused tests. */
@@ -79,7 +79,7 @@ public class MemberService {
         this.idempotencyRecords = null;
         this.jsonMapper = null;
         this.idempotencyTransaction = null;
-        this.idempotencyReadTransaction = null;
+        this.idempotencyLookupTransaction = null;
         this.idempotencyTtl = Duration.ofHours(24);
         this.idempotencyReplayCounter = null;
         this.idempotencyConflictCounter = null;
@@ -118,7 +118,7 @@ public class MemberService {
             if (result == null) throw new IllegalStateException("Member creation transaction returned no result");
             return result;
         } catch (DataIntegrityViolationException duplicateKeyOrConstraint) {
-            Optional<IdempotencyRecordEntity> existing = idempotencyReadTransaction.execute(transaction ->
+            Optional<IdempotencyRecordEntity> existing = idempotencyLookupTransaction.execute(transaction ->
                     idempotencyRecords.findByActorIdAndOperationAndIdempotencyKey(
                             actorId, CREATE_MEMBER_OPERATION, idempotencyKey));
             if (existing == null || existing.isEmpty()) throw duplicateKeyOrConstraint;

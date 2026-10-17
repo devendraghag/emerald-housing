@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-canary
+  namespace: emerald-housing
+  labels:
+    app.kubernetes.io/name: api-gateway-canary
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: api-gateway-canary
+  template:
+    metadata:
+      labels:
+        app: api-gateway-canary
+        app.kubernetes.io/name: api-gateway-canary
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api-gateway
+          image: emerald/api-gateway:canary
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-gateway-config
+          env:
+            - name: GATEWAY_AUTHENTICATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: gateway-authentication-token
+            - name: SESSION_VALIDATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: session-validation-token
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: redis-password
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 750m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

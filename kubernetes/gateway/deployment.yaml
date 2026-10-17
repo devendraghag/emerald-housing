@@ -17,6 +17,10 @@ spec:
       app: api-gateway
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8080"
       labels:
         app: api-gateway
         app.kubernetes.io/name: api-gateway

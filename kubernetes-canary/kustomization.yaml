@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../kubernetes
+  - gateway-canary-deployment.yaml
+  - gateway-canary-service.yaml
+  - gateway-canary-network-policy.yaml
+patches:
+  - target:
+      group: gateway.networking.k8s.io
+      version: v1
+      kind: HTTPRoute
+      name: emerald-api-to-spring-gateway
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/backendRefs
+        value:
+          - name: api-gateway
+            port: 8080
+            weight: 90
+          - name: api-gateway-canary
+            port: 8080
+            weight: 10
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: society-ingress-from-applications
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          podSelector:
+            matchLabels:
+              app: api-gateway-canary
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: redis-ingress-from-member-and-gateway
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          podSelector:
+            matchLabels:
+              app: api-gateway-canary
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: member-ingress-from-gateway
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          podSelector:
+            matchLabels:
+              app: api-gateway-canary

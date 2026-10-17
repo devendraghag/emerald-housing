@@ -13,7 +13,7 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 </style><style>
 .db-ownership-diagram{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:1rem 0;padding:1rem;border:2px solid var(--p3);border-radius:14px;background:color-mix(in srgb,var(--p3) 7%,var(--paper))}.db-service-box{padding:.9rem;border:1px solid var(--line);border-radius:11px;background:var(--paper);text-align:center}.db-service-box>strong{display:block;font-size:1.05rem;color:var(--p3)}.db-service-box>span{display:block;margin:.2rem 0 .7rem;color:var(--muted);font-size:.84rem}.db-pods{display:flex;justify-content:center;gap:.55rem;flex-wrap:wrap}.db-pod{padding:.55rem .75rem;border:1px solid var(--p2);border-radius:9px;background:color-mix(in srgb,var(--p2) 10%,var(--paper));font-weight:700}.db-arrow{margin:.6rem 0;color:var(--muted);font-size:.9rem}.db-store{padding:.55rem;border:2px solid var(--p4);border-radius:9px;background:color-mix(in srgb,var(--p4) 10%,var(--paper));font-weight:800}.db-http-flow{grid-column:1/-1;padding:.75rem;border:1px dashed var(--p3);border-radius:9px;background:var(--paper);text-align:center;overflow-wrap:anywhere}.db-http-flow strong{color:var(--p3)}@media(max-width:650px){.db-ownership-diagram{grid-template-columns:1fr}.db-http-flow{grid-column:auto}}
 .auth-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0}.auth-lane{padding:1rem;border:2px solid var(--line);border-radius:14px;background:var(--paper);min-width:0}.auth-lane h4{font-size:1.05rem;margin:0 0 .75rem}.auth-lane.positive{border-color:#258454;background:color-mix(in srgb,#258454 5%,var(--paper))}.auth-lane.negative{border-color:#c34b4b;background:color-mix(in srgb,#c34b4b 5%,var(--paper))}.auth-step{padding:.75rem .85rem;border:1px solid var(--line);border-left:5px solid var(--p7);border-radius:9px;background:var(--paper);overflow-wrap:anywhere}.auth-step strong{display:block;margin-bottom:.15rem}.auth-step small{display:block;color:var(--muted);font-size:.86rem}.positive .auth-step{border-left-color:#258454}.negative .auth-step{border-left-color:#c34b4b}.auth-arrow{text-align:center;line-height:1.4;padding:.15rem;color:var(--muted);font-weight:850}.auth-result{margin-top:.65rem;padding:.7rem .8rem;border-radius:9px;font-weight:750}.auth-result.ok{border:1px solid #258454;background:var(--good);color:var(--ink)}.auth-result.fail{border:1px solid #c34b4b;background:color-mix(in srgb,#c34b4b 10%,var(--paper));color:var(--ink)}.auth-note{font-size:.9rem;color:var(--muted);margin:.65rem 0 0}@media(max-width:760px){.auth-flow{grid-template-columns:1fr}}
-#phase17>p,#phase19>p{max-width:none;text-align:justify;text-justify:inter-word}
+#phase10>p,#phase17>p,#phase19>p{max-width:none;text-align:justify;text-justify:inter-word}
 </style></head>
 <body><a class="skip" href="#main">Skip to content</a><div class="layout">
 <aside id="side"><div class="mobile"><div class="brand">Emerald Housing<small>Simple English guide</small></div><button class="btn" id="menubtn">Contents</button></div><div class="brand desktop">Emerald Housing<small>Plain English · Phases 1–8</small></div><div class="navtools"><button class="btn" id="theme">Use dark theme</button></div><nav aria-label="Contents">
@@ -33,7 +33,7 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 <section id="roadmap"><h2>Eight project steps</h2><div class="grid">
 <article class="card"><span class="badge">Phase 1</span><h3>Two apps</h3><p>Separate building work from member work.</p></article><article class="card"><span class="badge">Phase 2</span><h3>Keep data</h3><p>Give each app its own PostgreSQL database.</p></article><article class="card"><span class="badge">Phase 3</span><h3>Ask another app</h3><p>Check a flat before saving a member-flat link.</p></article><article class="card"><span class="badge">Phase 4</span><h3>Stable names</h3><p>Let Kubernetes DNS find replaceable Pods.</p></article><article class="card"><span class="badge">Phase 5</span><h3>Extra copies</h3><p>Run several copies and replace stopped ones.</p></article><article class="card"><span class="badge">Phase 6</span><h3>One front door</h3><p>Use Gateway to route callers to either app.</p></article><article class="card"><span class="badge">Phase 7</span><h3>Authenticated access</h3><p>Use an ADMIN session, shared through Redis, to protect APIs.</p></article><article class="card"><span class="badge">Phase 8</span><h3>Secure outside entrance</h3><p>Use NGINX HTTPS in front of Spring Cloud Gateway.</p></article></div></section>
 
-<section id="run"><h2>Common section: how to run it</h2><div class="callout warning"><strong>Current setup:</strong> These instructions apply to the current source. Protected Gateway APIs need the Phase 7 credentials and Redis setup. Phase 8 HTTPS ingress is an optional Kubernetes edge. Phase 16 adds Kustomize and CPU-based HPA resources; Phase 17 documents PostgreSQL scaling limits; Phase 19 locking runs inside the existing Member/Society services.</div><p>There are two ways to run the current project. Run the Java applications directly on your computer for local development, or run their Docker images in Kubernetes. Do one setup at a time. For local learning, start with Option A.</p><div class="callout"><strong>Important:</strong> Society and Member need their existing PostgreSQL databases, <code>society_db</code> and <code>member_db</code>, before startup. Flyway creates or updates tables; it does not create the databases. Both services use their own default connection pool settings; this project does not provision PostgreSQL replicas.</div><div class="callout good"><strong>Current phase settings:</strong> For authenticated Gateway requests and shared rate limits, run Redis and configure the Phase 7 tokens/admin account; see <a href="#phase7">Phase 7 local/Kubernetes setup</a>. Society also uses Redis for reference-data caching and can fall back to PostgreSQL on cache errors. Phase 9 resilience and idempotency use configured defaults; Phase 19 locking is built into membership writes and adds no separate process. Redis, database replicas, and Hikari pool sizes are not automatically provisioned or scaled by these application settings.</div>
+<section id="run"><h2>Common section: how to run it</h2><div class="callout warning"><strong>Current setup:</strong> These instructions apply to the current source. Protected Gateway APIs need the Phase 7 credentials and Redis setup. Phase 8 HTTPS ingress is an optional Kubernetes edge. Phase 16 adds Kustomize and CPU-based HPA resources; Phase 17 documents PostgreSQL scaling limits; Phase 19 locking runs inside the existing Member/Society services.</div><p>There are two ways to run the current project. Run the Java applications directly on your computer for local development, or run their Docker images in Kubernetes. Do one setup at a time. For local learning, start with Option A.</p><div class="callout"><strong>Important:</strong> Society and Member need their existing PostgreSQL databases, <code>society_db</code> and <code>member_db</code>, before startup. Flyway creates or updates tables; it does not create the databases. Both services use explicitly tuned Hikari pools. Optional PostgreSQL read replicas are supported by application routing but must be provisioned separately.</div><div class="callout good"><strong>Current phase settings:</strong> For authenticated Gateway requests and shared rate limits, run Redis and configure the Phase 7 tokens/admin account; see <a href="#phase7">Phase 7 local/Kubernetes setup</a>. Society also uses Redis for reference-data caching and can fall back to PostgreSQL on cache errors. Phase 9 resilience and idempotency use configured defaults; Phase 19 locking is built into membership writes and adds no separate process. This repo configures the application pool sizes and can route to external database replicas. Kubernetes does not provision PostgreSQL servers or replication.</div>
 <h3>Prerequisites</h3><ul><li>Java Development Kit 21.</li><li>PowerShell on Windows, IntelliJ IDEA if you prefer to start apps from the IDE, and the project Maven Wrapper files.</li><li>PostgreSQL with the databases <code>society_db</code> and <code>member_db</code>, and a PostgreSQL user/password that works on your computer.</li><li>For Kubernetes only: Docker Desktop, kind, and kubectl.</li><li>The Postman files in <code>postman/</code>.</li></ul><p>The services have separate Maven projects. Their wrappers are under <code>services/society-service/</code> and <code>services/member-service/</code>. The Gateway project is under <code>infrastructure/api-gateway/</code>. You do not need a system-wide <code>mvn</code> command when using the wrappers, but the wrapper may need network access to download Maven or dependencies the first time.</p>
 <h3>Option A: run locally</h3>
 <p><strong>Prerequisites:</strong> Java 21, PowerShell, PostgreSQL running, <code>society_db</code> and <code>member_db</code> created, and valid database credentials. Run from the repository root. Open separate PowerShell terminals for the token setup, Society, Member, and Gateway.</p>
@@ -90,7 +90,7 @@ $env:SESSION_VALIDATION_TOKEN = 'paste the same session validation token'
 Invoke-RestMethod http://localhost:8082/actuator/health/readiness</code></pre><p>Optional Gateway:</p><pre><code>Invoke-RestMethod http://localhost:8080/actuator/health/readiness</code></pre>
 
 <h3>Option B: run in Kubernetes</h3>
-<p><strong>Prerequisites:</strong> Docker Desktop, kind, kubectl, PostgreSQL reachable from kind, both PostgreSQL databases created, database credentials, admin credentials, a Redis password, and three distinct random internal tokens of at least 32 characters. Use PowerShell from the repository root.</p>
+<p><strong>Prerequisites:</strong> Docker Desktop, kind, kubectl, PostgreSQL reachable from kind, both PostgreSQL databases created, database credentials, admin credentials, separate Redis passwords for session/lock Redis and Society cache Redis, and three distinct random internal tokens of at least 32 characters. Use PowerShell from the repository root.</p>
 <h4>1. Create the cluster, namespace, and secrets</h4><pre><code>cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing"
 .\scripts\kubernetes\prepare-kind.ps1
 kubectl apply -f .\kubernetes\namespace.yaml
@@ -680,13 +680,13 @@ kubectl rollout status deployment/api-gateway -n emerald-housing</code></pre>
 <section class="phase" id="phase10" style="--accent:var(--p4)">
 <div class="phase-no">Phase 10 · Distributed caching</div>
 <h2>Make repeated Society lookups faster with Redis</h2>
-<p class="lead">Society Service still owns the Society data in PostgreSQL. Spring Cache keeps short-lived copies of selected floor and flat reference responses in the Redis service already shared by the cluster. A cache can save repeated database reads, but it does not become the source of truth.</p>
-<div class="callout good"><strong>NEW — PHASE 10:</strong> Society floor and flat reference reads use Redis-backed Spring Cache with separate time-to-live settings. Flat assignment validation from Member Service still reads Society's database through its existing authenticated HTTP request.</div>
-<div class="callout"><strong>UPDATED — PHASE 10:</strong> Society's existing application configuration and Kubernetes ConfigMap, Deployment, and NetworkPolicy now provide Redis connection settings, cache lifetimes, the Redis password reference, and Society-to-Redis access. The existing Redis Deployment is reused.</div>
+<p class="lead">Society Service still owns the Society data in PostgreSQL. Spring Cache keeps short-lived copies of selected floor and flat reference responses in a dedicated Redis cache service. Gateway sessions and rate limits remain in a separate Redis service. A cache can save repeated database reads, but it does not become the source of truth.</p>
+<div class="callout good"><strong>NEW — PHASE 10:</strong> Society floor and flat reference reads use Redis-backed Spring Cache with per-cache lifetimes, cross-Pod miss coordination, short negative entries, and after-commit invalidation. Flat assignment validation from Member Service still reads Society's database through its existing authenticated HTTP request.</div>
+<div class="callout"><strong>UPDATED — PHASE 10:</strong> Society now uses a dedicated <code>redis-cache</code> Deployment and Service for disposable cache data. The original <code>redis</code> remains for Gateway sessions, rate limits, and Member locks. Cache settings, credentials, and Society-only network access are configured separately.</div>
 
 <h3>What caching means in this project</h3>
-<p>A cache is a nearby, temporary copy of data that is expensive or repetitive to fetch. Redis keeps these copies in memory, so a later matching request can return the saved response without repeating the same PostgreSQL query. This is useful for Society reference data because floors and flat descriptions are read often and changed less often than they are viewed.</p>
-<p>PostgreSQL remains the permanent record. If Redis is empty, its entry expires, or the cache is bypassed after a Redis error, Society Service reads PostgreSQL. Redis stores temporary copies; it does not replace Flyway, JPA, or either service's database ownership.</p>
+<p>A cache is a nearby, temporary copy of data that is expensive or repetitive to fetch. The dedicated cache Redis keeps these copies in memory, so a later matching request can return the saved response without repeating the same PostgreSQL query. This is useful for Society reference data because floors and flat descriptions are read often and changed less often than they are viewed.</p>
+<p>PostgreSQL remains the permanent record. If Redis is empty, an entry expires, or the cache is bypassed after an error, Society Service reads PostgreSQL. Cache Redis stores temporary copies; it does not replace Flyway, JPA, or either service's database ownership.</p>
 
 <h3>Features implemented</h3>
 <div class="tablebox"><table><thead><tr><th>Feature</th><th>Purpose</th><th>Actual file</th><th>Status</th></tr></thead><tbody>
@@ -694,7 +694,12 @@ kubectl rollout status deployment/api-gateway -n emerald-housing</code></pre>
 <tr><td>Floor-list cache</td><td>Reuse the ordered floor response for a short time.</td><td><code>service/FloorService.java</code>; cache <code>societyFloors</code></td><td>Implemented in source</td></tr>
 <tr><td>Flat reference caches</td><td>Cache the all-flats list, a floor's flats, and an admin's flat-by-ID read.</td><td><code>service/FlatService.java</code>; caches <code>societyFlats</code>, <code>societyFlatsByFloor</code>, <code>societyFlatById</code></td><td>Implemented in source</td></tr>
 <tr><td>Cache invalidation after commit</td><td>Evict changed flat and affected lists only after the database transaction commits.</td><td><code>event/FlatReferenceChangedEvent.java</code>, <code>event/FlatCacheInvalidationListener.java</code></td><td>Implemented in source</td></tr>
-<tr><td>Redis failure handling</td><td>Record failures, use PostgreSQL, and briefly bypass repeated Redis waits per Pod.</td><td><code>config/SocietyCacheMetrics.java</code>, <code>config/SocietyCacheConfiguration.java</code></td><td>Implemented in source; runtime pending</td></tr>
+<tr><td>Redis failure handling and fallback limit</td><td>After a Redis error, bypass cache Redis for five seconds per Pod. Allow up to 16 concurrent database fallback loads per Pod; reject excess loads with <code>503 CACHE_FALLBACK_OVERLOADED</code>.</td><td><code>config/SocietyCacheMetrics.java</code>, <code>config/CacheFallbackOverloadedException.java</code>, <code>exception/GlobalExceptionHandler.java</code></td><td>Implemented and compiled; runtime pending</td></tr>
+<tr><td>Cross-Pod cache-load coordination</td><td>Use an owner-token Redis lock per cache key. Waiters recheck Redis for up to two seconds; a waiter that times out loads without caching. The lock lease is 30 seconds.</td><td><code>config/SocietyCacheConfiguration.java</code></td><td>Implemented and compiled; runtime pending</td></tr>
+<tr><td>Negative cache for missing flats</td><td>Remember an unknown flat UUID for 30 seconds on the Admin cached-read path to avoid repeated database lookups. Member validation remains uncached.</td><td><code>config/SocietyNegativeCache.java</code>, <code>service/FlatService.java</code></td><td>Implemented and compiled; runtime pending</td></tr>
+<tr><td>TTL jitter and startup warmup</td><td>Reduce each cache TTL by a random 0–30 seconds to spread expirations. At startup, check and warm only the small floor list when it is missing.</td><td><code>config/SocietyCacheConfiguration.java</code>, <code>config/SocietyCacheWarmup.java</code></td><td>Implemented and compiled; runtime pending</td></tr>
+<tr><td>Cache diagnostics</td><td>Expose per-Pod cache-key access gauges for up to 256 tracked keys and cache Redis memory gauges sampled every 30 seconds.</td><td><code>config/SocietyCacheMetrics.java</code>, <code>config/SocietyRedisMemoryMetrics.java</code></td><td>Implemented and compiled; external scrape/alerts required</td></tr>
+<tr><td>Separate Redis services</td><td>Keep Society cache data in <code>redis-cache</code> with 128 MiB and <code>allkeys-lru</code>; leave sessions, rate limits, and Member locks on <code>redis</code>.</td><td><code>kubernetes/redis-cache/</code>, ConfigMap, Society Deployment, NetworkPolicies</td><td>Manifests configured; cluster application pending</td></tr>
 <tr><td>Redis access and settings</td><td>Give Society a Redis password reference and allow its Pods to connect to Redis.</td><td><code>kubernetes/config/application-config.yaml</code>, <code>kubernetes/society/deployment.yaml</code>, <code>kubernetes/networkpolicies.yaml</code></td><td>Configuration updated</td></tr>
 <tr><td>Manual examples</td><td>Describe repeat reads, invalidation, and authoritative flat validation.</td><td><code>postman/Emerald-Housing-Phase1.postman_collection.json</code></td><td>Updated existing combined collection</td></tr>
 </tbody></table></div>
@@ -712,32 +717,36 @@ Society Service -> Spring Cache
 
 <h3>Redis in plain English</h3>
 <p>Redis is a key-value store: an application supplies a key, and Redis stores a value under that key. It is commonly used for fast temporary data, such as cache entries, rate-limit counters, and web sessions. PostgreSQL is the durable relational database in this project. It stores the official Society and Member records and enforces database constraints. Redis cache entries can expire or disappear without losing the official Society records.</p>
-<p>The repository already has one private Redis Service used by Spring Session and Gateway rate limiting. Society caching reuses that Redis instance. The three uses remain logically separate: framework session keys, Gateway rate-limit keys, and the Society prefix <code>society:cache:</code>. A prefix keeps names distinct; it does not create a separate Redis server or guarantee separate memory. The Redis Deployment uses <code>noeviction</code>, which protects existing session and rate-limit keys from silent eviction. If Redis runs out of memory, cache writes can fail; the cache error handling records that and the application falls back to PostgreSQL.</p>
-<div class="callout warning"><strong>Runtime caveat:</strong> this source change does not verify Redis memory capacity, session continuity, or cache behavior. Redis is still a shared single Deployment in this local learning setup. Its uptime and available memory have not been tested here.</div>
+<p>The main private <code>redis</code> Service holds Spring Session, Gateway rate-limit, and Member lock data. Society uses the separate <code>redis-cache</code> Service for response caches, negative entries, and per-key load locks. Separate Services have separate processes and memory budgets; the key prefix remains <code>society:cache:</code>. Cache Redis uses <code>allkeys-lru</code>, so it can discard least-recently-used cache keys under memory pressure without evicting session or rate-limit keys.</p>
+<div class="callout warning"><strong>Runtime caveat:</strong> the manifests configure separate Redis Services and expose Society cache-memory metrics, but the cluster has not been applied or load-tested. Redis cache is still a single Pod with temporary storage, so cache data and locks can disappear when that Pod is replaced.</div>
 
 <h3>Spring Cache and the important annotations</h3>
 <ul>
 <li><code>@EnableCaching</code> turns on Spring's cache interception in <code>SocietyCacheConfiguration</code>.</li>
-<li><code>@Cacheable</code> checks the named cache before running a method. A hit returns the stored DTO. A miss runs the method, then stores its result.</li>
-<li><code>@CacheEvict</code> is not used in this implementation. Updates publish a transaction event so eviction can happen after commit and can cover the old and new floor lists.</li>
-<li><code>@CachePut</code> is not used. The application does not store an update response directly as a cache value; it evicts affected entries so the next read reloads current data.</li>
-<li><code>RedisCacheManager</code> selects cache names, key/value serializers, prefixes, TTLs, and cache statistics.</li>
+<li><code>@Cacheable</code> checks Redis before running a method. A hit returns the cached DTO; a miss loads the response and stores it in one of <code>societyFloors</code>, <code>societyFlatById</code>, <code>societyFlatsByFloor</code>, or <code>societyFlats</code>.</li>
+<li><code>@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)</code> handles flat-change events after the database transaction succeeds. The listener evicts the flat entry, matching negative marker, and affected all-flats and floor-list entries.</li>
+<li><code>@CacheEvict</code> and <code>@CachePut</code> are not used. Eviction is performed programmatically after commit; update responses are not written directly into the cache.</li>
+<li><code>RedisCacheManager</code> is the cache manager, not an annotation. It configures cache names, key/value serializers, prefixes, TTLs, and cache statistics.</li>
 </ul>
 <p>Spring applies caching through a proxy around Spring-managed service methods. Calls from the controller enter that proxy. A method calling another cached method on the same object could bypass that proxy; these cache annotations are on public service entry points, not self-calls.</p>
+<p>No Caffeine local cache or Hibernate/JPA second-level cache is configured. Redis is the shared application cache; PostgreSQL remains the source of truth.</p>
 
 <h3>Cache-aside: hit and miss flow</h3>
 <div class="diagram"><pre><code>Postman / API client
        |
        v
-NGINX -> API Gateway -> Society Service Pod
+NGINX -> API Gateway ---- redis (sessions / rate limits)
+              |
+              v
+       Society Service Pod
                               |
                               v
-                     Spring Cache checks key
+                     Spring Cache checks redis-cache
                         /             \
                  CACHE HIT          CACHE MISS
                     |                   |
                     v                   v
-                  Redis          Society Service method
+              redis-cache       Society Service method
                     |                   |
                     |                   v
                     |             JPA Repository
@@ -748,26 +757,28 @@ NGINX -> API Gateway -> Society Service Pod
                     |          create response DTO
                     |                   |
                     |                   v
-                    |             save in Redis
+                    |             save in redis-cache
                     \___________________/
                               |
                               v
                      Return same API response</code></pre></div>
-<p>The cache value is a response DTO such as <code>FloorResponse</code> or <code>FlatResponse</code>, not a JPA entity with lazy database relationships. This keeps the cache value small and independent of an open Hibernate session.</p>
+<p>The cache value is a response DTO such as <code>FloorResponse</code> or <code>FlatResponse</code>, not a JPA entity with lazy database relationships. This keeps the cache value small and independent of an open Hibernate session. A per-cache-key Redis lock coordinates misses across Society Pods; if Redis is unavailable, reads bypass it and a per-Pod semaphore limits database fallback concurrency.</p>
 
 <h3>Cache names, keys, and expiration</h3>
-<div class="tablebox"><table><thead><tr><th>Data</th><th>Cache name</th><th>Key inside cache</th><th>TTL</th><th>Configuration property</th></tr></thead><tbody>
-<tr><td>All ordered floors</td><td><code>societyFloors</code></td><td><code>all</code></td><td>10 minutes</td><td><code>society.cache.ttl.floors</code></td></tr>
-<tr><td>Flat by UUID, admin read</td><td><code>societyFlatById</code></td><td>Flat UUID text</td><td>2 minutes</td><td><code>society.cache.ttl.flat-by-id</code></td></tr>
-<tr><td>Flats on a floor</td><td><code>societyFlatsByFloor</code></td><td>Floor number text</td><td>5 minutes</td><td><code>society.cache.ttl.flats-by-floor</code></td></tr>
-<tr><td>All flats</td><td><code>societyFlats</code></td><td><code>all</code></td><td>5 minutes</td><td><code>society.cache.ttl.all-flats</code></td></tr>
+<div class="tablebox"><table><thead><tr><th>Data</th><th>Cache name / key</th><th>TTL</th><th>Configuration property</th></tr></thead><tbody>
+<tr><td>All ordered floors</td><td><code>societyFloors / all</code></td><td>10-minute base, reduced by 0–30 seconds of jitter</td><td><code>society.cache.ttl.floors</code></td></tr>
+<tr><td>Flat by UUID, admin read</td><td><code>societyFlatById / UUID</code></td><td>2-minute base, reduced by 0–30 seconds of jitter</td><td><code>society.cache.ttl.flat-by-id</code></td></tr>
+<tr><td>Flats on a floor</td><td><code>societyFlatsByFloor / floor number</code></td><td>5-minute base, reduced by 0–30 seconds of jitter</td><td><code>society.cache.ttl.flats-by-floor</code></td></tr>
+<tr><td>All flats</td><td><code>societyFlats / all</code></td><td>5-minute base, reduced by 0–30 seconds of jitter</td><td><code>society.cache.ttl.all-flats</code></td></tr>
+<tr><td>Unknown flat UUID marker</td><td><code>society:negative:flat:UUID</code></td><td>30 seconds</td><td><code>society.cache.ttl.not-found</code></td></tr>
 </tbody></table></div>
-<p>The actual Redis key is prefixed by <code>society:cache:</code>, followed by the cache name and the Spring Cache key. For example, the flat UUID <code>abc...</code> has the logical form <code>society:cache:societyFlatById::abc...</code>. Session and rate-limit entries use framework-controlled keys, not these Society cache names. The YAML uses environment variables such as <code>SOCIETY_CACHE_TTL_FLOORS</code> to override the defaults.</p>
+<p>The actual Redis key for a normal cached response is prefixed by <code>society:cache:</code>, followed by the cache name and Spring Cache key. Session and rate-limit keys live on a different Redis service. The YAML accepts environment overrides including <code>SOCIETY_CACHE_TTL_JITTER</code> and <code>SOCIETY_CACHE_TTL_NOT_FOUND</code>.</p>
 <p>TTL means “how long this copy may live.” After expiry, the next request is a miss and reloads PostgreSQL. TTL alone does not immediately refresh data after an update, which is why successful flat changes also trigger cache eviction.</p>
 <pre><code>Example floor-list timeline
-00:00  First GET /api/v1/floors -> likely miss -> PostgreSQL -> Redis, expires at 10:00
-00:20  Repeat GET             -> likely hit  -> Redis
-10:00+ Next GET               -> miss        -> PostgreSQL -> fresh Redis value</code></pre>
+00:00  Society Pod starts -> warm floor list in redis-cache
+00:20  GET /api/v1/floors -> hit -> redis-cache
+09:30+ Expired entry may miss (TTL jitter spreads nearby expirations)
+        -> PostgreSQL -> redis-cache -> return floors</code></pre>
 
 <h3>Updating a flat and invalidating old copies</h3>
 <div class="diagram"><pre><code>Admin updates a flat
@@ -794,28 +805,30 @@ Transaction commits successfully
 Next read loads the committed value and repopulates cache</code></pre></div>
 <p>If the database transaction rolls back, the <code>AFTER_COMMIT</code> listener does not run, so it does not evict values for a change that was not saved. If Redis is unavailable during eviction, ordinary cached reads may temporarily see an old value until its TTL expires. Also, a read that started before an update may finish after invalidation and repopulate an older value; the TTL bounds that race, but this design is not linearizable. Assignment validation remains uncached, so these cache consistency limits cannot approve a membership using cached flat data.</p>
 
-<h3>How a cache stampede is handled</h3>
-<p>A cache stampede happens when a popular key expires and many requests miss together, causing many database reads at once. For a synchronized cache load, the wrapper uses one of 64 fixed, process-local lock stripes and waits no more than 10 milliseconds for a stripe. A request that cannot get the stripe runs its database loader without waiting for that lock. This keeps lock memory bounded and avoids a long lock queue. It can reduce duplicate work inside one Society Pod, but it is not a distributed lock and does not coordinate the other Pod.</p>
+<h3>Stampede control, negative caching, and warmup</h3>
+<p>A cache stampede happens when many requests miss the same key together. The cache wrapper now takes a short-lived Redis lock for the specific cache name and key. The owner token ensures a request only releases its own lock. Other Society Pods recheck Redis while waiting up to two seconds; if the lock remains unavailable, a request loads without caching the result, so a slow source cannot hold requests indefinitely. This coordinates the normal miss path across Pods; it is not a correctness lock for database writes.</p>
+<p>Unknown flat IDs are remembered as negative entries for 30 seconds on the Admin cached-read path. The API still returns the normal <code>404 RESOURCE_NOT_FOUND</code>. Member's assignment validation continues to use the uncached authoritative database path. Flat-change events also clear a matching negative marker after commit.</p>
+<p>On startup, each Society Pod checks the shared cache and warms only the small floor list when it is absent. This avoids a cold floor-list read for the first Admin request in the usual case. The warmup is configurable with <code>SOCIETY_CACHE_WARMUP_ENABLED</code>; it does not preload the full flat inventory. If Pods start together while the shared entry is missing, more than one small warmup query can still occur.</p>
 
 <h3>Redis and PostgreSQL failure behavior</h3>
 <div class="tablebox"><table><thead><tr><th>Situation</th><th>Behavior in this implementation</th><th>Data safety</th></tr></thead><tbody>
 <tr><td>Cache hit</td><td>Return the typed DTO from Redis.</td><td>Temporary read copy; limited by TTL and invalidation.</td></tr>
 <tr><td>Cache miss or expired key</td><td>Load from PostgreSQL, then put the DTO in Redis.</td><td>PostgreSQL remains authoritative.</td></tr>
-<tr><td>Redis command/connect failure</td><td>Cache error handler records a bounded metric/log. Society uses a five-second per-Pod cache bypass window, then tries Redis again; bypassed reads go to PostgreSQL.</td><td>No fake “not found” or fake success is generated.</td></tr>
-<tr><td>Redis write failure / memory full</td><td>Return the successful database result while the cache write is skipped after the handler records the failure.</td><td>Database operation remains the source of truth.</td></tr>
+<tr><td>Redis command/connect failure</td><td>Cache error handler records the failure. Society bypasses cache Redis for five seconds per Pod, then retries; fallback database loads are limited to 16 concurrent calls per Pod.</td><td>If fallback capacity is full, return <code>503 CACHE_FALLBACK_OVERLOADED</code> instead of sending unlimited reads to PostgreSQL.</td></tr>
+<tr><td>Cache Redis write failure / memory full</td><td>Return the successful database result while the cache write is skipped. Cache Redis uses a dedicated <code>allkeys-lru</code> policy and memory metrics.</td><td>Cache data may be evicted or rebuilt; sessions and rate limits are on a separate Redis service.</td></tr>
 <tr><td>PostgreSQL unavailable</td><td>A cache hit may avoid a database query, but transaction setup and runtime behavior have not been verified. A miss cannot be filled and returns the existing database error.</td><td>Do not rely on cache as a database outage mode. Cached data is not used for flat assignment validation or writes.</td></tr>
 <tr><td>Flat assignment validation</td><td>Member calls the Society flat endpoint with its service identity. Controller selects <code>FlatService.get()</code>, which is deliberately not cached.</td><td>Society checks its authoritative database before Member writes membership.</td></tr>
 </tbody></table></div>
 
 <h3>Actual code: where to look</h3>
 <div class="grid">
-<article class="card"><span class="badge">Redis settings</span><h4><code>services/society-service/src/main/resources/application.yml</code></h4><p>Reads host, port, password, connection/command timeouts, and bounded Lettuce pool settings from configuration. Local defaults point to localhost; Kubernetes supplies <code>REDIS_HOST=redis</code> and the password Secret.</p><pre><code>spring.data.redis:
-  host: ${REDIS_HOST:localhost}
-  port: ${REDIS_PORT:6379}
-  password: ${REDIS_PASSWORD:}
-  connect-timeout: ${SOCIETY_REDIS_CONNECT_TIMEOUT:500ms}
-  timeout: ${SOCIETY_REDIS_COMMAND_TIMEOUT:500ms}</code></pre></article>
-<article class="card"><span class="badge">Cache manager</span><h4><code>services/society-service/src/main/java/com/emerald/society/config/SocietyCacheConfiguration.java</code></h4><p>Enables caching; creates Redis cache names with per-cache TTL and typed JSON serialization; adds the Society key prefix; exposes statistics; instruments lookups; uses bounded local load stripes; and selects a no-op cache briefly after Redis errors.</p><pre><code>@Cacheable(cacheNames = SocietyCacheConfiguration.FLAT_BY_ID,
+<article class="card"><span class="badge">Redis settings</span><h4><code>services/society-service/src/main/resources/application.yml</code></h4><p>Reads the Society cache Redis host, port, password, connection/command timeouts, and bounded Lettuce pool settings. Local development can use the legacy <code>REDIS_*</code> fallback; Kubernetes points Society at separate <code>redis-cache</code>.</p><pre><code>spring.data.redis:
+  host: ${SOCIETY_CACHE_REDIS_HOST:${REDIS_HOST:localhost}}
+  port: ${SOCIETY_CACHE_REDIS_PORT:${REDIS_PORT:6379}}
+  password: ${SOCIETY_CACHE_REDIS_PASSWORD:${REDIS_PASSWORD:}}
+  connect-timeout: ${SOCIETY_CACHE_REDIS_CONNECT_TIMEOUT:500ms}
+  timeout: ${SOCIETY_CACHE_REDIS_COMMAND_TIMEOUT:500ms}</code></pre></article>
+<article class="card"><span class="badge">Cache manager</span><h4><code>services/society-service/src/main/java/com/emerald/society/config/SocietyCacheConfiguration.java</code></h4><p>Enables caching; configures per-cache TTL with downward random jitter and typed JSON; adds the Society key prefix and statistics; coordinates cold misses across Society Pods with a short Redis lock; and bypasses Redis briefly after cache errors.</p><pre><code>@Cacheable(cacheNames = SocietyCacheConfiguration.FLAT_BY_ID,
            key = "#p0.toString()", sync = true)
 public FlatResponse getCached(UUID id) {
     return cacheMetrics.recordDatabaseLoad(
@@ -840,43 +853,53 @@ public void invalidateAfterCommit(
     evict(ALL_FLATS, "all");
     // evict affected floor lists
 }</code></pre></article>
-<article class="card"><span class="badge">Metrics</span><h4><code>services/society-service/src/main/java/com/emerald/society/config/SocietyCacheMetrics.java</code></h4><p>Records <code>society.cache.lookups</code> with bounded hit, miss, error and Redis-bypass outcomes; <code>society.cache.lookup</code> duration tagged by cache and outcome; <code>society.reference.database.loads</code> and <code>society.reference.database.load</code> timing; and <code>society.cache.redis.failures</code>. Actuator metrics remain per Society Pod; they are not aggregated across pods by themselves.</p></article>
+<article class="card"><span class="badge">Fallback and hot-key metrics</span><h4><code>services/society-service/src/main/java/com/emerald/society/config/SocietyCacheMetrics.java</code></h4><p>Records cache hits/misses and per-key access gauges (bounded to 256 keys per Pod). During the five-second Redis bypass window, at most 16 fallback database loads run concurrently per Pod; excess calls receive 503. Metrics remain per Pod until a monitoring system aggregates them.</p></article>
+<article class="card"><span class="badge">Negative cache and warmup</span><h4><code>SocietyNegativeCache.java</code> and <code>SocietyCacheWarmup.java</code></h4><p>Unknown Admin flat IDs get a 30-second marker. Startup warms only the small floor list; larger flat lists stay on demand. Member's authoritative flat validation bypasses both cache paths.</p></article>
+<article class="card"><span class="badge">Redis memory metrics</span><h4><code>SocietyRedisMemoryMetrics.java</code></h4><p>Samples cache Redis used and maximum memory every 30 seconds and exposes gauges for memory use and ratio. Scrape these metrics and set alerts in the monitoring system; the application does not create alert rules.</p></article>
 </div>
 <p>Society module dependencies are in <code>services/society-service/pom.xml</code>: Spring Boot cache, Spring Data Redis, and Commons Pool support. No Flyway migration is needed because the cache contains derived copies of existing Society data.</p>
 
 <h3>Kubernetes files that connect the application to Redis</h3>
 <div class="tablebox"><table><thead><tr><th>File</th><th>Connection it defines</th></tr></thead><tbody>
-<tr><td><code>kubernetes/config/application-config.yaml</code></td><td>Sets Redis Service name/port, bounded Redis timeouts and pool sizes, plus cache TTL overrides. These non-secret settings load through the existing Society Deployment ConfigMap.</td></tr>
-<tr><td><code>kubernetes/society/deployment.yaml</code></td><td>Loads <code>REDIS_PASSWORD</code> from key <code>redis-password</code> in Secret <code>emerald-security-credentials</code>.</td></tr>
+<tr><td><code>kubernetes/config/application-config.yaml</code></td><td>Sets cache Redis host/port, bounded timeouts and pool sizes, TTL jitter, negative TTL, miss-lock settings, fallback concurrency, warmup, and memory scrape interval.</td></tr>
+<tr><td><code>kubernetes/society/deployment.yaml</code></td><td>Loads <code>SOCIETY_CACHE_REDIS_PASSWORD</code> from key <code>redis-cache-password</code> in Secret <code>emerald-security-credentials</code>.</td></tr>
 <tr><td><code>kubernetes/redis/service.yaml</code></td><td>Provides the stable private name <code>redis:6379</code> for the existing Redis Pod.</td></tr>
-<tr><td><code>kubernetes/networkpolicies.yaml</code></td><td>Allows Redis ingress on port 6379 from Gateway and Society Pods. NetworkPolicy enforcement depends on the cluster CNI.</td></tr>
-<tr><td><code>kubernetes/redis/deployment.yaml</code></td><td>Reuses the existing Redis instance, 128 MiB max memory, and <code>noeviction</code>. This preserves critical session/rate-limit entries; cache writes may be refused when full.</td></tr>
+<tr><td><code>kubernetes/networkpolicies.yaml</code></td><td>Allows session/rate-limit Redis from Gateway and Member; dedicated cache Redis is reachable only from Society. Enforcement depends on the cluster CNI.</td></tr>
+<tr><td><code>kubernetes/redis/deployment.yaml</code></td><td>Retains the 128 MiB <code>noeviction</code> Redis for Gateway sessions, rate limits, and Member locks.</td></tr>
+<tr><td><code>kubernetes/redis-cache/deployment.yaml</code> and <code>service.yaml</code></td><td>Add a separate 128 MiB Redis with <code>allkeys-lru</code> for disposable Society cache entries. It uses ephemeral storage and one replica; it is not highly available.</td></tr>
 </tbody></table></div>
-<p>The cache and session keys share one Redis process and its memory budget even though their key namespaces differ. No broad key deletion, new Redis service, or cache endpoint was added. Redis credentials remain in the existing Secret and are not written into the ConfigMap.</p>
+<p>Separate Redis processes give cache eviction and memory pressure their own budget, protecting session, rate-limit, and Member lock keys from cache churn. This adds a Redis workload and credentials to operate; both Redis services are single replicas in this learning setup. Redis credentials remain in Secrets, not ConfigMaps.</p>
 
 <h3>Manual verification guide (not run here)</h3>
-<ol class="steps"><li>Start the existing cluster and Redis, then check Society Pods are ready. Confirm the Society Secret contains <code>redis-password</code> and the Deployment can read it without printing its value.</li><li>Log in as an Admin and call <code>GET /api/v1/floors</code>. Repeat within ten minutes. Both responses should match; Redis/cache metrics can help distinguish the miss and hit.</li><li>Call <code>GET /api/v1/flats/by-floor/{floorNumber}</code> twice, then inspect only the <code>society:cache:</code> keys and TTL with an authenticated Redis CLI session. Do not use <code>FLUSHDB</code> or delete broad key patterns because sessions and rate limits share Redis.</li><li>Read a flat by ID as Admin, update or deactivate it, then repeat the flat and floor-list reads. The next reads should reflect the committed database values after eviction.</li><li>Wait beyond each TTL and repeat a read. The expired item should be loaded from PostgreSQL again.</li><li>For an outage scenario, block or stop Redis only in a disposable local environment. Ordinary Society reads should use PostgreSQL after bounded Redis failure handling. Restore Redis and observe the cache path recover after the short bypass interval.</li><li>Try member assignment while the Admin flat read is cached, then try a nonexistent flat. Member's internal validation should still use the uncached authoritative path, and an invalid flat must not create membership.</li><li>Compare cache-hit and cache-miss latency with repeated controlled requests and Micrometer metrics. Inspect <code>/actuator/metrics/society.cache.lookups</code>, <code>/actuator/metrics/society.cache.lookup</code>, and <code>/actuator/metrics/society.reference.database.load</code> on each Society Pod. No performance percentage is promised; measure on the same hardware and dataset.</li></ol>
+<ol class="steps"><li>Apply the Kustomize package after creating Secrets. Check that both <code>redis</code> and <code>redis-cache</code> Pods are ready; cache Redis expects Secret key <code>redis-cache-password</code>.</li><li>Log in as an Admin and call <code>GET /api/v1/floors</code>. Startup normally warms this small list; repeat the request and inspect cache hit metrics.</li><li>Call <code>GET /api/v1/flats/by-floor/{floorNumber}</code> twice, then inspect only <code>society:cache:</code> keys on the dedicated <code>redis-cache</code> service. Avoid broad key deletion, which can trigger a burst of database reads.</li><li>Call <code>GET /api/v1/flats/00000000-0000-0000-0000-000000000099</code> twice within 30 seconds. Both calls should return the same 404; the second should use the short-lived negative marker. Member assignment validation still checks PostgreSQL directly.</li><li>Read a flat by ID as Admin, update or deactivate it, then repeat the flat and floor-list reads. The next reads should reflect the committed database values after eviction.</li><li>Wait beyond each base TTL and jitter window, then repeat a read. The expired item should be loaded from PostgreSQL again.</li><li>For outage behavior, stop only <code>redis-cache</code> in a disposable environment. Society reads fall back to PostgreSQL, limited to 16 concurrent cache-fallback loads per Pod; overflow returns <code>503 CACHE_FALLBACK_OVERLOADED</code>. The Gateway/Member <code>redis</code> should remain available.</li><li>Inspect <code>/actuator/metrics/society.cache.redis.memory.used</code>, <code>/actuator/metrics/society.cache.redis.memory.max</code>, <code>/actuator/metrics/society.cache.redis.memory.used.ratio</code>, and <code>/actuator/metrics/society.cache.key.accesses</code> on each Society Pod. Metrics are per Pod; aggregate them for a cluster view.</li></ol>
 <pre><code>kubectl get pods,services -n emerald-housing
 kubectl logs deployment/society-service -n emerald-housing
 kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing
 # Send authenticated GET requests from Postman to the existing Gateway URL.
-# Use a Redis CLI only for narrow inspection of society:cache:* keys and TTLs.
-# Never print the Redis password or delete all Redis keys.</code></pre>
+# Inspect society:cache:* keys only on the dedicated redis-cache Service.
+# Never print Redis passwords or delete all keys during normal verification.</code></pre>
 <p>The existing Postman file <code>postman/Emerald-Housing-Phase1.postman_collection.json</code> combines Society and Member folders; its floor, flat, update, assignment, and outage descriptions now include manual Step 10 context. The only other existing JSON file under <code>postman/</code> is the local environment, not a second collection.</p>
 
 <h3>System design terms to remember</h3>
-<div class="tablebox"><table><thead><tr><th>Term</th><th>Simple meaning here</th><th>Tradeoff</th></tr></thead><tbody>
-<tr><td>Cache-aside</td><td>Check Redis first; on a miss the service reads PostgreSQL and stores the result.</td><td>Application owns the read and update paths.</td></tr>
-<tr><td>Cache hit / miss</td><td>Hit means the key exists; miss means run the repository lookup.</td><td>Misses still need the database.</td></tr>
-<tr><td>TTL</td><td>Maximum time a cache copy stays before expiring.</td><td>Longer TTL can serve old data longer; shorter TTL creates more database reads.</td></tr>
-<tr><td>Invalidation</td><td>Remove copies affected by a committed update.</td><td>Eviction failures can leave a copy until TTL; authoritative assignment bypasses cache.</td></tr>
-<tr><td>Consistency</td><td>How closely reads match the latest committed data.</td><td>Admin reference reads may briefly be stale during Redis failure; writes/assignment validation use PostgreSQL.</td></tr>
-<tr><td>Distributed cache</td><td>Society Pods use the same Redis Service and keys.</td><td>One shared Redis can be a bottleneck or failure point; local metrics are not cluster totals.</td></tr>
-<tr><td>Serialization</td><td>Convert DTOs to/from Redis bytes.</td><td>Typed JSON avoids caching Hibernate entities, but DTO shape changes may require old cache entries to expire or be evicted.</td></tr>
+<div class="tablebox"><table><thead><tr><th>Pattern or problem</th><th>Meaning</th><th>Current project behavior</th><th>Common solution or lesson</th></tr></thead><tbody>
+<tr><td>Cache-aside</td><td>Check cache first; on a miss, load from the database and put the result in cache.</td><td>Implemented for selected Society floor and flat reads.</td><td>Keep the database authoritative; cache only reads that are safe to reuse.</td></tr>
+<tr><td>Cache hit / miss</td><td>A hit returns a cached value. A miss means the value is absent or expired.</td><td>A miss loads PostgreSQL and then stores the DTO in Redis.</td><td>Track hit rate and database load to see whether caching helps.</td></tr>
+<tr><td>Stale cache / invalidation</td><td>The database has new data while the cache still has the old copy.</td><td>Flat changes evict affected keys after commit. If eviction fails, stale data may remain until TTL; the TTL bounds but does not remove the brief consistency gap.</td><td>Use reliable invalidation, short TTLs, or read the database for operations requiring the latest value.</td></tr>
+<tr><td>Cache stampede</td><td>Many requests miss the same key and load the database together.</td><td>A Redis lock per cache key coordinates Society Pods for up to 2 seconds; timed-out waiters may load without caching.</td><td>Monitor lock timeouts and database load; adjust the lock wait/lease only from measurements.</td></tr>
+<tr><td>Cache avalanche</td><td>Many keys expire together and cause a burst of database reads.</td><td>Cache TTLs are shortened by a random 0–30 second jitter.</td><td>Keep jitter proportional to base TTL; monitor expiry and database-load patterns.</td></tr>
+<tr><td>Cache penetration</td><td>Repeated requests for nonexistent data keep reaching the database.</td><td>Unknown Admin flat IDs are stored as negative markers for 30 seconds. Other uncached paths still query PostgreSQL.</td><td>Use short negative TTLs only for safe lookups; keep Member assignment validation authoritative.</td></tr>
+<tr><td>Write-through / write-behind</td><td>Write-through updates cache with the database; write-behind caches first and persists later.</td><td>Neither pattern is used. Updates go to PostgreSQL, then affected Redis entries are evicted after commit.</td><td>Choose a write strategy only when its consistency and failure behavior fit the data.</td></tr>
+<tr><td>Redis outage or memory full</td><td>The cache is unavailable or refuses new cache entries.</td><td>Society bypasses cache Redis for five seconds per Pod and limits fallback database reads to 16 concurrent calls per Pod. Cache Redis uses <code>allkeys-lru</code>.</td><td>Monitor cache and PostgreSQL capacity; fallback overload returns <code>503 CACHE_FALLBACK_OVERLOADED</code>.</td></tr>
+<tr><td>Hot key</td><td>One popular key receives a large share of cache traffic.</td><td>Bounded per-Pod key-hash access gauges track up to 256 cache keys.</td><td>Compare metrics across Pods; scale Redis or change key usage if one key dominates.</td></tr>
+<tr><td>TTL</td><td>Maximum lifetime of a cached copy before it expires.</td><td>Base TTLs: floors 10 minutes, flat lists 5 minutes, flat by ID 2 minutes; 0–30 seconds of downward jitter. Negative flat markers last 30 seconds.</td><td>Balance freshness against database load; expiration alone is not immediate invalidation.</td></tr>
+<tr><td>Distributed cache</td><td>Multiple app instances use the same cache.</td><td>Society Pods share dedicated <code>redis-cache</code>. Gateway sessions, rate limits, and Member locks stay on <code>redis</code>.</td><td>Monitor each service's memory and availability separately.</td></tr>
+<tr><td>Cold cache / warmup</td><td>After restart, cache entries are empty and first reads go to PostgreSQL.</td><td>Each Society Pod warms the small floor list at startup; flat lists remain on-demand.</td><td>Warm only small, frequently used data; avoid loading a large inventory without evidence.</td></tr>
+<tr><td>Memory monitoring</td><td>Observe Redis memory use against its configured limit.</td><td>Society samples cache Redis <code>used_memory</code> and <code>maxmemory</code> every 30 seconds and exposes gauges.</td><td>Scrape metrics and alert before the Redis limit is reached.</td></tr>
+<tr><td>Serialization</td><td>Convert cached values to and from Redis data.</td><td>Typed JSON DTOs are cached; JPA entities are not.</td><td>Consider compatibility when changing DTO shapes while old cache entries may still exist.</td></tr>
 </tbody></table></div>
 
 <h3>Phase 10 completion status</h3>
-<ul><li>Source-level: cache dependencies, Redis manager, typed DTO serialization, four cache names, explicit TTLs, after-commit invalidation, bounded Redis timeouts, fallback handler, short local bypass window, metrics, Kubernetes access and Postman descriptions are implemented.</li><li>Correctness design: PostgreSQL remains authoritative; Member flat validation bypasses cached Admin reads.</li><li>Not runtime-verified: compilation, Redis serialization, cache hits/misses, TTL expiration, update invalidation, Redis outage recovery, NetworkPolicy enforcement, session/rate-limiter coexistence, and latency change.</li><li>No migration or Markdown document was added. The repository had one combined Postman collection and one environment JSON; the combined collection was updated.</li></ul>
+<ul><li>Implemented in source/configuration: cache-aside reads, after-commit invalidation, per-cache TTL with jitter, cross-Pod cache-miss locks, short negative caching for unknown Admin flat IDs, five-second Redis bypass, per-Pod bounded database fallback, floor-list startup warmup, hot-key and Redis-memory metrics, dedicated cache Redis in Kubernetes, and updated Postman request descriptions.</li><li>PostgreSQL remains authoritative; Member flat validation bypasses cached Admin reads. Hot-key metrics provide visibility, not automatic sharding or key replication. Memory metrics need an external scraper and alerting system.</li><li>The Society service compiled successfully with tests skipped. Runtime behavior remains unverified: Redis serialization, hit/miss behavior, load-lock expiry/failure behavior, TTL expiry, update invalidation, Redis outage recovery, Actuator memory metrics, NetworkPolicy enforcement, and latency change.</li><li>One combined Postman collection and one local environment file exist; the collection was updated. No migration is needed because cache data is derived and disposable.</li></ul>
 
 <h3>Architecture after Phase 10</h3>
 <div class="diagram"><pre><code>Admin / Postman
@@ -885,8 +908,7 @@ kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing
 NGINX Gateway Fabric (HTTPS)
       |
       v
-Spring Cloud API Gateway ---- Redis session keys / rate-limit keys
-      |                           (existing Step 7/9 uses)
+Spring Cloud API Gateway ---- redis (sessions / rate limits / Member locks)
       +--------------------+
       |                    |
       v                    v
@@ -894,13 +916,13 @@ Member Service        Society Service (multiple Pods)
       |                    |
       | RestClient         +---- Admin reference reads -> Spring Cache
       +-------------->      |                                |
-      |                     |                                +-> Redis
+      |                     |                                +-> redis-cache
       v                     |                                `-> society_db on miss
  member_db                 `---- Member validation -------> society_db directly
 
 Member flat assignment always asks Society over its existing
 authenticated HTTP path; that validation reads society_db directly.</code></pre></div>
-<p class="small">Phase 10 changes are source/configuration work only. No application, Redis instance, Postman collection, benchmark, Maven build, test suite, Docker build, or Kubernetes deployment was run for this change.</p>
+<p class="small">Phase 10 source, configuration, Kubernetes manifests, and the existing Postman collection were updated. The Society module compiled with tests skipped; no application startup, Redis scenario, benchmark, Docker build, or Kubernetes deployment was run.</p>
 </section>
 <section class="phase" id="phase14" style="--accent:var(--p3)">
 <div class="phase-no">Phase 14 · System design overview</div>
@@ -913,7 +935,7 @@ authenticated HTTP path; that validation reads society_db directly.</code></pre>
 <tr><td>Data ownership</td><td>Society and Member each use a separate PostgreSQL database with JPA and Flyway migrations.</td><td>There is no single transaction spanning both databases; each service remains responsible for its own records.</td></tr>
 <tr><td>Synchronous service validation</td><td>Member Service uses an authenticated RestClient request to check a flat with Society before saving a membership.</td><td>Assignment depends on Society availability and has a consistency window between validation and Member's local write.</td></tr>
 <tr><td>Layered API routing</td><td>NGINX Gateway Fabric is configured as the external HTTPS edge; Spring Cloud Gateway routes API requests to internal services.</td><td>Two routing layers add configuration and troubleshooting work, with separate edge and application-routing responsibilities.</td></tr>
-<tr><td>Shared state and cache</td><td>Redis backs Gateway sessions and rate limits, and Society's cache-aside reference-data caches.</td><td>Redis is a shared dependency. The current Kubernetes Redis setup is a learning deployment, not a highly available production cluster.</td></tr>
+<tr><td>Shared state and cache</td><td>One Redis service backs Gateway sessions, rate limits, and Member locks; a separate Redis service backs Society's cache-aside reference reads.</td><td>Both Redis services are single-replica learning deployments, not highly available production clusters.</td></tr>
 <tr><td>Resilience and safe retries</td><td>Member-to-Society reads have timeouts, bounded retries, a circuit breaker, and a bulkhead. Member creation supports durable idempotency keys.</td><td>Retries apply to selected transient reads; mutations are not automatically retried. Circuit-breaker state is per Member Pod.</td></tr>
 <tr><td>Orchestration and scaling</td><td>Kubernetes Deployments, Services, health probes, resource requests/limits, CPU-based HPA manifests, NetworkPolicies, and Kustomize resources are present.</td><td>HPA needs a metrics provider and cluster runtime behavior still requires verification.</td></tr>
 <tr><td>Security controls</td><td>Admin sessions, CSRF checks, backend session validation, service credentials, Secret references, and network boundaries are configured.</td><td>Session continuity depends on Redis; external HTTPS and NetworkPolicy behavior depend on the installed cluster components.</td></tr>
@@ -927,7 +949,7 @@ authenticated HTTP path; that validation reads society_db directly.</code></pre>
 <div class="phase-no">Phase 16 · Kubernetes orchestration</div>
 <h2>Let Kubernetes run and look after the applications</h2>
 <p class="lead">Kubernetes is the coordinator for containers. It compares the requested setup with what is running, creates or replaces Pods, gives applications steady Service names, and can change replica counts when CPU demand changes. This phase consolidates the repository’s existing Kubernetes resources and adds autoscaling and one Kustomize entry point.</p>
-<div class="callout good"><strong>UPDATED — PHASE 16:</strong> The Society, Member and API Gateway Deployments now get their replica counts from three HorizontalPodAutoscalers (HPAs). Their minimums preserve 2 Society, 1 Member and 2 Gateway Pods. <code>kubernetes/kustomization.yaml</code> gathers the existing resources and the new HPAs for one declarative package.</div>
+<div class="callout good"><strong>UPDATED — PHASE 16:</strong> The Society, Member and API Gateway Deployments now get their replica counts from three HorizontalPodAutoscalers (HPAs). Their minimums preserve 2 Society, 1 Member and 2 Gateway Pods. <code>kubernetes/kustomization.yaml</code> gathers the standard resources and HPAs; an optional canary overlay sends a small share of HTTPS API traffic to a candidate Gateway.</div>
 <div class="callout warning"><strong>Static configuration only:</strong> The manifests were inspected, not applied. HPA needs a resource metrics provider such as metrics-server; the repository does not install one. Readiness, DNS, traffic distribution, recovery, and autoscaling still need manual cluster verification.</div>
 
 <h3>Implemented orchestration features</h3>
@@ -935,11 +957,30 @@ authenticated HTTP path; that validation reads society_db directly.</code></pre>
 <tr><td>Workload management</td><td>Kubernetes Deployments and Services for Society, Member, API Gateway, and Redis in the <code>emerald-housing</code> namespace.</td><td>Manifests are present; cluster application has not been verified in this phase.</td></tr>
 <tr><td>Replica scaling</td><td>HPAs target CPU utilization: Society 2–4 replicas, Member 1–3, Gateway 2–4.</td><td>Requires a metrics provider; HPA behavior has not been verified.</td></tr>
 <tr><td>Pod health and rollout</td><td>Startup/readiness/liveness probes, resource requests/limits, and rolling update settings support safe scheduling and replacement.</td><td>Probe behavior, rollout capacity, and recovery require cluster checks.</td></tr>
+<tr><td>Canary release</td><td>The optional <code>kubernetes-canary/</code> overlay adds a candidate API Gateway Deployment and Service, then routes 90% of HTTPS API traffic to stable Gateway and 10% to the canary.</td><td>Requires the <code>emerald/api-gateway:canary</code> image in the cluster. Traffic weights and candidate health need manual monitoring; rollout has not been applied to a cluster.</td></tr>
 <tr><td>Configuration and secrets</td><td>ConfigMaps hold non-secret settings; database/security credentials are consumed through Kubernetes Secret references.</td><td>Secret values are supplied during setup and are not committed as a populated Secret manifest.</td></tr>
 <tr><td>Network boundaries</td><td>NetworkPolicies define allowed incoming service traffic between Gateway, Member, Society, and Redis.</td><td>Enforcement depends on the cluster network plugin.</td></tr>
 <tr><td>External HTTPS entry</td><td>NGINX Gateway Fabric and Kubernetes Gateway API resources route HTTPS traffic to the private Spring Cloud Gateway Service.</td><td>Controller installation, TLS certificate, route acceptance, and traffic flow need manual verification.</td></tr>
 <tr><td>Repeatable resource package</td><td><code>kubernetes/kustomization.yaml</code> assembles the project Kubernetes resources, including HPAs.</td><td>Render/apply behavior has not been verified for this phase.</td></tr>
 </tbody></table></div>
+
+<h3>Canary rollout for the API Gateway</h3>
+<p>The default <code>kubernetes/</code> package keeps sending all external API traffic to the stable <code>api-gateway</code> Service. The separate <code>kubernetes-canary/</code> Kustomize overlay adds one canary Gateway replica and changes the HTTPS HTTPRoute to split traffic 90/10 between stable and canary. The canary uses the same ConfigMap, Secrets, probes, resource limits, and backend routes as the stable Gateway. It shares Redis sessions and rate-limit counters so a user's session continues across either Gateway.</p>
+<p>Build and load or publish the candidate image as <code>emerald/api-gateway:canary</code> before applying the overlay. The overlay is opt-in; changing its HTTPRoute weights lets you increase or reduce the canary share while watching errors and latency. The NetworkPolicy changes that allow canary traffic to Member, Society, and Redis are included only in this overlay.</p>
+<pre><code># Render and review the canary configuration
+kubectl kustomize kubernetes-canary
+
+# Apply the standard resources plus the 90/10 canary route
+kubectl apply -k kubernetes-canary
+kubectl get deployment,service -n emerald-housing
+
+# Roll back external traffic to stable Gateway
+kubectl apply -k kubernetes
+
+# After the route has switched back, remove the canary resources
+kubectl delete deployment/api-gateway-canary service/api-gateway-canary \
+  networkpolicy/api-gateway-canary-ingress-from-nginx -n emerald-housing</code></pre>
+<div class="callout warning"><strong>Deployment boundary:</strong> This canary overlay covers the API Gateway entry point. Society and Member continue to use their standard rolling updates. The candidate image must be available to the cluster, and the rollout, monitoring, and rollback steps still need runtime verification.</div>
 
 <h3>1. What Kubernetes does</h3>
 <p>Docker packages an application and its runtime into an image. Kubernetes runs those images as containers inside Pods and continually reconciles the cluster toward the desired state written in YAML. The control plane accepts the desired state; worker nodes run the Pods. If one Pod disappears, a Deployment and its ReplicaSet create another. Kubernetes is therefore an orchestrator, while Docker Compose starts a declared group of containers on one Docker host. Compose is useful locally; Kubernetes adds cluster scheduling, Services, rolling updates, self-healing and autoscaling.</p>
@@ -995,7 +1036,7 @@ Service society-service:8080  (stable DNS name / ClusterIP)
 <tr><td><code>kubernetes/namespace.yaml</code></td><td>Creates the <code>emerald-housing</code> namespace.</td><td>Labels the namespace as part of Emerald Housing.</td></tr>
 <tr><td><code>kubernetes/society/deployment.yaml</code></td><td>Society application Deployment.</td><td>Image <code>emerald/society-service:step4-audit</code>; HTTP 8080; requests 100m CPU/256Mi, limits 750m/640Mi; non-root UID 10001; RollingUpdate, maxUnavailable 0, maxSurge 1; 30-second termination grace.</td></tr>
 <tr><td><code>kubernetes/member/deployment.yaml</code></td><td>Member application Deployment.</td><td>Image <code>emerald/member-service:step4-audit</code>; HTTP 8080; requests 100m/256Mi, limits 750m/640Mi; non-root; same rollout and termination policy. Secret references provide database, session, internal-call and admin-provisioning credentials.</td></tr>
-<tr><td><code>kubernetes/gateway/deployment.yaml</code></td><td>Spring Cloud Gateway Deployment.</td><td>Image <code>emerald/api-gateway:step6-audit</code>; HTTP 8080; requests 100m/192Mi, limits 750m/512Mi; non-root; same rollout and termination policy.</td></tr>
+<tr><td><code>kubernetes/gateway/deployment.yaml</code></td><td>Stable Spring Cloud Gateway Deployment.</td><td>Image <code>emerald/api-gateway:step6-audit</code>; HTTP 8080; requests 100m/192Mi, limits 750m/512Mi; non-root; rolling update.</td></tr>
 <tr><td><code>kubernetes/society/service.yaml</code>, <code>member/service.yaml</code>, <code>gateway/service.yaml</code></td><td>Private ClusterIP endpoints.</td><td>Service port 8080 to the named container port <code>http</code>; selectors match app labels.</td></tr>
 <tr><td><code>kubernetes/config/application-config.yaml</code></td><td><code>emerald-app-config</code> ConfigMap.</td><td>Non-secret URLs, ports, cache TTLs, timeout and resilience values. In particular, <code>SOCIETY_SERVICE_BASE_URL=http://society-service:8080</code> and <code>REDIS_HOST=redis</code>.</td></tr>
 <tr><td><code>kubernetes/gateway/config.yaml</code></td><td><code>api-gateway-config</code> ConfigMap.</td><td>Gateway’s Member/Society Service URLs, session behavior, forward-header strategy, timeouts and rate limits.</td></tr>
@@ -1004,6 +1045,7 @@ Service society-service:8080  (stable DNS name / ClusterIP)
 <tr><td><code>kubernetes/nginx/gatewayclass.yaml</code>, <code>gateway.yaml</code>, <code>httproutes.yaml</code>, <code>policies.yaml</code></td><td>NGINX Gateway Fabric entry point.</td><td><code>emerald-edge</code>, <code>emerald.local</code>, HTTP-to-HTTPS 308 redirect, TLS termination via externally-created <code>emerald-local-tls</code>, HTTPS API forwarding to <code>api-gateway:8080</code>, round-robin upstream policy.</td></tr>
 <tr><td><code>kubernetes/kind-config.yaml</code></td><td>Local kind cluster shape.</td><td>One control-plane and one worker node.</td></tr>
 <tr><td><code>kubernetes/kustomization.yaml</code></td><td>New Kustomize package root.</td><td>References the existing app, Redis, NetworkPolicy and Gateway API files plus the new HPAs; does not manufacture credentials or install controllers.</td></tr>
+<tr><td><code>kubernetes-canary/</code></td><td>Opt-in Gateway canary overlay.</td><td>Adds a one-replica candidate Gateway and Service, patches HTTPS traffic to 90/10, and adds canary-specific network access. Requires the candidate image to be available in the cluster.</td></tr>
 <tr><td><code>kubernetes/autoscaling/*-hpa.yaml</code></td><td>New HPA resources.</td><td>CPU target 70%; minimums Society 2, Member 1, Gateway 2; maximums 4, 3, 4.</td></tr>
 </tbody></table></div>
 
@@ -1051,7 +1093,7 @@ spec:
 <p>Actual HPA files are <code>kubernetes/autoscaling/society-hpa.yaml</code>, <code>member-hpa.yaml</code> and <code>gateway-hpa.yaml</code>. Society keeps at least two replicas for the existing multi-Pod design; Gateway keeps at least two; Member starts at one but can grow to three. HPA actions remain unverified until a metrics provider and cluster are available.</p>
 
 <h3>9. ConfigMaps, Secrets and network boundaries</h3>
-<p>ConfigMaps hold non-sensitive values. Deployments load the shared app ConfigMap with <code>envFrom</code> and use a separate Gateway ConfigMap. Sensitive database, Redis, session-validation, internal-service and admin-provisioning values come from Secret references. The manifests expect Secrets named <code>emerald-db-credentials</code> and <code>emerald-security-credentials</code>; they do not create those values. The TLS Secret <code>emerald-local-tls</code> is also supplied separately. Base64 encoding is not encryption: protect Secret access with RBAC and appropriate cluster-level encryption. No secret values or TLS private keys are committed by this Kustomize package.</p>
+<p>ConfigMaps hold non-sensitive values. Deployments load the shared app ConfigMap with <code>envFrom</code> and use a separate Gateway ConfigMap. Sensitive database, Redis, session-validation, internal-service and admin-provisioning values come from Secret references. The manifests expect Secrets named <code>emerald-db-credentials</code> and <code>emerald-security-credentials</code>; the security Secret supplies <code>redis-password</code> for sessions/locks and <code>redis-cache-password</code> for Society cache Redis. The manifests do not create secret values. The TLS Secret <code>emerald-local-tls</code> is also supplied separately. Base64 encoding is not encryption: protect Secret access with RBAC and appropriate cluster-level encryption. No secret values or TLS private keys are committed by this Kustomize package.</p>
 <p>All three application Services and Redis are ClusterIP. NGINX Gateway Fabric terminates external TLS and forwards API traffic only to the Gateway Service. Spring Cloud Gateway then routes to Member or Society. NetworkPolicies limit selected ingress paths, while the current policies leave egress governed by the cluster’s default behavior. Policy enforcement depends on a CNI that supports NetworkPolicy. No direct external backend, Redis, or PostgreSQL Service is created here.</p>
 
 <h3>10. NGINX Gateway API, rolling updates and self-healing</h3>
@@ -1122,7 +1164,7 @@ kubectl delete -k kubernetes/</code></pre>
 <div class="tablebox"><table><thead><tr><th>Failure</th><th>Expected behavior in this design</th><th>Tradeoff or point to explain</th></tr></thead><tbody>
 <tr><td>Society is unavailable during flat assignment</td><td>Member’s bounded HTTP call and resilience rules fail safely; it must not save an unvalidated membership.</td><td>Assignment is unavailable while the required validation dependency is down; independent Member operations can continue.</td></tr>
 <tr><td>A Society Pod becomes unready or disappears</td><td>The Service should stop sending new traffic to its unready endpoint; the Deployment should replace a missing Pod.</td><td>In-flight calls can still fail, and recovery depends on probes, scheduling capacity, and the cluster.</td></tr>
-<tr><td>Redis is unavailable</td><td>Session and rate-limit features can be affected. Society reference reads should use the configured PostgreSQL fallback where possible.</td><td>Redis currently has one ephemeral Pod; its loss can remove sessions and cache entries.</td></tr>
+<tr><td>Redis is unavailable</td><td>The affected Redis-backed feature is impacted. Society cache Redis outage triggers bounded PostgreSQL fallback; session/lock Redis outage can affect login, rate limits, and Member writes.</td><td>Both Redis services currently use one ephemeral Pod; cache entries can be rebuilt, while session loss or unavailable membership locks have direct user impact.</td></tr>
 <tr><td>PostgreSQL is unavailable</td><td>Operations requiring database access cannot safely complete; readiness should prevent database-dependent Pods from receiving normal traffic.</td><td>Database availability is a system dependency; this repository does not configure PostgreSQL HA or recovery.</td></tr>
 <tr><td>A Gateway Pod is replaced</td><td>The Service should route to ready Gateway Pods; another replica can validate the session through shared Redis.</td><td>Redis must remain available, and a request already in flight during termination can fail.</td></tr>
 <tr><td>A flat changes after validation but before membership save</td><td>Society validation and the Member database write are separate operations.</td><td>There is a consistency window; the two services do not share an atomic transaction.</td></tr>
@@ -1135,29 +1177,32 @@ kubectl delete -k kubernetes/</code></pre>
 <div class="callout"><strong>A useful interview answer:</strong> “We use a stable Service name so callers survive Pod replacement. We scale replicas within limits, but CPU scaling can increase database connections, so we need capacity measurements. Flat assignment remains synchronous because it needs authoritative validation; if Society is down, we fail safely instead of saving uncertain data.”</div>
 
 <h3>17. Phase 16 completion status</h3>
-<ul><li><strong>Present and reused:</strong> namespace, app Deployments and ClusterIP Services, ConfigMaps, Redis, NetworkPolicies, NGINX Gateway API/TLS routing, probes, resource requests/limits and rolling updates.</li><li><strong>Added:</strong> three CPU-based HPAs and <code>kubernetes/kustomization.yaml</code>; app Deployment replica fields were removed so HPA owns their scale.</li><li><strong>Preserved:</strong> Kubernetes DNS, independent Society/Member databases, RestClient validation, Redis sessions/rate limiting/cache, Spring Security, Resilience4j and NGINX-to-Spring-Gateway routing.</li><li><strong>Not added:</strong> Kafka, observability stack, test frameworks or CI/CD.</li><li><strong>Pending manual verification:</strong> Kustomize build/apply, metrics-server availability, Pod readiness, DNS, EndpointSlices, HPA behavior, rollout, Pod replacement, Redis/session continuity, NGINX HTTPS, NetworkPolicy enforcement and database reachability.</li><li>No Markdown files or automated tests were changed. No tests, Maven, Docker, Helm, Kubernetes deployment or application startup commands were run.</li></ul>
+<ul><li><strong>Present and reused:</strong> namespace, app Deployments and ClusterIP Services, ConfigMaps, Redis services, NetworkPolicies, NGINX Gateway API/TLS routing, probes, resource requests/limits and rolling updates.</li><li><strong>Added:</strong> three CPU-based HPAs, <code>kubernetes/kustomization.yaml</code>, and the optional <code>kubernetes-canary/</code> Gateway overlay. App Deployment replica fields remain HPA-managed.</li><li><strong>Preserved:</strong> Kubernetes DNS, independent Society/Member databases, RestClient validation, Redis sessions/rate limiting/cache, Spring Security, Resilience4j and NGINX-to-Spring-Gateway routing.</li><li><strong>Not added:</strong> Kafka, observability stack, automated deployment pipeline, or automatic traffic analysis/promotion.</li><li><strong>Pending manual verification:</strong> applying the canary image in kind, 90/10 traffic split, candidate health and metrics, weight changes, rollback, metrics-server availability, HPA behavior, NetworkPolicy enforcement and database reachability.</li><li>The base and canary Kustomize packages render successfully. No cluster deployment or canary traffic test was run.</li></ul>
 </section>
 <section class="phase" id="phase17" style="--accent:var(--p2)">
 <div class="phase-no">Phase 17 · Database scaling foundations</div>
 <h2>Understand the database capacity this system has today</h2>
-<p class="lead">Society and Member each own a PostgreSQL database. The services use Spring Data JPA and Flyway, with Spring Boot's default HikariCP connection pool when available on the classpath. The current design scales application Pods; it does not configure database replicas or horizontal database partitioning.</p>
+<p class="lead">Society and Member each own a PostgreSQL database. Both services use Spring Data JPA and Flyway with explicitly tuned Hikari writer pools and optional read-only replica pools. Replica routing is configured in the applications; PostgreSQL replica servers remain externally provisioned.</p>
 
 <h3>Implemented database features</h3>
 <div class="tablebox"><table><thead><tr><th>Feature</th><th>Current implementation</th></tr></thead><tbody>
 <tr><td>Database per service</td><td>Society Service connects to <code>society_db</code>; Member Service connects to <code>member_db</code>. Each owns and changes its own schema.</td></tr>
-<tr><td>PostgreSQL persistence and connection pooling</td><td>Both services use the PostgreSQL JDBC driver and Spring Data JPA. Spring Boot auto-configures HikariCP from the JPA starter when available.</td></tr>
+<tr><td>PostgreSQL persistence and connection pooling</td><td>Each service has an explicit Hikari writer pool (default maximum 8 connections per Pod) with 2-second connection wait, 1-second validation timeout, 10-minute idle timeout, and 30-minute maximum lifetime.</td></tr>
+<tr><td>Optional read-replica routing</td><td>When enabled with a replica JDBC URL, Spring routes <code>@Transactional(readOnly = true)</code> database work to a separate Hikari reader pool (default maximum 4 connections per Pod). Without a replica, reads use the writer pool.</td></tr>
+<tr><td>Primary consistency path</td><td>Writes use the primary. Society's authenticated Member flat-validation lookup is explicitly routed to the primary so replication lag cannot cause a false “flat not found” result.</td></tr>
 <tr><td>Versioned schema migrations</td><td>Flyway applies each service's numbered SQL migrations at startup; Hibernate validates mappings against the migrated schema.</td></tr>
 <tr><td>Indexes and database constraints</td><td>Migrations define primary keys, foreign keys, checks, lookup indexes, and uniqueness rules, including the active membership and active mobile-number constraints.</td></tr>
 <tr><td>Environment-driven database connection</td><td>Each service accepts its own JDBC URL, username, and password from environment settings; database credentials are supplied to Kubernetes through Secret references.</td></tr>
 </tbody></table></div>
 
-<h3>Current scaling boundary</h3>
-<p>The HikariCP pool is not explicitly tuned in application configuration. There is no primary/replica datasource routing, read replica, database sharding, or table partitioning configured. The Kubernetes manifests run the application services, while PostgreSQL databases must already exist outside this project's Kubernetes manifests.</p>
-<div class="callout warning"><strong>Connection budget:</strong> increasing Society or Member replicas can increase the total number of database connections because each application process has its own pool. Estimate maximum pool connections across all replicas against PostgreSQL's connection limit before increasing replica counts. The repository does not currently set custom Hikari pool sizes or validate a production capacity budget.</div>
+<h3>Replica configuration and scaling boundary</h3>
+<p>Read replicas are opt-in. Set <code>SOCIETY_DB_REPLICA_ENABLED=true</code> and <code>SOCIETY_DB_REPLICA_URL</code> for Society, and/or <code>MEMBER_DB_REPLICA_ENABLED=true</code> and <code>MEMBER_DB_REPLICA_URL</code> for Member. Replica credentials can use the optional <code>society-replica-username/password</code> and <code>member-replica-username/password</code> Secret keys; when omitted, each service falls back to its writer credentials. Kubernetes does not create or configure PostgreSQL streaming replication.</p>
+<p>Replica reads can be behind the primary. Use the primary path where read-after-write freshness is required. The router does not automatically retry a failed replica query on the primary; monitor replica health and lag and disable replica routing if the endpoint is unhealthy.</p>
+<div class="callout warning"><strong>Connection budget:</strong> the default HPA maxima allow up to 4 Society Pods and 3 Member Pods. At defaults, the theoretical writer-pool maximum is <code>(4 + 3) × 8 = 56</code> connections. If both read replicas are enabled, the reader pools can add another <code>(4 + 3) × 4 = 28</code>, for up to 84 application connections across both databases, plus migrations and other clients. Reduce pool or HPA limits to fit the actual PostgreSQL server and replica connection budgets. When replicas are disabled, the reader route reuses the primary pool and does not create a second pool.</div>
 
 <h3>Database files</h3>
 <ul><li>Society settings and migrations: <code>services/society-service/src/main/resources/application.yml</code> and <code>services/society-service/src/main/resources/db/migration/</code>.</li><li>Member settings and migrations: <code>services/member-service/src/main/resources/application.yml</code> and <code>services/member-service/src/main/resources/db/migration/</code>.</li><li>Service-owned JDBC and JPA dependencies: each service's <code>pom.xml</code>.</li></ul>
-<p class="small">This phase describes the current source and deployment configuration. Read replicas, partitioning, sharding, pool tuning, database HA, and database failover have not been configured or runtime-verified here.</p>
+<p class="small">The services now support optional read-only routing and tuned Hikari pools. PostgreSQL replica provisioning, replication monitoring/failover, partitioning, sharding, database HA, and production capacity measurements remain outside the repo implementation and require runtime verification.</p>
 </section>
 <section class="phase" id="phase19" style="--accent:var(--p7)">
 <div class="phase-no">Phase 19 · Distributed locking and concurrency control</div>
@@ -1221,7 +1266,7 @@ MemberRepository.findByIdForUpdate()
 <tr><td><code>MemberRepository.findByIdForUpdate()</code> with <code>@Lock(PESSIMISTIC_WRITE)</code></td><td>Asks PostgreSQL to make another write for this member wait.</td></tr>
 <tr><td><code>FlatMembershipRepository.existsByMemberIdAndFlatIdAndRelationshipTypeAndEndDateIsNull()</code></td><td>Checks whether this active assignment already exists.</td></tr>
 <tr><td><code>uq_active_membership</code> in <code>V1__create_member_tables.sql</code></td><td>Database rule that blocks a second matching active assignment.</td></tr>
-<tr><td><code>SocietyCacheConfiguration</code></td><td>Contains the local Society cache-loading locks. These are separate from the Redis membership lock.</td></tr>
+<tr><td><code>SocietyCacheConfiguration</code></td><td>Coordinates Society cache cold misses with short per-key Redis locks on dedicated cache Redis. These are separate from the Member membership lock.</td></tr>
 </tbody></table></div>
 
 <h3>Confirm the behavior with Postman</h3>

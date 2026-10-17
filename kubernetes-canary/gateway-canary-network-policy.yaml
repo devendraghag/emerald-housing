@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-canary-ingress-from-nginx
+  namespace: emerald-housing
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway-canary
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: emerald-edge
+      ports:
+        - protocol: TCP
+          port: 8080

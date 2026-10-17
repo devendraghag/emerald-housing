@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class FloorService {
@@ -25,12 +26,14 @@ public class FloorService {
         this(floorRepository, new SocietyCacheMetrics(new SimpleMeterRegistry()));
     }
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = SocietyCacheConfiguration.FLOOR_LIST, key = "'all'", sync = true)
     public List<FloorResponse> getFloors() {
         return cacheMetrics.recordDatabaseLoad("floors", () -> floorRepository.findAllByOrderByFloorNumberAsc().stream()
                 .map(floor -> new FloorResponse(floor.getFloorNumber())).toList());
     }
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public FloorResponse getFloor(int floorNumber) {
         return floorRepository.findByFloorNumber(floorNumber)
                 .map(floor -> new FloorResponse(floor.getFloorNumber()))

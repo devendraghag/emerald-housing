@@ -4,6 +4,9 @@ metadata:
   name: api-gateway-config
   namespace: emerald-housing
 data:
+  TRACING_OTLP_ENABLED: "false"
+  TRACING_SAMPLING_PROBABILITY: "0.1"
+  INSTANCE_ID: "api-gateway"
   MEMBER_SERVICE_URL: "http://member-service:8080"
   SOCIETY_SERVICE_URL: "http://society-service:8080"
   MEMBER_CREDENTIAL_URL: "http://member-service:8080/internal/auth/credentials"

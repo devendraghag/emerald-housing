@@ -12,6 +12,8 @@ resources:
   - gateway/service.yaml
   - redis/deployment.yaml
   - redis/service.yaml
+  - redis-cache/deployment.yaml
+  - redis-cache/service.yaml
   - networkpolicies.yaml
   - nginx/gatewayclass.yaml
   - nginx/gateway.yaml

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.emerald.society.config.CacheFallbackOverloadedException;
 
 import java.time.Instant;
 import java.util.Map;
@@ -43,6 +44,13 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "A flat with this number already exists", request);
     }
 
+    @ExceptionHandler(CacheFallbackOverloadedException.class)
+    public ResponseEntity<ApiError> handleCacheFallbackOverloaded(
+            CacheFallbackOverloadedException exception, HttpServletRequest request) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "CACHE_FALLBACK_OVERLOADED",
+                "Society is limiting database reads while Redis is unavailable; retry shortly", request);
+    }
+
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ApiError> handleBadRequest(Exception exception, HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
@@ -64,6 +72,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof CacheFallbackOverloadedException) {
+                return error(HttpStatus.SERVICE_UNAVAILABLE, "CACHE_FALLBACK_OVERLOADED",
+                        "Society is limiting database reads while Redis is unavailable; retry shortly", request);
+            }
+        }
         LOGGER.error("Unexpected error while handling {}", request.getRequestURI(), exception);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred", request);

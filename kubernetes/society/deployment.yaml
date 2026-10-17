@@ -17,6 +17,10 @@ spec:
       app: society-service
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8080"
       labels:
         app: society-service
         app.kubernetes.io/name: society-service
@@ -53,6 +57,18 @@ spec:
                 secretKeyRef:
                   name: emerald-db-credentials
                   key: society-password
+            - name: SOCIETY_DB_REPLICA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-db-credentials
+                  key: society-replica-username
+                  optional: true
+            - name: SOCIETY_DB_REPLICA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-db-credentials
+                  key: society-replica-password
+                  optional: true
             - name: SESSION_VALIDATION_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -63,11 +79,11 @@ spec:
                 secretKeyRef:
                   name: emerald-security-credentials
                   key: member-to-society-token
-            - name: REDIS_PASSWORD
+            - name: SOCIETY_CACHE_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: emerald-security-credentials
-                  key: redis-password
+                  key: redis-cache-password
           startupProbe:
             httpGet:
               path: /actuator/health/liveness

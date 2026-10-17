@@ -2,6 +2,7 @@ package com.emerald.society.event;
 
 import com.emerald.society.config.SocietyCacheConfiguration;
 import com.emerald.society.config.SocietyCacheMetrics;
+import com.emerald.society.config.SocietyNegativeCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
@@ -15,14 +16,18 @@ public class FlatCacheInvalidationListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(FlatCacheInvalidationListener.class);
     private final CacheManager caches;
     private final SocietyCacheMetrics metrics;
+    private final SocietyNegativeCache negativeCache;
 
-    public FlatCacheInvalidationListener(CacheManager cacheManager, SocietyCacheMetrics metrics) {
+    public FlatCacheInvalidationListener(CacheManager cacheManager, SocietyCacheMetrics metrics,
+            SocietyNegativeCache negativeCache) {
         this.caches = cacheManager;
         this.metrics = metrics;
+        this.negativeCache = negativeCache;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void invalidateAfterCommit(FlatReferenceChangedEvent event) {
+        negativeCache.evictFlat(event.flatId());
         evict(SocietyCacheConfiguration.FLAT_BY_ID, event.flatId().toString());
         evict(SocietyCacheConfiguration.ALL_FLATS, "all");
         evictFloor(event.previousFloorNumber());

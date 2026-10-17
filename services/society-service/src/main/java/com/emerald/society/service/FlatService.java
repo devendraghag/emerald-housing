@@ -7,6 +7,7 @@ import com.emerald.society.dto.UpdateFlatRequest;
 import com.emerald.society.config.PageRequests;
 import com.emerald.society.config.SocietyCacheConfiguration;
 import com.emerald.society.config.SocietyCacheMetrics;
+import com.emerald.society.config.SocietyNegativeCache;
 import com.emerald.society.entity.FlatEntity;
 import com.emerald.society.event.FlatReferenceChangedEvent;
 import com.emerald.society.exception.FlatNotFoundException;
@@ -35,16 +36,18 @@ public class FlatService {
     private final SocietyRepository societies;
     private final ApplicationEventPublisher events;
     private final SocietyCacheMetrics cacheMetrics;
+    private final SocietyNegativeCache negativeCache;
     @Autowired
     public FlatService(FlatRepository flats, FloorRepository floors, SocietyRepository societies,
-            ApplicationEventPublisher events, SocietyCacheMetrics cacheMetrics) {
+            ApplicationEventPublisher events, SocietyCacheMetrics cacheMetrics, SocietyNegativeCache negativeCache) {
         this.flats = flats; this.floors = floors; this.societies = societies;
-        this.events = events; this.cacheMetrics = cacheMetrics;
+        this.events = events; this.cacheMetrics = cacheMetrics; this.negativeCache = negativeCache;
     }
     public FlatService(FlatRepository flats, FloorRepository floors, SocietyRepository societies) {
-        this(flats, floors, societies, event -> { }, new SocietyCacheMetrics(new SimpleMeterRegistry()));
+        this(flats, floors, societies, event -> { }, new SocietyCacheMetrics(new SimpleMeterRegistry()), null);
     }
-    @Transactional(readOnly = true)
+    // Member assignment validation must read the primary to avoid replica-lag false negatives.
+    @Transactional(readOnly = false)
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('SERVICE_MEMBER_FLAT_READ')")
     public FlatResponse get(UUID id) {
         return loadFlat(id);
@@ -53,7 +56,15 @@ public class FlatService {
     @PreAuthorize("hasRole('ADMIN')")
     @Cacheable(cacheNames = SocietyCacheConfiguration.FLAT_BY_ID, key = "#p0.toString()", sync = true)
     public FlatResponse getCached(UUID id) {
-        return cacheMetrics.recordDatabaseLoad("flat-by-id", () -> loadFlat(id));
+        if (negativeCache != null && negativeCache.containsFlat(id)) {
+            throw new FlatNotFoundException(id);
+        }
+        try {
+            return cacheMetrics.recordDatabaseLoad("flat-by-id", () -> loadFlat(id));
+        } catch (FlatNotFoundException exception) {
+            if (negativeCache != null) negativeCache.rememberMissingFlat(id);
+            throw exception;
+        }
     }
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
