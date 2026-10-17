@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -27,7 +29,8 @@ public class IdempotencyRecordEntity {
     @Column(name = "idempotency_key", nullable = false, length = 128)
     private String idempotencyKey;
 
-    @Column(name = "request_fingerprint", nullable = false, length = 64)
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "request_fingerprint", nullable = false, length = 64, columnDefinition = "char(64)")
     private String requestFingerprint;
 
     @Column(nullable = false, length = 20)

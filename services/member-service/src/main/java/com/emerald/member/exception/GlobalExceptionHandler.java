@@ -73,6 +73,19 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, "DUPLICATE_MEMBERSHIP", exception.getMessage(), Map.of(), request);
     }
 
+    @ExceptionHandler(MembershipUpdateInProgressException.class)
+    public ResponseEntity<ApiError> handleMembershipUpdateInProgress(
+            MembershipUpdateInProgressException exception, HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "MEMBERSHIP_UPDATE_IN_PROGRESS", exception.getMessage(), Map.of(), request);
+    }
+
+    @ExceptionHandler(MembershipLockUnavailableException.class)
+    public ResponseEntity<ApiError> handleMembershipLockUnavailable(
+            MembershipLockUnavailableException exception, HttpServletRequest request) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "MEMBERSHIP_LOCK_UNAVAILABLE",
+                exception.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler(InactiveMemberException.class)
     public ResponseEntity<ApiError> handleInactiveMember(InactiveMemberException exception, HttpServletRequest request) {
         return error(HttpStatus.CONFLICT, "MEMBER_INACTIVE", exception.getMessage(), Map.of(), request);

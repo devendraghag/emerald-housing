@@ -23,7 +23,7 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
     private final String credentialUrl;
     private final String serviceToken;
 
-    public AdminAuthenticationManager(WebClient.Builder builder,
+    public AdminAuthenticationManager(
             @Value("${emerald.security.member-credential-url}") String credentialUrl,
             @Value("${emerald.security.gateway-authentication-token:}") String serviceToken,
             @Value("${emerald.security.credential-connect-timeout:2s}") Duration connectTimeout,
@@ -31,7 +31,7 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(connectTimeout.toMillis()))
                 .responseTimeout(responseTimeout);
-        this.memberClient = builder.clientConnector(new ReactorClientHttpConnector(httpClient)).build();
+        this.memberClient = WebClient.builder().clientConnector(new ReactorClientHttpConnector(httpClient)).build();
         this.credentialUrl = credentialUrl;
         this.serviceToken = serviceToken;
     }
@@ -55,7 +55,7 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
                     return response.bodyToMono(AdminIdentityResponse.class);
                 })
                 .switchIfEmpty(Mono.error(new AuthServiceUnavailableException()))
-                .map(identity -> {
+                .<Authentication>map(identity -> {
                     if (identity.adminId() == null || identity.username() == null || !"ADMIN".equals(identity.role())) {
                         throw new AuthServiceUnavailableException();
                     }

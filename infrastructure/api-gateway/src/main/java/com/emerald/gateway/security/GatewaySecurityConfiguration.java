@@ -13,7 +13,7 @@ import org.springframework.security.web.server.csrf.ServerCsrfTokenRepository;
 import org.springframework.security.web.server.authentication.logout.SecurityContextServerLogoutHandler;
 import org.springframework.security.web.server.authentication.logout.WebSessionServerLogoutHandler;
 import org.springframework.security.web.server.authentication.logout.DelegatingServerLogoutHandler;
-import org.springframework.web.server.WebSessionIdResolver;
+import org.springframework.web.server.session.WebSessionIdResolver;
 import org.springframework.web.server.session.CookieWebSessionIdResolver;
 
 @Configuration

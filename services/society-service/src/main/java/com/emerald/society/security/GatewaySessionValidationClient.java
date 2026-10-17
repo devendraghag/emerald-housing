@@ -17,7 +17,7 @@ public class GatewaySessionValidationClient {
     private final String cookieName;
     private final String validationToken;
 
-    public GatewaySessionValidationClient(RestClient.Builder builder,
+    public GatewaySessionValidationClient(
             @Value("${emerald.security.gateway-session-validation-url:http://localhost:8080/internal/auth/session}") String url,
             @Value("${emerald.security.session-cookie-name:SESSION}") String cookieName,
             @Value("${emerald.security.session-validation-token:}") String validationToken,
@@ -28,7 +28,7 @@ public class GatewaySessionValidationClient {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(readTimeout);
-        this.client = builder.requestFactory(factory).baseUrl(url).build();
+        this.client = RestClient.builder().requestFactory(factory).baseUrl(url).build();
     }
 
     public Optional<SessionIdentityResponse> validate(HttpServletRequest request) {

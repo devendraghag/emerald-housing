@@ -1,6 +1,7 @@
 package com.emerald.member.service;
 
 import com.emerald.member.client.SocietyClient;
+import com.emerald.member.lock.RedisMembershipLock;
 import com.emerald.member.exception.FlatNotEligibleException;
 import com.emerald.member.dto.CreateMembershipRequest;
 import com.emerald.member.dto.MembershipResponse;
@@ -16,15 +17,18 @@ public class MembershipService {
     private final MemberService members;
     private final SocietyClient societyClient;
     private final MembershipWriter writer;
-    public MembershipService(MemberService members, SocietyClient societyClient, MembershipWriter writer) {
+    private final RedisMembershipLock membershipLock;
+    public MembershipService(MemberService members, SocietyClient societyClient, MembershipWriter writer,
+            RedisMembershipLock membershipLock) {
         this.members=members; this.societyClient=societyClient; this.writer=writer;
+        this.membershipLock=membershipLock;
     }
     @PreAuthorize("hasRole('ADMIN')")
     public MembershipResponse assign(UUID memberId, CreateMembershipRequest request) {
         members.requireActive(memberId);
         var flat = societyClient.getFlat(request.flatId());
         if (!"ACTIVE".equals(flat.status())) throw new FlatNotEligibleException();
-        return writer.persist(memberId, request);
+        return membershipLock.withMemberLock(memberId, () -> writer.persist(memberId, request));
     }
     @PreAuthorize("hasRole('ADMIN')")
     public List<MembershipResponse> byMember(UUID id) { return writer.byMember(id); }
@@ -40,6 +44,6 @@ public class MembershipService {
     }
     @PreAuthorize("hasRole('ADMIN')")
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
-        return writer.end(memberId, membershipId, request);
+        return membershipLock.withMemberLock(memberId, () -> writer.end(memberId, membershipId, request));
     }
 }

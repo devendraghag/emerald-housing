@@ -12,13 +12,15 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 
 </style><style>
 .db-ownership-diagram{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:1rem 0;padding:1rem;border:2px solid var(--p3);border-radius:14px;background:color-mix(in srgb,var(--p3) 7%,var(--paper))}.db-service-box{padding:.9rem;border:1px solid var(--line);border-radius:11px;background:var(--paper);text-align:center}.db-service-box>strong{display:block;font-size:1.05rem;color:var(--p3)}.db-service-box>span{display:block;margin:.2rem 0 .7rem;color:var(--muted);font-size:.84rem}.db-pods{display:flex;justify-content:center;gap:.55rem;flex-wrap:wrap}.db-pod{padding:.55rem .75rem;border:1px solid var(--p2);border-radius:9px;background:color-mix(in srgb,var(--p2) 10%,var(--paper));font-weight:700}.db-arrow{margin:.6rem 0;color:var(--muted);font-size:.9rem}.db-store{padding:.55rem;border:2px solid var(--p4);border-radius:9px;background:color-mix(in srgb,var(--p4) 10%,var(--paper));font-weight:800}.db-http-flow{grid-column:1/-1;padding:.75rem;border:1px dashed var(--p3);border-radius:9px;background:var(--paper);text-align:center;overflow-wrap:anywhere}.db-http-flow strong{color:var(--p3)}@media(max-width:650px){.db-ownership-diagram{grid-template-columns:1fr}.db-http-flow{grid-column:auto}}
-.auth-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0}.auth-lane{padding:1rem;border:2px solid var(--line);border-radius:14px;background:var(--paper);min-width:0}.auth-lane h4{font-size:1.05rem;margin:0 0 .75rem}.auth-lane.positive{border-color:#258454;background:color-mix(in srgb,#258454 5%,var(--paper))}.auth-lane.negative{border-color:#c34b4b;background:color-mix(in srgb,#c34b4b 5%,var(--paper))}.auth-step{padding:.75rem .85rem;border:1px solid var(--line);border-left:5px solid var(--p7);border-radius:9px;background:var(--paper);overflow-wrap:anywhere}.auth-step strong{display:block;margin-bottom:.15rem}.auth-step small{display:block;color:var(--muted);font-size:.86rem}.positive .auth-step{border-left-color:#258454}.negative .auth-step{border-left-color:#c34b4b}.auth-arrow{text-align:center;line-height:1.4;padding:.15rem;color:var(--muted);font-weight:850}.auth-result{margin-top:.65rem;padding:.7rem .8rem;border-radius:9px;font-weight:750}.auth-result.ok{border:1px solid #258454;background:var(--good);color:var(--ink)}.auth-result.fail{border:1px solid #c34b4b;background:color-mix(in srgb,#c34b4b 10%,var(--paper));color:var(--ink)}.auth-note{font-size:.9rem;color:var(--muted);margin:.65rem 0 0}@media(max-width:760px){.auth-flow{grid-template-columns:1fr}}</style></head>
+.auth-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0}.auth-lane{padding:1rem;border:2px solid var(--line);border-radius:14px;background:var(--paper);min-width:0}.auth-lane h4{font-size:1.05rem;margin:0 0 .75rem}.auth-lane.positive{border-color:#258454;background:color-mix(in srgb,#258454 5%,var(--paper))}.auth-lane.negative{border-color:#c34b4b;background:color-mix(in srgb,#c34b4b 5%,var(--paper))}.auth-step{padding:.75rem .85rem;border:1px solid var(--line);border-left:5px solid var(--p7);border-radius:9px;background:var(--paper);overflow-wrap:anywhere}.auth-step strong{display:block;margin-bottom:.15rem}.auth-step small{display:block;color:var(--muted);font-size:.86rem}.positive .auth-step{border-left-color:#258454}.negative .auth-step{border-left-color:#c34b4b}.auth-arrow{text-align:center;line-height:1.4;padding:.15rem;color:var(--muted);font-weight:850}.auth-result{margin-top:.65rem;padding:.7rem .8rem;border-radius:9px;font-weight:750}.auth-result.ok{border:1px solid #258454;background:var(--good);color:var(--ink)}.auth-result.fail{border:1px solid #c34b4b;background:color-mix(in srgb,#c34b4b 10%,var(--paper));color:var(--ink)}.auth-note{font-size:.9rem;color:var(--muted);margin:.65rem 0 0}@media(max-width:760px){.auth-flow{grid-template-columns:1fr}}
+#phase17>p,#phase19>p{max-width:none;text-align:justify;text-justify:inter-word}
+</style></head>
 <body><a class="skip" href="#main">Skip to content</a><div class="layout">
 <aside id="side"><div class="mobile"><div class="brand">Emerald Housing<small>Simple English guide</small></div><button class="btn" id="menubtn">Contents</button></div><div class="brand desktop">Emerald Housing<small>Plain English · Phases 1–8</small></div><div class="navtools"><button class="btn" id="theme">Use dark theme</button></div><nav aria-label="Contents">
 <div class="label">Start here</div><a href="#overview">Overview</a><a href="#words">Simple word guide</a><a href="#technology">Technology</a><a href="#roadmap">Roadmap</a><a href="#run">How to run</a>
-<div class="label">Phases</div><a href="#phase1">1 · Two applications</a><a href="#phase2">2 · Databases</a><a class="sub" href="#flyway">Flyway</a><a href="#phase3">3 · HTTP communication</a><a href="#phase4">4 · Kubernetes names</a><a href="#phase5">5 · Replicas</a><a href="#phase6">6 · Gateway</a><a href="#phase7">7 · Security</a><a href="#phase8">8 · HTTPS edge</a><a href="#phase10">10 · Distributed cache</a>
+<div class="label">Phases</div><a href="#phase1">1 · Two applications</a><a href="#phase2">2 · Databases</a><a class="sub" href="#flyway">Flyway</a><a href="#phase3">3 · HTTP communication</a><a href="#phase4">4 · Kubernetes names</a><a href="#phase5">5 · Replicas</a><a href="#phase6">6 · Gateway</a><a href="#phase7">7 · Security</a><a href="#phase8">8 · HTTPS edge</a><a href="#phase9">9 | Resilience</a><a href="#phase10">10 · Distributed cache</a><a href="#phase14">14 | System design overview</a><a href="#phase16">16 | Kubernetes orchestration</a><a href="#phase17">17 | Database scaling</a><a href="#phase19">19 | Distributed locking</a>
 <div class="label">Use the system</div><a href="#api-contracts">API reference</a><a href="#manual-k8s">Manual Kubernetes checklist</a>
-<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a><a href="#phase16">16 | Kubernetes orchestration</a><a href="#phase31">31 | Java virtual threads</a></nav></aside>
+<div class="label">Kubernetes file map</div><a href="#click-flow">Kubernetes configuration walkthrough</a><a class="sub" href="#k8s-order">Resource creation order</a><a class="sub" href="#k8s-yaml-reference">Kubernetes YAML property guide</a><a href="#click-flow">File walkthrough</a><a class="sub" href="#cluster-map">Cluster and resources</a><a class="sub" href="#file-walk">Files and line locations</a></nav></aside>
 <main id="main">
 <header class="hero" id="overview"><div class="phase-no">A beginner's guide</div><h1>Emerald Housing Society</h1><p class="lead">Learn how the project grows from two small Java applications into a system with separate databases, service communication, Kubernetes and an API Gateway.</p><p>Read one phase at a time. Technical words are explained in everyday language, and diagrams show how the pieces fit together.</p><div class="callout good"><strong>Short version:</strong> Society Service looks after the building. Member Service looks after people. Each has its own database. Kubernetes runs the applications and gives them stable names. The Gateway is one front door for API calls.</div><span class="badge">Phases 1–8</span> <span class="badge">Works offline</span> <span class="badge">Light/dark themes</span></header>
 
@@ -31,79 +33,106 @@ html[data-theme=dark]{color-scheme:dark;--bg:#101720;--paper:#172330;--soft:#1e2
 <section id="roadmap"><h2>Eight project steps</h2><div class="grid">
 <article class="card"><span class="badge">Phase 1</span><h3>Two apps</h3><p>Separate building work from member work.</p></article><article class="card"><span class="badge">Phase 2</span><h3>Keep data</h3><p>Give each app its own PostgreSQL database.</p></article><article class="card"><span class="badge">Phase 3</span><h3>Ask another app</h3><p>Check a flat before saving a member-flat link.</p></article><article class="card"><span class="badge">Phase 4</span><h3>Stable names</h3><p>Let Kubernetes DNS find replaceable Pods.</p></article><article class="card"><span class="badge">Phase 5</span><h3>Extra copies</h3><p>Run several copies and replace stopped ones.</p></article><article class="card"><span class="badge">Phase 6</span><h3>One front door</h3><p>Use Gateway to route callers to either app.</p></article><article class="card"><span class="badge">Phase 7</span><h3>Authenticated access</h3><p>Use an ADMIN session, shared through Redis, to protect APIs.</p></article><article class="card"><span class="badge">Phase 8</span><h3>Secure outside entrance</h3><p>Use NGINX HTTPS in front of Spring Cloud Gateway.</p></article></div></section>
 
-<section id="run"><h2>Common section: how to run it</h2><div class="callout warning"><strong>Phase 7 note:</strong> the run instructions below describe the Phase 1–6 baseline. To use protected APIs after Step 7, also configure the admin and internal tokens and start Redis as described in <a href="#phase7">Phase 7 local/Kubernetes security setup</a>.</div><p>There are two ways to run the current project. Run the Java applications directly on your computer for local development, or run their Docker images in Kubernetes. Do one setup at a time. For local learning, start with Option A.</p><div class="callout"><strong>Important:</strong> The current Society and Member code uses PostgreSQL. The databases must exist and be reachable before those applications start. Flyway creates or updates tables inside each database when its application starts.</div>
+<section id="run"><h2>Common section: how to run it</h2><div class="callout warning"><strong>Current setup:</strong> These instructions apply to the current source. Protected Gateway APIs need the Phase 7 credentials and Redis setup. Phase 8 HTTPS ingress is an optional Kubernetes edge. Phase 16 adds Kustomize and CPU-based HPA resources; Phase 17 documents PostgreSQL scaling limits; Phase 19 locking runs inside the existing Member/Society services.</div><p>There are two ways to run the current project. Run the Java applications directly on your computer for local development, or run their Docker images in Kubernetes. Do one setup at a time. For local learning, start with Option A.</p><div class="callout"><strong>Important:</strong> Society and Member need their existing PostgreSQL databases, <code>society_db</code> and <code>member_db</code>, before startup. Flyway creates or updates tables; it does not create the databases. Both services use their own default connection pool settings; this project does not provision PostgreSQL replicas.</div><div class="callout good"><strong>Current phase settings:</strong> For authenticated Gateway requests and shared rate limits, run Redis and configure the Phase 7 tokens/admin account; see <a href="#phase7">Phase 7 local/Kubernetes setup</a>. Society also uses Redis for reference-data caching and can fall back to PostgreSQL on cache errors. Phase 9 resilience and idempotency use configured defaults; Phase 19 locking is built into membership writes and adds no separate process. Redis, database replicas, and Hikari pool sizes are not automatically provisioned or scaled by these application settings.</div>
 <h3>Prerequisites</h3><ul><li>Java Development Kit 21.</li><li>PowerShell on Windows, IntelliJ IDEA if you prefer to start apps from the IDE, and the project Maven Wrapper files.</li><li>PostgreSQL with the databases <code>society_db</code> and <code>member_db</code>, and a PostgreSQL user/password that works on your computer.</li><li>For Kubernetes only: Docker Desktop, kind, and kubectl.</li><li>The Postman files in <code>postman/</code>.</li></ul><p>The services have separate Maven projects. Their wrappers are under <code>services/society-service/</code> and <code>services/member-service/</code>. The Gateway project is under <code>infrastructure/api-gateway/</code>. You do not need a system-wide <code>mvn</code> command when using the wrappers, but the wrapper may need network access to download Maven or dependencies the first time.</p>
-<h3>Option A: run locally from PowerShell</h3><ol class="steps"><li><strong>Open the repository:</strong> open <code>emerald-housing</code> in IntelliJ IDEA. Set Project SDK, module SDK, and Maven JDK to Java 21. Import the Society and Member Maven projects from their <code>pom.xml</code> files. Keep preview features disabled.</li><li><strong>Start PostgreSQL and create the databases:</strong> PostgreSQL must be running. If you use one PostgreSQL role called <code>emerald</code> for both services, create that role first if needed. Open psql as the PostgreSQL administrator and run the role commands only if the role does not already exist:<pre><code>psql -h localhost -p 5432 -U postgres -d postgres
-CREATE ROLE emerald LOGIN;
-\password emerald
-\q</code></pre><p>Then create each database owned by that role. Run only the database commands for databases that do not already exist:</p><pre><code>createdb -h localhost -p 5432 -U postgres -O emerald society_db
-createdb -h localhost -p 5432 -U postgres -O emerald member_db
-psql -h localhost -p 5432 -U postgres -d postgres -c "SELECT datname FROM pg_database WHERE datname IN ('society_db','member_db');"</code></pre><p>If <code>createdb</code> is not on PATH, run it from PostgreSQL's <code>bin</code> directory or use pgAdmin. If you use separate application roles, create each database with the matching owner and use those credentials below. Flyway creates tables, not databases.</p></li><li><strong>Open three PowerShell terminals:</strong> one for Society, one for Member, and one for Gateway if you want to use Gateway. Environment variables set with <code>$env:</code> apply to that terminal and processes started from it. They do not automatically transfer to an IntelliJ process launched separately from the Start menu.</li><li><strong>Start Society Service in its terminal:</strong> set Society's DB variables, then run its Maven Wrapper. The default local port is 8081. Keep this terminal open.</li><li><strong>Start Member Service in a second terminal:</strong> set Member's DB variables and its Society URL, then run its Maven Wrapper. The default local port is 8082. Society must be running for flat assignment validation. Keep this terminal open too.</li><li><strong>Optionally start Gateway in a third terminal:</strong> after the backend services are running, start Gateway. Its default port is 8080 and its local backend defaults are Society on 8081 and Member on 8082.</li><li><strong>Check health:</strong> wait for each application's startup to finish; backend startup includes Flyway and Hibernate schema validation. Then run these commands in another PowerShell terminal:<pre><code>Invoke-RestMethod http://localhost:8081/actuator/health
-Invoke-RestMethod http://localhost:8082/actuator/health
-Invoke-RestMethod http://localhost:8080/actuator/health</code></pre><p>Only run the Gateway check if you started Gateway.</p></li><li><strong>Use Postman:</strong> import the collection and environment below, select the local environment, and start with Society reads. Create a flat if the database has none, create a member, then assign that member to the flat. To call through Gateway, set <code>gatewayBaseUrl</code> to <code>http://localhost:8080</code>.</li></ol>
-<h4>Society terminal: local PostgreSQL settings and startup</h4><p>Run this in the Society terminal. Replace the example username and password with your actual local PostgreSQL credentials. Then change to the service directory and start the application:</p><pre><code>$env:SOCIETY_DB_URL = "jdbc:postgresql://localhost:5432/society_db"
+<h3>Option A: run locally</h3>
+<p><strong>Prerequisites:</strong> Java 21, PowerShell, PostgreSQL running, <code>society_db</code> and <code>member_db</code> created, and valid database credentials. Run from the repository root. Open separate PowerShell terminals for the token setup, Society, Member, and Gateway.</p>
+<h4>1. Generate the three private service tokens</h4><p>Run this once in the token-setup terminal before starting any service. Copy and keep the three printed values private. These are separate tokens with different purposes:</p><ul><li><code>GATEWAY_AUTHENTICATION_TOKEN</code>: same value in Gateway and Member.</li><li><code>SESSION_VALIDATION_TOKEN</code>: same value in Gateway, Member, and Society. This is required for authenticated requests; a missing or mismatched value can cause <code>SESSION_VALIDATION_UNAVAILABLE</code>.</li><li><code>MEMBER_TO_SOCIETY_TOKEN</code>: same value in Member and Society.</li></ul><pre><code>$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$gatewayAuthToken = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+Write-Host "GATEWAY_AUTHENTICATION_TOKEN (Gateway + Member): $gatewayAuthToken"
+
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$sessionValidationToken = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+Write-Host "SESSION_VALIDATION_TOKEN (Gateway + Member + Society): $sessionValidationToken"
+
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$memberToSocietyToken = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+Write-Host "MEMBER_TO_SOCIETY_TOKEN (Member + Society): $memberToSocietyToken"</code></pre><p>PowerShell windows do not share variables. Paste each generated value into the matching service terminals below, exactly as printed and inside the quotes.</p>
+<h4>2. Start Society Service</h4><pre><code>cd .\services\society-service
+$env:SOCIETY_DB_URL = "jdbc:postgresql://localhost:5432/society_db"
 $env:SOCIETY_DB_USERNAME = "emerald"
-$env:SOCIETY_DB_PASSWORD = "your-local-password"
+$env:SOCIETY_DB_PASSWORD = "12341234"
 $env:SOCIETY_SERVER_PORT = "8081"
-cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing\services\society-service"
+$env:SESSION_VALIDATION_TOKEN = 'paste the generated session validation token'
+$env:MEMBER_TO_SOCIETY_TOKEN = 'paste the generated Member-to-Society token'
 .\mvnw.cmd spring-boot:run</code></pre>
-<h4>Member terminal: local PostgreSQL settings and startup</h4><p>Run this in the separate Member terminal. Use the same database role only if that role has access to both databases; otherwise set the correct Member role and password. The Society URL points to the locally running Society Service:</p><pre><code>$env:MEMBER_DB_URL = "jdbc:postgresql://localhost:5432/member_db"
+<h4>3. Start Member Service</h4><p>Paste the generated Gateway authentication, session validation, and Member-to-Society tokens into this Member terminal. Keep it open. The admin block generates a password for Postman; it meets the application's 14 to 72 byte requirement. Use an admin username that is not already in <code>member_db.admin_users</code>.</p><pre><code>cd .\services\member-service
+$env:MEMBER_DB_URL = "jdbc:postgresql://localhost:5432/member_db"
 $env:MEMBER_DB_USERNAME = "emerald"
 $env:MEMBER_DB_PASSWORD = "your-local-password"
 $env:MEMBER_SERVER_PORT = "8082"
 $env:SOCIETY_SERVICE_BASE_URL = "http://localhost:8081"
-$env:SOCIETY_SERVICE_CONNECT_TIMEOUT = "2s"
-$env:SOCIETY_SERVICE_READ_TIMEOUT = "3s"
-cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing\services\member-service"
+$env:GATEWAY_AUTHENTICATION_TOKEN = 'paste the generated Gateway authentication token'
+$env:SESSION_VALIDATION_TOKEN = 'paste the generated session validation token'
+$env:MEMBER_TO_SOCIETY_TOKEN = 'paste the generated Member-to-Society token'
+$env:ADMIN_PROVISIONING_USERNAME = 'emerald-admin-local-2'
+$passBytes = New-Object byte[] 24
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($passBytes)
+$env:ADMIN_PROVISIONING_PASSWORD = [Convert]::ToBase64String($passBytes)
+$rng.Dispose()
+$env:ADMIN_PROVISIONING_PASSWORD
 .\mvnw.cmd spring-boot:run</code></pre>
-<h4>Optional Gateway terminal</h4><p>Run this from the repository root after Society and Member are running. The Society wrapper is used to launch the separate Gateway Maven project:</p><pre><code>cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing"
+<p><code>emerald-admin-local-2</code> is an example: check that it is not already in <code>member_db.admin_users</code>, and choose another unused username if needed. Provisioning creates the account only if the username is new; it does not reset an existing account's password. Set Postman's <code>adminUsername</code> to the username you used, and <code>adminPassword</code> to the printed password.</p>
+<h4>4. Start Redis, then the API Gateway</h4><p><strong>Prerequisite:</strong> Redis must be running. In a separate Gateway terminal, paste the same Gateway authentication token and session validation token used in Member. See <a href="#phase7">Phase 7</a>.</p><pre><code>$env:GATEWAY_AUTHENTICATION_TOKEN = 'paste the same Gateway authentication token'
+$env:SESSION_VALIDATION_TOKEN = 'paste the same session validation token'
 .\services\society-service\mvnw.cmd -f .\infrastructure\api-gateway\pom.xml spring-boot:run</code></pre>
-<h4>Health and sample local API addresses</h4><pre><code>Society health:  http://localhost:8081/actuator/health
-Member health:   http://localhost:8082/actuator/health
-Gateway health:  http://localhost:8080/actuator/health
-Get society:     GET http://localhost:8081/api/v1/society
-List floors:     GET http://localhost:8081/api/v1/floors
-List members:    GET http://localhost:8082/api/v1/members
-Gateway society: GET http://localhost:8080/api/v1/society
-Gateway members: GET http://localhost:8080/api/v1/members</code></pre><p>A healthy Actuator response is normally <code>{"status":"UP"}</code>. To stop each locally running application, focus its terminal and press <kbd>Ctrl</kbd>+<kbd>C</kbd>. If startup reports a missing table, check the effective database URL and Flyway history before changing schema settings. Do not create tables manually or change Hibernate <code>ddl-auto</code> to <code>update</code>.</p>
-<h3>Option B: run in Kubernetes (PowerShell commands)</h3><p>Use this path after Docker Desktop and PostgreSQL are running, and <code>society_db</code> and <code>member_db</code> exist. For Step 7, create the security Secret and Redis resources described in <a href="#phase7">Phase 7</a> before starting the Gateway. Run commands from the repository root unless the step says to open another terminal. The detailed explanation of why each resource is applied in this order is in <a href="#k8s-order">Resource creation order and connections</a>.</p>
-<ol class="steps"><li><strong>Open PowerShell at the repository root:</strong><pre><code>cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing"
-Get-Location</code></pre></li>
-<li><strong>Start or check the kind cluster:</strong> Docker Desktop must already be running. The script creates the project cluster if needed and checks that kubectl can reach it.<pre><code>.\scripts\kubernetes\prepare-kind.ps1
-kubectl cluster-info --context kind-emerald-housing</code></pre></li>
-<li><strong>Create the namespace:</strong><pre><code>kubectl apply -f .\kubernetes\namespace.yaml
-kubectl get namespace emerald-housing</code></pre></li>
-<li><strong>Create the database Secret:</strong> enter the actual database credentials when prompted. If the same PostgreSQL role can access both databases, enter it for both services. This creates a Secret in the <code>emerald-housing</code> namespace; it does not create a Secret file.<pre><code>$societyUser = Read-Host 'Society DB username'
+<h4>5. Check service readiness</h4><pre><code>Invoke-RestMethod http://localhost:8081/actuator/health/readiness
+Invoke-RestMethod http://localhost:8082/actuator/health/readiness</code></pre><p>Optional Gateway:</p><pre><code>Invoke-RestMethod http://localhost:8080/actuator/health/readiness</code></pre>
+
+<h3>Option B: run in Kubernetes</h3>
+<p><strong>Prerequisites:</strong> Docker Desktop, kind, kubectl, PostgreSQL reachable from kind, both PostgreSQL databases created, database credentials, admin credentials, a Redis password, and three distinct random internal tokens of at least 32 characters. Use PowerShell from the repository root.</p>
+<h4>1. Create the cluster, namespace, and secrets</h4><pre><code>cd "D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing"
+.\scripts\kubernetes\prepare-kind.ps1
+kubectl apply -f .\kubernetes\namespace.yaml
+kubectl get namespace emerald-housing</code></pre>
+<p>Create or update the database Secret using credentials for the existing databases:</p><pre><code>$societyUser = Read-Host 'Society DB username'
 $societyPasswordSecure = Read-Host 'Society DB password' -AsSecureString
 $memberUser = Read-Host 'Member DB username'
 $memberPasswordSecure = Read-Host 'Member DB password' -AsSecureString
 $societyPassword = [System.Net.NetworkCredential]::new('', $societyPasswordSecure).Password
 $memberPassword = [System.Net.NetworkCredential]::new('', $memberPasswordSecure).Password
-kubectl create secret generic emerald-db-credentials -n emerald-housing --from-literal="society-username=$societyUser" --from-literal="society-password=$societyPassword" --from-literal="member-username=$memberUser" --from-literal="member-password=$memberPassword"
-kubectl get secret emerald-db-credentials -n emerald-housing</code></pre><p>If the Secret already exists, do not create a duplicate. Follow the repository’s manual Kubernetes checklist to update it safely. Keep passwords out of committed files and screenshots.</p></li>
-<li><strong>Build and load the Society and Member images into kind:</strong> the kind cluster must exist first because <code>kind load</code> copies images into its nodes.<pre><code>.\scripts\kubernetes\build-load-images.ps1</code></pre></li>
-<li><strong>Create the backend ConfigMap:</strong><pre><code>kubectl apply -f .\kubernetes\config\application-config.yaml
-kubectl get configmap emerald-app-config -n emerald-housing</code></pre><p>It supplies non-secret settings, including <code>POSTGRES_HOST=host.docker.internal</code> and the in-cluster Society URL. This host name is for the repository’s Docker Desktop/kind setup; PostgreSQL must accept connections from the Pod network.</p></li>
-<li><strong>Create backend Deployments and Services:</strong><pre><code>kubectl apply -f .\kubernetes\society\
+kubectl create secret generic emerald-db-credentials -n emerald-housing --from-literal="society-username=$societyUser" --from-literal="society-password=$societyPassword" --from-literal="member-username=$memberUser" --from-literal="member-password=$memberPassword" --dry-run=client -o yaml | kubectl apply -f -</code></pre>
+<p>Create the security Secret with private values. Replace the placeholders; keep matching token values identical across services, and use distinct values for the three tokens:</p><pre><code>kubectl create secret generic emerald-security-credentials -n emerald-housing `
+  --from-literal=admin-username='your-admin-name' `
+  --from-literal=admin-password='your-private-password' `
+  --from-literal=redis-password='your-private-redis-password' `
+  --from-literal=gateway-authentication-token='replace-with-a-unique-32-character-random-token' `
+  --from-literal=session-validation-token='replace-with-a-different-32-character-random-token' `
+  --from-literal=member-to-society-token='replace-with-another-32-character-random-token' `
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl get secrets -n emerald-housing</code></pre>
+<h4>2. Build and load images; apply configuration and workloads</h4><pre><code>.\scripts\kubernetes\build-load-images.ps1 -IncludeGateway
+kubectl apply -f .\kubernetes\config\application-config.yaml
+kubectl apply -f .\kubernetes\redis\
+kubectl apply -f .\kubernetes\society\
 kubectl apply -f .\kubernetes\member\
-kubectl get deployments,pods,services,endpointslices -n emerald-housing</code></pre></li>
-<li><strong>Wait for both backend applications:</strong> each container starts Spring Boot. Society and Member each run Flyway against their own database, then Hibernate validates the schema. Wait for both Deployments to become ready:<pre><code>kubectl rollout status deployment/society-service -n emerald-housing
+kubectl rollout restart deployment/redis deployment/society-service deployment/member-service -n emerald-housing
+kubectl rollout status deployment/redis -n emerald-housing
+kubectl rollout status deployment/society-service -n emerald-housing
 kubectl rollout status deployment/member-service -n emerald-housing
-kubectl get pods -n emerald-housing -o wide</code></pre><p>If a Pod does not become Ready, inspect its logs before continuing:</p><pre><code>kubectl logs deployment/society-service -n emerald-housing
-kubectl logs deployment/member-service -n emerald-housing</code></pre></li>
-<li><strong>Build and load images including Gateway:</strong> this script option builds and loads all three images using the tags referenced by the manifests.<pre><code>.\scripts\kubernetes\build-load-images.ps1 -IncludeGateway</code></pre></li>
-<li><strong>Create Gateway configuration, then its Deployment and Service:</strong><pre><code>kubectl apply -f .\kubernetes\gateway\config.yaml
+kubectl apply -f .\kubernetes\gateway\config.yaml
 kubectl apply -f .\kubernetes\gateway\deployment.yaml
 kubectl apply -f .\kubernetes\gateway\service.yaml
-kubectl rollout status deployment/api-gateway -n emerald-housing
-kubectl get pods,services -n emerald-housing</code></pre></li>
-<li><strong>Apply NetworkPolicies:</strong> these restrict inbound application traffic to the allowed callers. The cluster network plugin must enforce NetworkPolicy for these rules to take effect.<pre><code>kubectl apply -f .\kubernetes\networkpolicies.yaml
-kubectl get networkpolicies -n emerald-housing</code></pre></li>
-<li><strong>Make the private Gateway reachable from Windows:</strong> <code>api-gateway</code> is a <code>ClusterIP</code> Service. That is an internal Kubernetes address: Pods in the cluster can call <code>http://api-gateway:8080</code>, and Kubernetes routes that call to a ready Gateway Pod. Postman on Windows runs outside the cluster, so it cannot normally use that internal address directly. Open a new PowerShell terminal and keep this temporary tunnel running while using Postman:<pre><code>kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing</code></pre><p>This connects your computer's <code>localhost:8080</code> to the Service's port <code>8080</code>. Use <code>http://localhost:8080</code> in Postman and press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the port-forward terminal when finished. This is a local development access method; it does not change the Service to a public endpoint.</p></li>
-<li><strong>Check readiness and send a first request:</strong> in another PowerShell terminal:<pre><code>Invoke-RestMethod http://localhost:8080/actuator/health
-Invoke-RestMethod http://localhost:8080/api/v1/society</code></pre><p>For more status and discovery checks, use <code>kubectl get deployments,pods,services,endpointslices -n emerald-housing</code>. Gateway receives the client request, routes it to a backend Service DNS name, and that Service sends it to a ready Pod.</p></li></ol>
-<div class="callout"><strong>Inside versus outside the cluster:</strong> frontend and backend Pods can call one another through internal Service names, such as <code>http://api-gateway:8080</code> or <code>http://member-service:8080</code>. A person using a browser or Postman on Windows is outside the cluster and needs a way in. This project uses port-forwarding for local access. Phase 8 adds an NGINX HTTPS edge in front of the private Gateway; see the Phase 8 section for its resources and local access steps.</div><div class="callout warning"><strong>Database connection note:</strong> Flyway creates tables within existing databases; it does not create PostgreSQL databases. If Kubernetes Pods cannot connect to PostgreSQL on Windows, check PostgreSQL listening and host-based authentication settings for the actual Pod source address. Do not use <code>trust</code> authentication as a shortcut.</div>
-<h3>Postman files and recommended request order</h3><ol class="steps"><li>Import <code>postman/Emerald-Housing-Phase1.postman_collection.json</code>.</li><li>Import <code>postman/Emerald-Housing-Local.postman_environment.json</code> and select <strong>Emerald Housing - Local</strong>.</li><li>For local direct calls, use <code>societyBaseUrl=http://localhost:8081</code> and <code>memberBaseUrl=http://localhost:8082</code>. For local Gateway calls, use <code>gatewayBaseUrl=http://localhost:8080</code>.</li><li>Get society, list floors, and retrieve or create a flat.</li><li>Create a member and copy its UUID into <code>memberId</code> if the collection has not captured it automatically.</li><li>Assign the member to the valid flat. Member Service asks Society Service to verify the flat before saving the membership.</li><li>Try a nonexistent flat to see the controlled error. A failed remote validation must not create a membership.</li></ol><h3>If a backend fails during database startup</h3><details><summary>Check Flyway and the actual database</summary><div class="inside"><p>Connect to the same database named in the startup URL and inspect Flyway history. Use your actual PostgreSQL role:</p><pre><code>psql -h localhost -U emerald -d society_db
+kubectl rollout restart deployment/api-gateway -n emerald-housing
+kubectl rollout status deployment/api-gateway -n emerald-housing</code></pre>
+<h4>3. Optional resources and local access</h4><pre><code>kubectl apply -f .\kubernetes\networkpolicies.yaml
+kubectl get deployments,pods,services,endpointslices -n emerald-housing</code></pre>
+<p>Optional: apply HPAs only when a metrics provider is installed.</p><pre><code>kubectl apply -f .\kubernetes\autoscaling\
+kubectl get hpa -n emerald-housing</code></pre>
+<p>For Gateway health checks, keep this command running in a separate terminal. The Kubernetes Gateway sets a Secure session cookie; use the Phase 8 HTTPS edge for authenticated Postman requests.</p><pre><code>kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing</code></pre>
+<h4>Health checks</h4><pre><code>Invoke-RestMethod http://localhost:8080/actuator/health/readiness
+</code></pre>
+<h3>Postman files and recommended request order</h3><ol class="steps"><li>Import <code>postman/Emerald-Housing-Phase1.postman_collection.json</code>.</li><li>Import <code>postman/Emerald-Housing-Local.postman_environment.json</code> and select <strong>Emerald Housing - Local</strong>.</li><li>For local direct calls, use <code>societyBaseUrl=http://localhost:8081</code> and <code>memberBaseUrl=http://localhost:8082</code>. For local Gateway APIs, set <code>externalBaseUrl</code> and <code>gatewayBaseUrl</code> to <code>http://localhost:8080</code>. For authenticated Kubernetes calls, use the optional Phase 8 HTTPS edge at <code>https://emerald.local:8443</code>.</li><li>Get society, list floors, and retrieve or create a flat.</li><li>Create a member and copy its UUID into <code>memberId</code> if the collection has not captured it automatically.</li><li>Assign the member to the valid flat. Member Service asks Society Service to verify the flat before saving the membership.</li><li>Try a nonexistent flat to see the controlled error. A failed remote validation must not create a membership.</li></ol><h3>If a backend fails during database startup</h3><details><summary>Check Flyway and the actual database</summary><div class="inside"><p>Connect to the same database named in the startup URL and inspect Flyway history. Use your actual PostgreSQL role:</p><pre><code>psql -h localhost -U emerald -d society_db
 SELECT current_database(), current_schema();
 SELECT installed_rank, version, description, success FROM flyway_schema_history ORDER BY installed_rank;
 SELECT to_regclass('public.flats');</code></pre><pre><code>psql -h localhost -U emerald -d member_db
@@ -385,7 +414,7 @@ kubectl port-forward -n emerald-housing service/member-service 8082:8080</code><
 Invoke-RestMethod http://localhost:8081/api/v1/society
 Invoke-RestMethod http://localhost:8081/api/v1/floors
 Invoke-RestMethod http://localhost:8081/api/v1/flats
-Invoke-RestMethod http://localhost:8082/actuator/health</code></pre><p>Create a flat and member, then assign. The floor must be 1–18:</p><pre><code>$flatBody = @{ floorNumber = 1; flatNumber = 'A-101' } | ConvertTo-Json
+Invoke-RestMethod http://localhost:8082/actuator/health/readiness</code></pre><p>Create a flat and member, then assign. The floor must be 1–18:</p><pre><code>$flatBody = @{ floorNumber = 1; flatNumber = 'A-101' } | ConvertTo-Json
 $flat = Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/api/v1/flats' -ContentType 'application/json' -Body $flatBody
 $memberBody = @{ fullName = 'Rahul Sharma'; mobileNumber = '9876543210'; email = 'rahul@example.com' } | ConvertTo-Json
 $member = Invoke-RestMethod -Method Post -Uri 'http://localhost:8082/api/v1/members' -ContentType 'application/json' -Body $memberBody
@@ -610,6 +639,43 @@ kubectl delete pod &lt;one-api-gateway-pod&gt; -n emerald-housing
 kubectl rollout status deployment/api-gateway -n emerald-housing</code></pre>
 <h3>NGINX reverse proxy versus Spring Cloud Gateway</h3><div class="tablebox"><table><thead><tr><th>NGINX Gateway Fabric</th><th>Spring Cloud Gateway</th></tr></thead><tbody><tr><td>Outside edge: accepts HTTP/HTTPS, handles the certificate and redirects HTTP to HTTPS, then forwards public API paths to the Gateway Service.</td><td>Application router: matches Member, Society and authentication paths and forwards them to backend Services.</td></tr><tr><td>Configured with Kubernetes Gateway API resources and NGINX policies.</td><td>Configured in <code>infrastructure/api-gateway/src/main/resources/application.yml</code>.</td></tr><tr><td>Does not replace Spring Security or backend authorization.</td><td>Keeps the existing application security integration; backend services also enforce authorization.</td></tr></tbody></table></div>
 <h3>Phase 8 summary</h3><ul><li><strong>Added:</strong> NGINX Gateway Fabric and Kubernetes Gateway API configuration under <code>kubernetes/nginx/</code>.</li><li><strong>Connected to:</strong> the existing API Gateway ClusterIP Service and its two Deployment replicas.</li><li><strong>Preserved:</strong> separate databases, Member-to-Society RestClient calls, Spring Cloud Gateway routes, and Phase 7 session/CSRF security.</li><li><strong>Still unverified:</strong> controller installation, certificate, HTTPS routes, policy acceptance, real traffic distribution and recovery need manual deployment. NetworkPolicy enforcement depends on the cluster CNI.</li></ul>
+</section>
+<section class="phase" id="phase9" style="--accent:var(--p5)">
+<div class="phase-no">Phase 9 · Resilience and fault tolerance</div>
+<h2>Handle dependency failures and repeated requests safely</h2>
+<p class="lead">Member Service validates a flat through Society Service before recording a membership. This phase bounds that remote wait, rejects unsafe writes when Society cannot confirm a flat, adds shared Gateway rate limits, and makes member creation safely repeatable when a client supplies an idempotency key.</p>
+<div class="callout warning"><strong>Implementation status:</strong> the source and configuration are present. The documented outage, timing, rate-limit, migration, metrics, and Kubernetes scenarios still require runtime verification.</div>
+
+<h3>Member-to-Society lookup protection</h3>
+<p><code>SocietyClient</code> protects the read-only flat lookup with a Resilience4j circuit breaker and semaphore bulkhead, plus bounded retries for transient failures. The request retains its internal service credential and correlation ID. The call order is: check the member locally, obtain the circuit-breaker and bulkhead permits, call Society with bounded retries, confirm the flat is active, then save the membership in a local transaction. The remote wait happens outside the database transaction.</p>
+<div class="tablebox"><table><thead><tr><th>Setting</th><th>Default</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Society connect / read timeout</td><td>2s / 3s</td><td>Bounds connection establishment and each Society response wait.</td></tr>
+<tr><td>Retry attempts</td><td>3 total</td><td>First call plus at most two retries; exponential delay starts at 200ms, multiplier 2, jitter 0.2, capped at 1s.</td></tr>
+<tr><td>Circuit breaker window / minimum calls</td><td>10 / 5</td><td>Uses recent physical HTTP attempts; opens at 50% failures or 60% slow calls.</td></tr>
+<tr><td>Slow call / open wait / half-open calls</td><td>2s / 15s / 2</td><td>Defines a slow attempt, recovery wait, and limited recovery trials.</td></tr>
+<tr><td>Bulkhead concurrent calls / wait</td><td>12 / 0ms</td><td>Limits concurrent lookups per Member process and rejects overflow promptly.</td></tr>
+</tbody></table></div>
+<p>Only transient transport failures and remote 502, 503, and 504 responses are retried. A 404, bad request, conflict, malformed response, or other permanent failure is not retried. A normal flat-not-found response does not count as a breaker failure. An open breaker or full bulkhead returns a controlled 503; a Society timeout maps to 504. A failed lookup never permits the membership write. Circuit-breaker state is per Member Pod, not shared through Redis. Member operations that only use <code>member_db</code> remain available independently of Society.</p>
+
+<h3>Gateway rate limits, health, and shutdown</h3>
+<p>Spring Cloud Gateway uses Redis rate limiting for Society and Member routes. Authenticated requests are keyed from the security principal, not client-supplied identity headers. Login requests share an unauthenticated bucket. The limiter fails closed with 503 if Redis is unavailable; an exhausted bucket returns 429 with <code>Retry-After</code>.</p>
+<div class="tablebox"><table><thead><tr><th>Bucket</th><th>Default</th><th>Kubernetes setting</th></tr></thead><tbody>
+<tr><td>Login</td><td>2 new tokens/second, burst 5</td><td>1/second, burst 3</td></tr>
+<tr><td>Member routes</td><td>10 requests/second, burst 20</td><td>Configurable through environment-backed settings</td></tr>
+<tr><td>Society routes</td><td>20 requests/second, burst 40</td><td>Configurable through environment-backed settings</td></tr>
+</tbody></table></div>
+<p>Gateway's response timeout defaults to 28 seconds; NGINX upstream read/send timeouts are 32 seconds. These are separate proxy wait limits, not a single end-to-end deadline. Member Service has bounded Tomcat threads, connections, and accept queue; graceful shutdown has a 20-second phase timeout. Member readiness checks its own database, while Society availability does not control Member liveness. Applications expose Actuator metrics; Gateway metrics require ADMIN authorization. Resilience4j meters and bounded-cardinality Society lookup and Gateway rate-limit metrics are configured.</p>
+
+<h3>Durable idempotency for member creation</h3>
+<p><code>POST /api/v1/members</code> accepts an optional <code>Idempotency-Key</code> containing 1 to 128 letters, digits, periods, underscores, colons, or hyphens. The key is scoped to the authenticated admin and <code>CREATE_MEMBER</code>. Member Service fingerprints the normalized request with SHA-256 and stores the response in the same <code>member_db</code> transaction as the create.</p>
+<ul><li>Repeating the key with the same payload returns the stored logical response and <code>Idempotency-Replayed: true</code>.</li><li>Reusing the key with different input returns 409.</li><li>A database uniqueness constraint coordinates concurrent submissions to prevent duplicate member creation.</li><li>Records expire after 24 hours by default. Expired rows are removed opportunistically during a later idempotent create; there is no background cleanup job.</li></ul>
+<p>Member creation and flat assignment are not automatically retried. Idempotency supports a deliberate client resubmission with the same key and payload; it does not make automatic Gateway retries safe. Assignment always requires live flat validation. The stored replay response may contain contact fields, so retention, database access, and backup policy should account for that data.</p>
+
+<h3>Manual verification guide</h3>
+<ol class="steps"><li>Create a membership while Society is available and verify it is stored in <code>member_db</code>.</li><li>Make Society unavailable and try an assignment. Expect a controlled 503 or 504 and verify no membership row was added; do not automatically retry the POST.</li><li>While Society is unavailable, retrieve a Member record through Gateway and confirm the local database operation remains independent.</li><li>Repeat safe flat GETs during an outage; observe the per-Pod breaker open, then limited half-open trials after 15 seconds.</li><li>Generate controlled concurrency above 12 lookups for one Member Pod to observe prompt bulkhead rejection; do not use production traffic.</li><li>Send a short burst of API and login requests through Gateway; inspect 429 and <code>Retry-After</code>. Redis must be reachable for shared limiting.</li><li>Create a member with an idempotency key, repeat the exact request, then reuse the key with changed input. Expect a replay followed by 409.</li><li>Inspect protected Actuator metrics for Resilience4j, rate-limit, and lookup measurements. Breaker state can differ by Member Pod.</li></ol>
+<p>The combined Postman collection includes idempotency examples and outage/bulkhead descriptions. Replace its sample mobile number with an unused value before creating a member.</p>
+<div class="callout"><strong>Code locations:</strong> Member lookup resilience is in <code>services/member-service/src/main/java/com/emerald/member/client/SocietyClient.java</code> and its resilience configuration. Idempotency persistence is introduced by <code>V3__create_idempotency_records.sql</code>. Runtime settings are in the Member <code>application.yml</code>, Kubernetes <code>application-config.yaml</code>, and Gateway <code>application.yml</code>.</div>
+<p class="small">Verification note: this phase's original notes report static source/configuration review only. They do not report Maven builds, tests, Docker builds, application starts, Postman runs, or Kubernetes deployment for these changes.</p>
 </section>
 <section class="phase" id="phase10" style="--accent:var(--p4)">
 <div class="phase-no">Phase 10 · Distributed caching</div>
@@ -836,6 +902,26 @@ Member flat assignment always asks Society over its existing
 authenticated HTTP path; that validation reads society_db directly.</code></pre></div>
 <p class="small">Phase 10 changes are source/configuration work only. No application, Redis instance, Postman collection, benchmark, Maven build, test suite, Docker build, or Kubernetes deployment was run for this change.</p>
 </section>
+<section class="phase" id="phase14" style="--accent:var(--p3)">
+<div class="phase-no">Phase 14 · System design overview</div>
+<h2>See how the implemented design fits together</h2>
+<p class="lead">This phase gathers the system design ideas already present in Emerald Housing and connects each one to its implementation. It describes the current project architecture and its operational boundaries.</p>
+
+<h3>Implemented system design features</h3>
+<div class="tablebox"><table><thead><tr><th>Design area</th><th>Implemented feature</th><th>Tradeoff or boundary</th></tr></thead><tbody>
+<tr><td>Service decomposition</td><td>Society Service owns building, floor, and flat APIs; Member Service owns members, memberships, and admin credentials; Spring Cloud Gateway routes client traffic.</td><td>Services can be deployed separately, while cross-service workflows need explicit communication and failure handling.</td></tr>
+<tr><td>Data ownership</td><td>Society and Member each use a separate PostgreSQL database with JPA and Flyway migrations.</td><td>There is no single transaction spanning both databases; each service remains responsible for its own records.</td></tr>
+<tr><td>Synchronous service validation</td><td>Member Service uses an authenticated RestClient request to check a flat with Society before saving a membership.</td><td>Assignment depends on Society availability and has a consistency window between validation and Member's local write.</td></tr>
+<tr><td>Layered API routing</td><td>NGINX Gateway Fabric is configured as the external HTTPS edge; Spring Cloud Gateway routes API requests to internal services.</td><td>Two routing layers add configuration and troubleshooting work, with separate edge and application-routing responsibilities.</td></tr>
+<tr><td>Shared state and cache</td><td>Redis backs Gateway sessions and rate limits, and Society's cache-aside reference-data caches.</td><td>Redis is a shared dependency. The current Kubernetes Redis setup is a learning deployment, not a highly available production cluster.</td></tr>
+<tr><td>Resilience and safe retries</td><td>Member-to-Society reads have timeouts, bounded retries, a circuit breaker, and a bulkhead. Member creation supports durable idempotency keys.</td><td>Retries apply to selected transient reads; mutations are not automatically retried. Circuit-breaker state is per Member Pod.</td></tr>
+<tr><td>Orchestration and scaling</td><td>Kubernetes Deployments, Services, health probes, resource requests/limits, CPU-based HPA manifests, NetworkPolicies, and Kustomize resources are present.</td><td>HPA needs a metrics provider and cluster runtime behavior still requires verification.</td></tr>
+<tr><td>Security controls</td><td>Admin sessions, CSRF checks, backend session validation, service credentials, Secret references, and network boundaries are configured.</td><td>Session continuity depends on Redis; external HTTPS and NetworkPolicy behavior depend on the installed cluster components.</td></tr>
+<tr><td>Operations and observability</td><td>Correlation IDs, Actuator health and metrics, readiness/liveness probes, graceful shutdown, and controlled error responses are implemented.</td><td>Metrics are exposed by services, but the repository does not include a complete centralized monitoring stack.</td></tr>
+</tbody></table></div>
+<div class="callout good"><strong>Current request path:</strong> client → NGINX HTTPS edge → Spring Cloud Gateway → owning backend service → its PostgreSQL database. For flat assignment, Member Service also calls Society Service and only writes after Society confirms the flat.</div>
+<p class="small">This overview summarizes features documented in the related phases. It does not claim unimplemented database replicas, a Saga workflow, Kafka messaging, gRPC, or production-grade Redis/PostgreSQL high availability.</p>
+</section>
 <section class="phase" id="phase16" style="--accent:#355f9c">
 <style>#phase16{--accent:#355f9c}html[data-theme=dark] #phase16{--accent:#91b8ff}</style>
 <div class="phase-no">Phase 16 · Kubernetes orchestration</div>
@@ -843,6 +929,17 @@ authenticated HTTP path; that validation reads society_db directly.</code></pre>
 <p class="lead">Kubernetes is the coordinator for containers. It compares the requested setup with what is running, creates or replaces Pods, gives applications steady Service names, and can change replica counts when CPU demand changes. This phase consolidates the repository’s existing Kubernetes resources and adds autoscaling and one Kustomize entry point.</p>
 <div class="callout good"><strong>UPDATED — PHASE 16:</strong> The Society, Member and API Gateway Deployments now get their replica counts from three HorizontalPodAutoscalers (HPAs). Their minimums preserve 2 Society, 1 Member and 2 Gateway Pods. <code>kubernetes/kustomization.yaml</code> gathers the existing resources and the new HPAs for one declarative package.</div>
 <div class="callout warning"><strong>Static configuration only:</strong> The manifests were inspected, not applied. HPA needs a resource metrics provider such as metrics-server; the repository does not install one. Readiness, DNS, traffic distribution, recovery, and autoscaling still need manual cluster verification.</div>
+
+<h3>Implemented orchestration features</h3>
+<div class="tablebox"><table><thead><tr><th>Feature</th><th>Current configuration</th><th>Runtime status</th></tr></thead><tbody>
+<tr><td>Workload management</td><td>Kubernetes Deployments and Services for Society, Member, API Gateway, and Redis in the <code>emerald-housing</code> namespace.</td><td>Manifests are present; cluster application has not been verified in this phase.</td></tr>
+<tr><td>Replica scaling</td><td>HPAs target CPU utilization: Society 2–4 replicas, Member 1–3, Gateway 2–4.</td><td>Requires a metrics provider; HPA behavior has not been verified.</td></tr>
+<tr><td>Pod health and rollout</td><td>Startup/readiness/liveness probes, resource requests/limits, and rolling update settings support safe scheduling and replacement.</td><td>Probe behavior, rollout capacity, and recovery require cluster checks.</td></tr>
+<tr><td>Configuration and secrets</td><td>ConfigMaps hold non-secret settings; database/security credentials are consumed through Kubernetes Secret references.</td><td>Secret values are supplied during setup and are not committed as a populated Secret manifest.</td></tr>
+<tr><td>Network boundaries</td><td>NetworkPolicies define allowed incoming service traffic between Gateway, Member, Society, and Redis.</td><td>Enforcement depends on the cluster network plugin.</td></tr>
+<tr><td>External HTTPS entry</td><td>NGINX Gateway Fabric and Kubernetes Gateway API resources route HTTPS traffic to the private Spring Cloud Gateway Service.</td><td>Controller installation, TLS certificate, route acceptance, and traffic flow need manual verification.</td></tr>
+<tr><td>Repeatable resource package</td><td><code>kubernetes/kustomization.yaml</code> assembles the project Kubernetes resources, including HPAs.</td><td>Render/apply behavior has not been verified for this phase.</td></tr>
+</tbody></table></div>
 
 <h3>1. What Kubernetes does</h3>
 <p>Docker packages an application and its runtime into an image. Kubernetes runs those images as containers inside Pods and continually reconciles the cluster toward the desired state written in YAML. The control plane accepts the desired state; worker nodes run the Pods. If one Pod disappears, a Deployment and its ReplicaSet create another. Kubernetes is therefore an orchestrator, while Docker Compose starts a declared group of containers on one Docker host. Compose is useful locally; Kubernetes adds cluster scheduling, Services, rolling updates, self-healing and autoscaling.</p>
@@ -1007,10 +1104,9 @@ kubectl delete -k kubernetes/</code></pre>
 <div class="tablebox"><table><thead><tr><th>Topic</th><th>Docker Compose</th><th>Kubernetes in this repository</th></tr></thead><tbody>
 <tr><td>Startup</td><td>Compose starts services on a Docker host.</td><td>Deployments schedule Pods and reconcile desired replicas.</td></tr><tr><td>Networking</td><td>Compose service names on a Docker network.</td><td>ClusterIP Services and Kubernetes DNS names.</td></tr><tr><td>Scaling</td><td>Manual Compose replica behavior depends on published ports and setup.</td><td>Service balances ready Pod endpoints; HPA changes replica count from CPU metrics.</td></tr><tr><td>Health and recovery</td><td>Container health checks/restart policies.</td><td>Startup/readiness/liveness probes, ReplicaSets and Deployment reconciliation.</td></tr><tr><td>Configuration</td><td>Compose environment and mounted files.</td><td>ConfigMaps and Secret references.</td></tr><tr><td>Rollouts</td><td>Usually recreate or replace containers.</td><td>RollingUpdate strategy with readiness-gated endpoints.</td></tr><tr><td>External entry</td><td>Compose-specific NGINX reverse proxy.</td><td>NGINX Gateway Fabric, Gateway API and TLS Secret.</td></tr></tbody></table></div>
 
-<h3>14. System design ideas in everyday language</h3>
-<ul><li><strong>Desired state:</strong> the YAML says how many copies and which settings should exist.</li><li><strong>Reconciliation:</strong> Kubernetes keeps comparing the live cluster with that request and corrects differences.</li><li><strong>Service discovery:</strong> applications use stable Service DNS names rather than memorizing replaceable Pod IP addresses.</li><li><strong>Self-healing:</strong> a Deployment replaces a missing Pod; readiness stops sending new calls to a Pod that is not ready.</li><li><strong>Horizontal scaling:</strong> add or remove application copies. HPA uses CPU here; it does not directly measure API request count.</li><li><strong>Rolling update:</strong> replace old Pods in controlled batches while keeping ready replicas available where capacity allows.</li><li><strong>Resource isolation:</strong> requests reserve scheduling capacity and limits cap container usage, though they still require measured tuning.</li><li><strong>Declarative infrastructure:</strong> Kustomize collects files describing the target resources; it does not itself create a cluster or install external controllers.</li></ul>
+<p><a href="#phase14">See Phase 14 for the system design feature overview.</a></p>
 
-<h3>15. Interview practice: explain the choices and their costs</h3>
+<h3>14. Interview practice: explain the choices and their costs</h3>
 <p>In a system design interview, describe each choice in four parts: what this project chose, what benefit it gives, what it costs, and what you would change as traffic or availability needs grow.</p>
 <div class="tablebox"><table><thead><tr><th>Choice in this project</th><th>Benefit</th><th>Cost or tradeoff</th><th>What to discuss as it grows</th></tr></thead><tbody>
 <tr><td>Separate Society and Member databases</td><td>Each service owns its data and can change its schema independently.</td><td>A cross-service operation cannot use one ordinary database transaction.</td><td>Define consistency expectations and recovery behavior for multi-service workflows.</td></tr>
@@ -1022,7 +1118,7 @@ kubectl delete -k kubernetes/</code></pre>
 <tr><td>Kustomize manifests</td><td>Existing Kubernetes resources can be gathered as a repeatable package.</td><td>Kustomize does not install external prerequisites or create secret values.</td><td>Manage controller/CRD, metrics provider, TLS and secret provisioning separately.</td></tr>
 </tbody></table></div>
 
-<h3>16. Interview practice: walk through failure scenarios</h3>
+<h3>15. Interview practice: walk through failure scenarios</h3>
 <div class="tablebox"><table><thead><tr><th>Failure</th><th>Expected behavior in this design</th><th>Tradeoff or point to explain</th></tr></thead><tbody>
 <tr><td>Society is unavailable during flat assignment</td><td>Member’s bounded HTTP call and resilience rules fail safely; it must not save an unvalidated membership.</td><td>Assignment is unavailable while the required validation dependency is down; independent Member operations can continue.</td></tr>
 <tr><td>A Society Pod becomes unready or disappears</td><td>The Service should stop sending new traffic to its unready endpoint; the Deployment should replace a missing Pod.</td><td>In-flight calls can still fail, and recovery depends on probes, scheduling capacity, and the cluster.</td></tr>
@@ -1034,104 +1130,121 @@ kubectl delete -k kubernetes/</code></pre>
 <tr><td>A rolling update has insufficient spare capacity</td><td>The Deployment requests one extra Pod while keeping existing replicas available.</td><td>The new Pod may remain Pending if the cluster cannot schedule the surge capacity; zero downtime is not guaranteed.</td></tr>
 </tbody></table></div>
 
-<h3>17. Interview practice: explain the scaling plan</h3>
+<h3>16. Interview practice: explain the scaling plan</h3>
 <ul><li><strong>Scale application replicas:</strong> HPA currently uses CPU. It is simple, but request rate or latency may be a better signal for some workloads. The project has not installed a metrics provider or measured a workload.</li><li><strong>Set replica limits:</strong> HPA ranges are Society 2–4, Member 1–3, Gateway 2–4. The maximums should fit cluster capacity and the databases’ connection budgets.</li><li><strong>Budget database connections:</strong> each additional application replica may create another connection pool. Estimate the maximum possible total before increasing HPA limits.</li><li><strong>Plan Redis availability:</strong> one Redis Pod is easy to learn with, but production session continuity and cache availability need persistence and failover planning.</li><li><strong>Balance cache freshness and load:</strong> shorter TTLs reduce how long stale data may remain but cause more database reads. Invalidation can improve freshness but must cover all affected cache entries.</li><li><strong>Keep retries bounded:</strong> retrying a safe read may recover from a brief fault, but retries during an outage add load. Do not retry unsafe writes or multiply retries across Gateway and Member Service.</li><li><strong>Separate readiness and liveness:</strong> readiness controls whether a Pod receives new calls; liveness determines whether Kubernetes restarts it. Making liveness depend on a remote service can cause restart storms.</li></ul>
 <div class="callout"><strong>A useful interview answer:</strong> “We use a stable Service name so callers survive Pod replacement. We scale replicas within limits, but CPU scaling can increase database connections, so we need capacity measurements. Flat assignment remains synchronous because it needs authoritative validation; if Society is down, we fail safely instead of saving uncertain data.”</div>
 
-<h3>18. Phase 16 completion status</h3>
+<h3>17. Phase 16 completion status</h3>
 <ul><li><strong>Present and reused:</strong> namespace, app Deployments and ClusterIP Services, ConfigMaps, Redis, NetworkPolicies, NGINX Gateway API/TLS routing, probes, resource requests/limits and rolling updates.</li><li><strong>Added:</strong> three CPU-based HPAs and <code>kubernetes/kustomization.yaml</code>; app Deployment replica fields were removed so HPA owns their scale.</li><li><strong>Preserved:</strong> Kubernetes DNS, independent Society/Member databases, RestClient validation, Redis sessions/rate limiting/cache, Spring Security, Resilience4j and NGINX-to-Spring-Gateway routing.</li><li><strong>Not added:</strong> Kafka, observability stack, test frameworks or CI/CD.</li><li><strong>Pending manual verification:</strong> Kustomize build/apply, metrics-server availability, Pod readiness, DNS, EndpointSlices, HPA behavior, rollout, Pod replacement, Redis/session continuity, NGINX HTTPS, NetworkPolicy enforcement and database reachability.</li><li>No Markdown files or automated tests were changed. No tests, Maven, Docker, Helm, Kubernetes deployment or application startup commands were run.</li></ul>
 </section>
-<section class="phase" id="phase31" style="--accent:#147d75">
-<style>#phase31{--accent:#147d75}html[data-theme=dark] #phase31{--accent:#69d2c6}</style>
-<div class="phase-no">Phase 31 · Performance engineering</div>
-<h2>Handle more waiting work with Java virtual threads</h2>
-<p class="lead">Society and Member use Spring MVC and blocking I/O. Java 21 virtual threads can make it cheaper for the JVM to manage many requests that are waiting on HTTP, PostgreSQL, or Redis. They do not make PostgreSQL faster, create more CPU cores, or remove connection limits.</p>
-<div class="callout good"><strong>NEW — PHASE 31:</strong> Society Service and Member Service now read Spring Boot’s virtual-thread setting from <code>SPRING_THREADS_VIRTUAL_ENABLED</code>. It defaults to enabled and can be switched off for a later same-workload comparison. Kubernetes receives the setting through its existing application ConfigMap.</div>
-<div class="callout warning"><strong>Scope finding:</strong> Java 21 and Spring Boot 4.1.1 are already configured. The inspected source does not contain the claimed Step 17 primary/replica routing or custom HikariCP pool settings, nor Step 19 JPA <code>@Version</code> or Redisson locking. This phase does not invent those missing prerequisites. The Gateway is reactive WebFlux and remains unchanged.</div>
+<section class="phase" id="phase17" style="--accent:var(--p2)">
+<div class="phase-no">Phase 17 · Database scaling foundations</div>
+<h2>Understand the database capacity this system has today</h2>
+<p class="lead">Society and Member each own a PostgreSQL database. The services use Spring Data JPA and Flyway, with Spring Boot's default HikariCP connection pool when available on the classpath. The current design scales application Pods; it does not configure database replicas or horizontal database partitioning.</p>
 
-<h3>1. Threads in plain language</h3>
-<p>A thread is a path of work the application can run. A traditional platform thread is backed by an operating-system thread and costs more memory and scheduling effort. A virtual thread is managed by the Java Virtual Machine and is much lighter for work that spends time waiting. Spring Boot can assign a virtual thread to suitable synchronous web work, so a waiting request need not hold a costly platform thread for its whole wait.</p>
-<div class="tablebox"><table><thead><tr><th>Platform thread</th><th>Virtual thread</th></tr></thead><tbody><tr><td>Operating-system-backed execution.</td><td>Lightweight JVM-managed execution, available with Java 21+.</td></tr><tr><td>Commonly used in bounded thread pools.</td><td>Useful for many concurrent tasks that block on I/O.</td></tr><tr><td>Thread count and pool capacity can constrain concurrent waiting work.</td><td>Lower thread overhead does not remove limits in HTTP pools, HikariCP, Redis, CPU, or downstream services.</td></tr><tr><td>Can be suitable for CPU work, but CPU still has a finite number of cores.</td><td>Does not make CPU-bound calculations run faster by itself.</td></tr></tbody></table></div>
-
-<h3>2. What changed in this repository</h3>
-<div class="tablebox"><table><thead><tr><th>File</th><th>Change</th><th>Reason</th></tr></thead><tbody>
-<tr><td><code>services/society-service/src/main/resources/application.yml</code></td><td>Added configurable <code>spring.threads.virtual.enabled</code> and <code>spring.main.keep-alive</code>.</td><td>Allows the Spring MVC service to use virtual threads and allows opting back into platform-thread behavior through an environment variable.</td></tr>
-<tr><td><code>services/member-service/src/main/resources/application.yml</code></td><td>Added the same two settings.</td><td>Member’s blocking HTTP and JDBC request path is also Spring MVC.</td></tr>
-<tr><td><code>kubernetes/config/application-config.yaml</code></td><td>Added both environment settings as ConfigMap values.</td><td>Society and Member Deployments already load this ConfigMap via <code>envFrom</code>.</td></tr>
-<tr><td><code>services/*/Dockerfile</code></td><td>No change. Existing runtime images use Eclipse Temurin 21 JRE.</td><td>The Java runtime already supports virtual threads.</td></tr>
-<tr><td><code>server.tomcat.max-connections</code> in Society and Member YAML</td><td>Kept/configured connection ceilings and accept backlogs separately from the thread mode.</td><td>A virtual-thread executor does not mean unlimited incoming connections.</td></tr>
-<tr><td><code>infrastructure/api-gateway/</code></td><td>No change.</td><td>Gateway uses reactive Spring Cloud Gateway/WebFlux; its event-loop model is not converted to one virtual thread per request by this setting.</td></tr>
+<h3>Implemented database features</h3>
+<div class="tablebox"><table><thead><tr><th>Feature</th><th>Current implementation</th></tr></thead><tbody>
+<tr><td>Database per service</td><td>Society Service connects to <code>society_db</code>; Member Service connects to <code>member_db</code>. Each owns and changes its own schema.</td></tr>
+<tr><td>PostgreSQL persistence and connection pooling</td><td>Both services use the PostgreSQL JDBC driver and Spring Data JPA. Spring Boot auto-configures HikariCP from the JPA starter when available.</td></tr>
+<tr><td>Versioned schema migrations</td><td>Flyway applies each service's numbered SQL migrations at startup; Hibernate validates mappings against the migrated schema.</td></tr>
+<tr><td>Indexes and database constraints</td><td>Migrations define primary keys, foreign keys, checks, lookup indexes, and uniqueness rules, including the active membership and active mobile-number constraints.</td></tr>
+<tr><td>Environment-driven database connection</td><td>Each service accepts its own JDBC URL, username, and password from environment settings; database credentials are supplied to Kubernetes through Secret references.</td></tr>
 </tbody></table></div>
-<pre><code># Added under spring: in each Spring MVC application's application.yml
-main:
-  keep-alive: ${SPRING_MAIN_KEEP_ALIVE:true}
-threads:
-  virtual:
-    enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}</code></pre>
-<p>Environment variable <code>SPRING_THREADS_VIRTUAL_ENABLED=false</code> selects the platform-thread mode for a later comparison. In Kubernetes, <code>SPRING_THREADS_VIRTUAL_ENABLED: "true"</code> and <code>SPRING_MAIN_KEEP_ALIVE: "true"</code> are in <code>kubernetes/config/application-config.yaml</code>. The Gateway has a separate ConfigMap and does not load these settings.</p>
-<p>Society now has configurable Tomcat <code>max-connections</code> and <code>accept-count</code> values, matching the existing Member settings. These bound accepted connections/backlog separately from executor threads. With virtual threads enabled, do not assume a platform-thread pool size caps request concurrency.</p>
 
-<h3>3. Request handling: before and after</h3>
-<div class="diagram"><pre><code>Platform-thread mode (comparison setting)
-HTTP request → Servlet container platform thread → blocking call waits
-                                                → response
+<h3>Current scaling boundary</h3>
+<p>The HikariCP pool is not explicitly tuned in application configuration. There is no primary/replica datasource routing, read replica, database sharding, or table partitioning configured. The Kubernetes manifests run the application services, while PostgreSQL databases must already exist outside this project's Kubernetes manifests.</p>
+<div class="callout warning"><strong>Connection budget:</strong> increasing Society or Member replicas can increase the total number of database connections because each application process has its own pool. Estimate maximum pool connections across all replicas against PostgreSQL's connection limit before increasing replica counts. The repository does not currently set custom Hikari pool sizes or validate a production capacity budget.</div>
 
-Virtual-thread mode (configured for Society and Member)
-HTTP request → virtual thread → blocking call waits → response
-                    |
-                    +-- JVM schedules many lightweight waiting tasks</code></pre></div>
-<p>This is still synchronous application code. Member’s existing <code>RestClient</code> call and the services’ JPA/JDBC calls remain blocking. The difference is the thread model used to handle suitable work, not a change to endpoint paths, DTOs, business rules, or transaction semantics.</p>
-
-<h3>4. Blocking I/O and the real bottlenecks</h3>
-<div class="diagram"><pre><code>Member request virtual thread
-       |
-       +-- RestClient waits for Society HTTP response
-       |
-       +-- JPA request waits for a HikariCP JDBC connection
-                                  |
-                                  v
-                         PostgreSQL connection limit
-
-Many virtual threads can wait cheaply,
-but only the bounded connections and database work proceed.</code></pre></div>
-<p>The existing Member-to-Society client has a 2-second connection timeout and a 3-second read timeout in <code>services/member-service/src/main/resources/application.yml</code>; <code>SocietyRestClientConfig</code> builds the blocking RestClient. Resilience4j’s existing bulkhead and retry rules still control dependency concurrency and attempts. Do not remove those limits because virtual threads are lightweight.</p>
-<p>Spring Boot’s JPA setup normally uses HikariCP when it is on the classpath, but this repository currently has no explicit Hikari pool tuning, no separate primary/replica DataSources, and no read/write router. Virtual threads do not change that. Pool sizing and the Primary/Replica design described in Step 17 remain unimplemented prerequisites.</p>
-
-<h3>5. Spring Security, correlation IDs, and task boundaries</h3>
-<p>The synchronous Servlet request remains on its assigned request thread, which is now a virtual thread when enabled. The existing Member and Society correlation filters put an ID in SLF4J MDC and remove it in a <code>finally</code> block. Spring Security’s servlet context is also thread-bound for the synchronous request. If a future change moves work to another executor or starts asynchronous work, authentication, transaction, MDC, and request context must be propagated explicitly; this configuration does not make arbitrary asynchronous context propagation automatic.</p>
-<p>The Gateway uses reactive security context propagation through Reactor, not the servlet thread-local model. It is intentionally left on WebFlux’s nonblocking request path.</p>
-
-<h3>6. Redis locks and synchronization</h3>
-<p>No Redisson client or distributed <code>RLock</code> implementation exists in the inspected repository, so this phase adds none. Society’s current cache loader uses a small set of JVM-local <code>ReentrantLock</code> objects to reduce duplicate local cache loads; that is not a lock shared across Pods. The synchronous code acquires and releases that lock on the same request thread. If distributed Redisson locking is added later, acquire, protected work, and ownership-checked release must stay in the correct lock-owner thread unless a supported transfer mechanism is deliberately used.</p>
-<div class="diagram"><pre><code>Current Society cache load coordination (per JVM)
-Society Pod A: request → local ReentrantLock → Redis cache / database
-Society Pod B: request → separate local ReentrantLock → Redis cache / database
-
-These local locks do not coordinate Pod A with Pod B.</code></pre></div>
-
-<h3>7. CPU-bound work, pinning, and limits</h3>
-<ul><li><strong>I/O-bound examples:</strong> waiting on PostgreSQL, Redis, or the existing RestClient. Virtual threads can help manage many waiting requests.</li><li><strong>CPU-bound examples:</strong> large calculations or expensive transformations. Virtual threads do not add CPU capacity; CPU and Kubernetes limits still bound throughput.</li><li><strong>Limits remain useful:</strong> Resilience4j bulkheads, rate limits, HTTP timeouts, connection pools, HikariCP, and Pod resource requests/limits keep demand bounded.</li><li><strong>Pinning:</strong> blocking while holding certain monitors or in native code can limit a virtual thread’s ability to unmount, depending on JDK version and operation. Do not assume every synchronized block pins on every modern JDK; inspect with JFR before changing code.</li><li><strong>No unlimited queues:</strong> inexpensive virtual threads are not permission to queue unlimited database work. Keep bulkheads and pool limits.</li></ul>
-<p class="small">Spring Boot’s virtual-thread Tomcat executor changes how request work is scheduled; a configured platform-thread maximum is not the same as a maximum number of concurrent virtual requests. Use connection/backlog settings and downstream limits, and measure safe concurrency for the application.</p>
-
-<h3>8. Java Flight Recorder and future comparison</h3>
-<p>Java Flight Recorder (JFR) is built into the Java runtime and can help inspect thread scheduling, blocking, CPU, allocation, and virtual-thread pinning events where supported. A future manual capture can use a Java 21 JDK on a local process, for example:</p>
-<pre><code># Documentation only — not run
-java -XX:StartFlightRecording=filename=emerald.jfr,duration=60s -jar target/member-service-0.1.0-SNAPSHOT.jar
-# Inspect the recording using JDK Mission Control or the JFR command-line tools.</code></pre>
-<p>The container images are JRE images, so JDK diagnostic tools may not be installed inside them. For container investigation, choose an approved diagnostic approach separately; no JFR recording was captured for this change.</p>
-<p>Compare platform and virtual modes only under the same application version, data set, database/Redis settings, pool limits, replica count, request mix, and traffic pattern. Warm up both modes similarly and repeat measurements. Record values; do not infer a speedup from thread count alone.</p>
-<div class="tablebox"><table><thead><tr><th>Record for each mode</th><th>Why it matters</th><th>Result</th></tr></thead><tbody><tr><td>Throughput (requests/second)</td><td>Completed work rate.</td><td>Measure later</td></tr><tr><td>Average, p95, and p99 response latency</td><td>Typical and tail user waiting time.</td><td>Measure later</td></tr><tr><td>CPU and memory</td><td>Checks resource cost and saturation.</td><td>Measure later</td></tr><tr><td>Thread count and JFR blocking/pinning observations</td><td>Shows scheduling behavior.</td><td>Measure later</td></tr><tr><td>Hikari active/idle/pending connections and database query latency</td><td>Shows whether the database pool or query time is the bottleneck.</td><td>Measure later; current custom pool metrics/config are absent</td></tr><tr><td>RestClient duration, timeouts, bulkhead rejections</td><td>Shows dependency wait and overload behavior.</td><td>Measure later</td></tr></tbody></table></div>
-
-<h3>9. Docker and Kubernetes settings</h3>
-<p>The Society and Member Dockerfiles already build with Temurin 21 and run on a Temurin 21 JRE. No Dockerfile or JVM heap setting was changed. The Kubernetes Deployments load <code>emerald-app-config</code> with <code>envFrom</code>, so the two new ConfigMap values reach their containers. Existing CPU/memory requests, limits, probes, graceful shutdown, and termination grace periods remain in place. The reactive Gateway configuration is separate.</p>
-
-<h3>10. Manual comparison steps</h3>
-<ol><li>Use the same Java 21 build and stable local data for both runs.</li><li>For platform-thread mode, set <code>SPRING_THREADS_VIRTUAL_ENABLED=false</code> for the Society and Member process before starting it.</li><li>For virtual-thread mode, set it to <code>true</code>.</li><li>Keep the Hikari/HTTP limits, Redis, database, endpoint mix, and request volume identical.</li><li>Record throughput, average/p95/p99 latency, CPU, memory, thread count, Hikari active/idle/pending, and downstream timeouts.</li><li>Repeat each mode and compare the measurements. No benchmark, load generator, app start, Maven command, or test was run for this implementation.</li></ol>
-
-<h3>11. Completion status and limits</h3>
-<ul><li><strong>Implemented in source configuration:</strong> Java 21-compatible Spring Boot virtual-thread toggles for the two MVC services, platform-mode override, keep-alive setting, and Kubernetes ConfigMap values.</li><li><strong>Preserved:</strong> blocking RestClient, timeout and Resilience4j limits, Spring Security, correlation filters, Docker Java 21 runtime images, Kubernetes resource limits, and reactive Gateway behavior.</li><li><strong>Not implemented because absent from the repository and outside this final Step 31 scope:</strong> Step 17 primary/replica DataSource routing and custom Hikari settings; Step 19 JPA optimistic versions and Redisson distributed locks. Society cache-load locks are JVM-local only.</li><li><strong>Not measured:</strong> throughput, latency, CPU/memory changes, JFR events, virtual-thread pinning, or production suitability.</li><li>No tests, builds, applications, Docker containers, Kubernetes resources, JFR captures, or benchmarks were run.</li></ul>
+<h3>Database files</h3>
+<ul><li>Society settings and migrations: <code>services/society-service/src/main/resources/application.yml</code> and <code>services/society-service/src/main/resources/db/migration/</code>.</li><li>Member settings and migrations: <code>services/member-service/src/main/resources/application.yml</code> and <code>services/member-service/src/main/resources/db/migration/</code>.</li><li>Service-owned JDBC and JPA dependencies: each service's <code>pom.xml</code>.</li></ul>
+<p class="small">This phase describes the current source and deployment configuration. Read replicas, partitioning, sharding, pool tuning, database HA, and database failover have not been configured or runtime-verified here.</p>
 </section>
-<footer><p>Read phases in order. For Kubernetes, open the configuration walkthrough and reveal Cluster, Namespace, then a resource. The matching file settings appear alongside the flow. This standalone page uses no external images, fonts or scripts.</p><p>File line numbers can move if the source files change.</p></footer>
+<section class="phase" id="phase19" style="--accent:var(--p7)">
+<div class="phase-no">Phase 19 · Distributed locking and concurrency control</div>
+<h2>Protect concurrent membership updates</h2>
+<p class="lead">This phase helps keep membership data correct when many requests arrive together, including requests handled by different app instances. Redis and PostgreSQL help those requests take turns and prevent duplicate assignments.</p>
+
+<h3>What do “distributed” and “concurrent” mean?</h3>
+<p><strong>Concurrent</strong> means two or more requests happen at the same time. <strong>Distributed</strong> means the app runs as more than one instance. A local lock can coordinate requests in one instance; a distributed lock coordinates through a shared service such as Redis.</p>
+
+<h3>Implemented features</h3>
+<div class="tablebox"><table><thead><tr><th>Feature</th><th>What it does</th><th>Where it works</th></tr></thead><tbody>
+<tr><td>Redis membership lock</td><td>Member takes a Redis lock for the member before assigning or ending a membership. Other updates for that member wait their turn. The lock uses a unique owner value, expires after 30 seconds, and waits up to 2 seconds to be acquired.</td><td>Distributed: Member instances share Redis. If Redis is unavailable, the write fails with <code>503 MEMBERSHIP_LOCK_UNAVAILABLE</code>. If the lock is still busy after 2 seconds, the API returns <code>409 MEMBERSHIP_UPDATE_IN_PROGRESS</code>.</td></tr>
+<tr><td>PostgreSQL member row lock</td><td>The database also makes writes for the same member take turns. It protects the write while the database transaction runs.</td><td>Across all app instances using the same PostgreSQL database.</td></tr>
+<tr><td>Active membership duplicate rule</td><td>The app checks for an existing active assignment. A database index also prevents saving the same member, flat, and relationship type twice.</td><td>Across all app instances using the same database.</td></tr>
+<tr><td>Society cache lock</td><td>When a cached item is missing, requests in one Society instance coordinate briefly so they do not all load the same item at once. It waits up to 10 milliseconds.</td><td>One Society instance only. It is not a distributed lock.</td></tr>
+<tr><td>Society call limit</td><td>Member limits how many calls it sends to Society at once.</td><td>Each Member instance applies its own limit. This controls traffic; it does not lock membership data.</td></tr>
+</tbody></table></div>
+
+<h3>How a membership assignment works</h3>
+<div class="diagram"><pre><code>POST /api/v1/members/{memberId}/flats
+        |
+        v
+MembershipService.assign()
+  1. Check the member and ask Society to check the flat
+        |
+        v
+RedisMembershipLock
+  2. Get the shared lock for this member
+        |
+        v
+MembershipWriter.persist() starts a database transaction
+        |
+        v
+MemberRepository.findByIdForUpdate()
+  3. PostgreSQL locks the member row
+        |
+        v
+  4. Check for an active duplicate, then save
+        |
+        v
+  5. Transaction finishes; release the Redis lock</code></pre></div>
+<p>The call to Society happens before the Redis and database locks are held. This keeps the locked part short.</p>
+
+<h3>What happens in common cases?</h3>
+<div class="tablebox"><table><thead><tr><th>Example</th><th>What happens</th><th>Result</th></tr></thead><tbody>
+<tr><td>First valid assignment for M1 to F101 as OWNER</td><td>The app checks the flat, gets the locks, checks for an existing assignment, and saves it.</td><td><code>201 Created</code></td></tr>
+<tr><td>Send the same assignment again</td><td>The app finds the active assignment already saved. The database index is an extra guard.</td><td><code>409 DUPLICATE_MEMBERSHIP</code></td></tr>
+<tr><td>Two matching requests arrive together</td><td>One gets the Redis lock and saves. The other waits, then checks the database and finds the assignment.</td><td>Usually one <code>201</code> and one <code>409 DUPLICATE_MEMBERSHIP</code>. If the Redis lock stays busy for 2 seconds, the waiting request gets <code>409 MEMBERSHIP_UPDATE_IN_PROGRESS</code>.</td></tr>
+<tr><td>Two updates for the same member, different flats</td><td>They share that member's Redis lock and database row, so they take turns. Each assignment is checked separately.</td><td>Both can be saved if both are valid and not already active.</td></tr>
+<tr><td>Two updates for different members</td><td>Each member has a different Redis lock and database row.</td><td>They can usually run at the same time.</td></tr>
+<tr><td>Member does not exist or is inactive</td><td>The app checks the member before saving.</td><td>Missing: <code>404</code>. Inactive: <code>409 MEMBER_INACTIVE</code>.</td></tr>
+<tr><td>Redis is unavailable</td><td>The app does not start the membership write because it cannot get the shared lock.</td><td><code>503 MEMBERSHIP_LOCK_UNAVAILABLE</code></td></tr>
+<tr><td>End an existing membership</td><td>The app uses the same Redis lock and PostgreSQL member row lock before ending it.</td><td>The update is protected from another membership change for the same member.</td></tr>
+</tbody></table></div>
+
+<h3>Code names to know</h3>
+<div class="tablebox"><table><thead><tr><th>Code</th><th>What it does</th></tr></thead><tbody>
+<tr><td><code>MembershipService.assign()</code> and <code>end()</code></td><td>For an assignment, checks the member and asks Society to check the flat before getting the lock. Ending a membership also uses the lock.</td></tr>
+<tr><td><code>RedisMembershipLock.withMemberLock()</code></td><td>Creates a Redis lock key for the member, waits up to 2 seconds, and releases only the lock owned by this request. The 30-second expiry clears a lock if its owner stops unexpectedly.</td></tr>
+<tr><td><code>MembershipWriter.persist()</code> and <code>end()</code> with <code>@Transactional</code></td><td>Run the database update. They lock the member row before changing membership data.</td></tr>
+<tr><td><code>MemberRepository.findByIdForUpdate()</code> with <code>@Lock(PESSIMISTIC_WRITE)</code></td><td>Asks PostgreSQL to make another write for this member wait.</td></tr>
+<tr><td><code>FlatMembershipRepository.existsByMemberIdAndFlatIdAndRelationshipTypeAndEndDateIsNull()</code></td><td>Checks whether this active assignment already exists.</td></tr>
+<tr><td><code>uq_active_membership</code> in <code>V1__create_member_tables.sql</code></td><td>Database rule that blocks a second matching active assignment.</td></tr>
+<tr><td><code>SocietyCacheConfiguration</code></td><td>Contains the local Society cache-loading locks. These are separate from the Redis membership lock.</td></tr>
+</tbody></table></div>
+
+<h3>Confirm the behavior with Postman</h3>
+<p>Use the local <strong>Option A</strong> setup with Redis, Society on <code>8081</code>, Member on <code>8082</code>, and Gateway on <code>8080</code>. Select the <code>Emerald Housing - Local</code> environment and use the existing collection. Requests go through <code>http://localhost:8080</code>.</p>
+<ol class="steps">
+<li>Get a CSRF token with <code>GET /api/v1/auth/csrf</code>, sign in with <code>POST /api/v1/auth/login</code>, then get a fresh CSRF token again.</li>
+<li>Use <strong>POST Assign Member to Flat</strong> with a member and flat that have no active matching assignment. Expect <code>201 Created</code>, then use <strong>GET Member Memberships</strong> to confirm it was saved.</li>
+<li>Send the same assignment again with <strong>POST Duplicate Assignment</strong>. Expect <code>409 DUPLICATE_MEMBERSHIP</code>.</li>
+<li>For the concurrent case, use a new member and flat assignment. Send <strong>Concurrent Assignment A</strong> and <strong>Concurrent Assignment B</strong> with the same values as close together as possible. Expect one request to save and the other to receive a conflict. Then use <strong>GET Member Memberships</strong> and confirm there is only one matching active assignment.</li>
+</ol>
+<p class="small">Postman confirms the API behavior, but cannot prove the requests overlapped or show which safeguard handled the second request. The steps above are manual; no automated concurrency test is included.</p>
+
+<h3>Configuration and code locations</h3>
+<div class="tablebox"><table><thead><tr><th>Purpose</th><th>Source file</th></tr></thead><tbody>
+<tr><td>Redis membership lock (Spring Data Redis; no Redisson)</td><td><code>services/member-service/src/main/java/com/emerald/member/lock/RedisMembershipLock.java</code></td></tr>
+<tr><td>Membership assignment and end flow</td><td><code>services/member-service/src/main/java/com/emerald/member/service/MembershipService.java</code><br><code>services/member-service/src/main/java/com/emerald/member/service/MembershipWriter.java</code></td></tr>
+<tr><td>Database member lock and duplicate rule</td><td><code>services/member-service/src/main/java/com/emerald/member/repository/MemberRepository.java</code><br><code>services/member-service/src/main/resources/db/migration/V1__create_member_tables.sql</code></td></tr>
+<tr><td>Redis lock error responses</td><td><code>services/member-service/src/main/java/com/emerald/member/exception/GlobalExceptionHandler.java</code></td></tr>
+<tr><td>Redis connection and lock settings</td><td><code>services/member-service/src/main/resources/application.yml</code><br><code>kubernetes/member/deployment.yaml</code></td></tr>
+<tr><td>Society cache lock and Member call limit</td><td><code>services/society-service/src/main/java/com/emerald/society/config/SocietyCacheConfiguration.java</code><br><code>services/member-service/src/main/java/com/emerald/member/config/SocietyResilienceConfiguration.java</code></td></tr>
+</tbody></table></div>
+</section>
+
 </main></div>
 <script>(function(){const r=document.documentElement,t=document.getElementById('theme');if(localStorage.getItem('emerald-theme')==='dark')r.setAttribute('data-theme','dark');function label(){t.textContent=r.getAttribute('data-theme')==='dark'?'Use light theme':'Use dark theme'}label();t.addEventListener('click',function(){const d=r.getAttribute('data-theme')==='dark';if(d)r.removeAttribute('data-theme');else r.setAttribute('data-theme','dark');localStorage.setItem('emerald-theme',d?'light':'dark');label()});const s=document.getElementById('side'),m=document.getElementById('menubtn');m.addEventListener('click',function(){const o=s.classList.toggle('open');m.setAttribute('aria-expanded',String(o))});function reveal(id){const x=document.getElementById(id);if(x){x.open=true;x.scrollIntoView({behavior:'smooth',block:'center'})}}document.querySelectorAll('[data-open],[data-file]').forEach(function(x){function go(){reveal(x.getAttribute('data-open')||x.getAttribute('data-file'))}x.addEventListener('click',go);x.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});document.querySelectorAll('pre').forEach(function(p){const c=p.querySelector('code');if(!c)return;const b=document.createElement('button');b.className='copy';b.type='button';b.textContent='Copy';b.addEventListener('click',async function(){try{await navigator.clipboard.writeText(c.innerText);b.textContent='Copied'}catch(e){b.textContent='Select and copy'}setTimeout(function(){b.textContent='Copy'},1300)});p.appendChild(b)})})();</script>
 <script>

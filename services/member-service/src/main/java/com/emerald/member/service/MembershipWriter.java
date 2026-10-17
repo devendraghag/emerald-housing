@@ -69,7 +69,7 @@ public class MembershipWriter {
     }
     @Transactional
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
-        if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
+        members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
         FlatMembershipEntity membership = memberships.findByIdAndMemberId(membershipId, memberId)
                 .orElseThrow(() -> new MembershipNotFoundException(membershipId));
         if (request.endDate().isBefore(membership.getStartDate())) throw new InvalidMembershipEndDateException();

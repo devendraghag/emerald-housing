@@ -68,6 +68,11 @@ spec:
                 secretKeyRef:
                   name: emerald-security-credentials
                   key: member-to-society-token
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: redis-password
             - name: ADMIN_PROVISIONING_USERNAME
               valueFrom:
                 secretKeyRef:

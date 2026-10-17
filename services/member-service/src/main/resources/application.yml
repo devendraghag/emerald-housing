@@ -1,15 +1,17 @@
 spring:
-  main:
-    keep-alive: ${SPRING_MAIN_KEEP_ALIVE:true}
-  threads:
-    virtual:
-      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   application:
     name: member-service
   datasource:
     url: ${MEMBER_DB_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/member_db}
     username: ${MEMBER_DB_USERNAME:emerald}
     password: ${MEMBER_DB_PASSWORD:emerald_local}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: ${MEMBER_REDIS_CONNECT_TIMEOUT:500ms}
+      timeout: ${MEMBER_REDIS_COMMAND_TIMEOUT:500ms}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -46,7 +48,7 @@ management:
         enabled: true
       group:
         readiness:
-          include: readinessState,db
+          include: readinessState,db,redis
   health:
     livenessstate:
       enabled: true
@@ -85,6 +87,11 @@ society:
     base-url: ${SOCIETY_SERVICE_BASE_URL:http://localhost:8081}
     connect-timeout: ${SOCIETY_SERVICE_CONNECT_TIMEOUT:2s}
     read-timeout: ${SOCIETY_SERVICE_READ_TIMEOUT:3s}
+
+membership:
+  lock:
+    wait-time: ${MEMBERSHIP_LOCK_WAIT:2s}
+    lease-time: ${MEMBERSHIP_LOCK_LEASE:30s}
 
 emerald:
   security:

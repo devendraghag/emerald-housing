@@ -1,8 +1,8 @@
 ﻿{
     "info":  {
                  "_postman_id":  "a3b55d97-5679-41bf-8a36-55f0486aa201",
-                 "name":  "Emerald Housing Society - Steps 1-10",
-                 "description":  "Combined Society and Member API collection for Steps 1-10. Use externalBaseUrl for normal HTTPS requests through NGINX Gateway Fabric, API Gateway, and backend services. Sign in, fetch a fresh CSRF token, and use manual Step 9 resilience/idempotency and Step 10 cache observations as described in each request. No Step 10 test scripts were added.",
+                 "name":  "Emerald Housing Society - API and Phase 19",
+                 "description":  "Society and Member API collection for current routes, session authentication, CSRF, idempotency, resilience, caching, and Phase 19 membership concurrency. externalBaseUrl defaults to a local Gateway; edgeBaseUrl is for HTTPS through NGINX. Sign in and fetch a fresh CSRF token before protected requests.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [
@@ -1013,7 +1013,7 @@
                  },
                  {
                      "name":  "Gateway - Step 6",
-                     "description":  "The api-gateway Kubernetes Service is ClusterIP, so it is reachable directly by Pods inside the cluster as http://api-gateway:8080. Postman running on your computer is outside the cluster: first run `kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing`, keep that terminal open, and set gatewayBaseUrl to http://localhost:8080. The tunnel is temporary; stop it with Ctrl+C. These requests preserve backend routes; direct Society/Member folders remain useful for local development or troubleshooting.",
+                      "description":  "For a local Gateway process, set gatewayBaseUrl to http://localhost:8080. For Kubernetes, run `kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing`; keep that terminal open and use the same URL. Stop the port-forward with Ctrl+C. API requests use externalBaseUrl; the NGINX HTTPS example uses edgeBaseUrl.",
                      "item":  [
                                   {
                                       "name":  "GET Gateway Health",
@@ -1026,6 +1026,17 @@
                                                       "description":  "Direct diagnostic only. Health endpoints are intentionally not published through the NGINX external route; use the documented port-forward or kubectl health checks."
                                                   }
                                   },
+                                   {
+                                       "name":  "GET Gateway Readiness",
+                                       "request":  {
+                                                       "method":  "GET",
+                                                       "header":  [
+
+                                                                  ],
+                                                       "url":  "{{gatewayBaseUrl}}/actuator/health/readiness",
+                                                       "description":  "Checks whether Gateway is ready to receive traffic. Expected: 200 with {\"status\":\"UP\"}. If Redis or the application is not ready, expect a non-2xx response and status DOWN."
+                                                   }
+                                   },
                                   {
                                       "name":  "GET Society Through Gateway",
                                       "request":  {
@@ -1195,9 +1206,85 @@
                                   }
                               ]
                  },
-                 {
-                     "name":  "NGINX Edge - Step 8",
-                     "description":  "Manual demonstrations of NGINX Gateway Fabric HTTPS entry and HTTP redirect. Trust the local development certificate before sending requests.",
+                  {
+                      "name":  "Phase 19 - Membership Concurrency",
+                      "description":  "Use an active member, valid flat, current session/CSRF token, and no active membership for the same member, flat, and relationship type. Open A and B in separate tabs and send them nearly simultaneously. Expect one 201 and one 409. Sequential sends only confirm duplicate protection, not overlap. The database row lock serializes competing writes and the unique index is the final guard.",
+                      "item":  [
+                                   {
+                                       "name":  "Concurrent Assignment A",
+                                       "request":  {
+                                                       "method":  "POST",
+                                                       "header":  [
+                                                                      {
+                                                                          "key":  "Content-Type",
+                                                                          "value":  "application/json"
+                                                                      },
+                                                                      {
+                                                                          "key":  "X-Correlation-ID",
+                                                                          "value":  "{{correlationId}}"
+                                                                      },
+                                                                      {
+                                                                          "key":  "X-XSRF-TOKEN",
+                                                                          "value":  "{{csrfToken}}",
+                                                                          "description":  "Fetch a fresh token after login. Postman must retain the SESSION cookie."
+                                                                      }
+                                                                  ],
+                                                       "body":  {
+                                                                    "mode":  "raw",
+                                                                    "raw":  "{\"flatId\":\"{{flatId}}\",\"relationshipType\":\"{{relationshipType}}\",\"startDate\":\"{{startDate}}\"}",
+                                                                    "options":  {
+                                                                                    "raw":  {
+                                                                                                "language":  "json"
+                                                                                            }
+                                                                                }
+                                                                },
+                                                       "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                       "description":  "Send at the same time as Concurrent Assignment B with identical member, flat, and relationship values. Manually expect one request in the pair to return 201 and the other 409."
+                                                   },
+                                       "response":  [
+
+                                                    ]
+                                   },
+                                   {
+                                       "name":  "Concurrent Assignment B",
+                                       "request":  {
+                                                       "method":  "POST",
+                                                       "header":  [
+                                                                      {
+                                                                          "key":  "Content-Type",
+                                                                          "value":  "application/json"
+                                                                      },
+                                                                      {
+                                                                          "key":  "X-Correlation-ID",
+                                                                          "value":  "{{correlationId}}"
+                                                                      },
+                                                                      {
+                                                                          "key":  "X-XSRF-TOKEN",
+                                                                          "value":  "{{csrfToken}}",
+                                                                          "description":  "Fetch a fresh token after login. Postman must retain the SESSION cookie."
+                                                                      }
+                                                                  ],
+                                                       "body":  {
+                                                                    "mode":  "raw",
+                                                                    "raw":  "{\"flatId\":\"{{flatId}}\",\"relationshipType\":\"{{relationshipType}}\",\"startDate\":\"{{startDate}}\"}",
+                                                                    "options":  {
+                                                                                    "raw":  {
+                                                                                                "language":  "json"
+                                                                                            }
+                                                                                }
+                                                                },
+                                                       "url":  "{{externalBaseUrl}}/api/v1/members/{{memberId}}/flats",
+                                                       "description":  "Send at the same time as Concurrent Assignment A with identical member, flat, and relationship values. Verify the persisted list using GET Member Memberships."
+                                                   },
+                                       "response":  [
+
+                                                    ]
+                                   }
+                               ]
+                  },
+                  {
+                      "name":  "NGINX Edge - Step 8",
+                      "description":  "Manual demonstrations of NGINX Gateway Fabric HTTPS entry and HTTP redirect. Trust the local development certificate before sending requests.",
                      "item":  [
                                   {
                                       "name":  "GET HTTP redirects to HTTPS (manual)",
@@ -1224,7 +1311,7 @@
                                                                          "value":  "{{correlationId}}"
                                                                      }
                                                                  ],
-                                                      "url":  "{{externalBaseUrl}}/api/v1/society",
+                                                       "url":  "{{edgeBaseUrl}}/api/v1/society",
                                                       "description":  "Calls the public NGINX HTTPS listener, then Spring Cloud Gateway, then Society Service. Sign in first using the Authentication folder when security is enabled."
                                                   },
                                       "response":  [

@@ -83,7 +83,7 @@ public class AuthController {
     private Mono<ResponseEntity<?>> authenticate(LoginRequest request, ServerWebExchange exchange) {
         Authentication credentials = UsernamePasswordAuthenticationToken.unauthenticated(request.username(), request.password());
         return authenticationManager.authenticate(credentials)
-                .flatMap(authentication -> {
+                .<ResponseEntity<?>>flatMap(authentication -> {
                     SecurityContext context = new SecurityContextImpl(authentication);
                     return exchange.getSession()
                             .flatMap(session -> session.changeSessionId().thenReturn(session))
@@ -93,14 +93,14 @@ public class AuthController {
                                             new LoginResponse(((AdminIdentity) authentication.getPrincipal()).adminId(),
                                                     ((AdminIdentity) authentication.getPrincipal()).username(), "ADMIN", true)))));
                 })
-                .onErrorResume(BadCredentialsException.class, exception -> Mono.just((ResponseEntity<?>)
+                .onErrorResume(BadCredentialsException.class, exception -> Mono.<ResponseEntity<?>>just(
                         ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(exchange, HttpStatus.UNAUTHORIZED,
                                 "INVALID_CREDENTIALS", "Username or password is invalid"))))
-                .onErrorResume(AuthServiceUnavailableException.class, exception -> Mono.just((ResponseEntity<?>)
+                .onErrorResume(AuthServiceUnavailableException.class, exception -> Mono.<ResponseEntity<?>>just(
                         ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error(exchange,
                                 HttpStatus.SERVICE_UNAVAILABLE, "AUTHENTICATION_SERVICE_UNAVAILABLE",
                                 "Credential validation is temporarily unavailable"))))
-                .onErrorResume(exception -> Mono.just((ResponseEntity<?>) ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .onErrorResume(exception -> Mono.<ResponseEntity<?>>just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(error(exchange, HttpStatus.SERVICE_UNAVAILABLE, "AUTHENTICATION_UNAVAILABLE",
                                 "Authentication is temporarily unavailable"))));
     }
