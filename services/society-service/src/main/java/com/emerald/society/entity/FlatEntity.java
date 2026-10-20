@@ -14,6 +14,8 @@ import java.time.Instant;
 @Table(name = "flats")
 public class FlatEntity {
     @Id private UUID id;
+    @jakarta.persistence.Version @Column(nullable=false) private long version;
+    public long getVersion() { return version; }
     @Column(name = "society_id", nullable = false) private UUID societyId;
     @Column(name = "floor_id", nullable = false) private UUID floorId;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -33,6 +35,11 @@ public class FlatEntity {
     }
     public UUID getId() { return id; }
     public UUID getSocietyId() { return societyId; }
+    public FloorEntity getFloor() { return floor; }
+    public void setFloorReference(FloorEntity floor) {
+        if (!floorId.equals(floor.getId())) throw new IllegalArgumentException("Floor reference must match floorId");
+        this.floor = floor;
+    }
     public UUID getFloorId() { return floorId; }
     public String getFlatNumber() { return flatNumber; }
     public String getStatus() { return status; }

@@ -15,6 +15,8 @@ import java.util.UUID;
 @Table(name = "flat_memberships")
 public class FlatMembershipEntity {
     @Id private UUID id;
+    @jakarta.persistence.Version @Column(nullable=false) private long version;
+    public long getVersion() { return version; }
     @Column(name = "member_id", nullable = false) private UUID memberId;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "member_id", insertable = false, updatable = false)

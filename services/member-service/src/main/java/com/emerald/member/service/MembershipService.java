@@ -23,26 +23,26 @@ public class MembershipService {
         this.members=members; this.societyClient=societyClient; this.writer=writer;
         this.membershipLock=membershipLock;
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.manage()")
     public MembershipResponse assign(UUID memberId, CreateMembershipRequest request) {
         members.requireActive(memberId);
         var flat = societyClient.getFlat(request.flatId());
         if (!"ACTIVE".equals(flat.status())) throw new FlatNotEligibleException();
         return membershipLock.withMemberLock(memberId, () -> writer.persist(memberId, request));
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.member(#p0)")
     public List<MembershipResponse> byMember(UUID id) { return writer.byMember(id); }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.flat(#p0)")
     public List<MembershipResponse> byFlat(UUID id) { return writer.byFlat(id); }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.member(#p0)")
     public PageResponse<MembershipResponse> pageByMember(UUID id, int page, int size, String sortBy, String direction) {
         return writer.pageByMember(id, page, size, sortBy, direction);
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.flat(#p0)")
     public PageResponse<MembershipResponse> pageByFlat(UUID id, int page, int size, String sortBy, String direction) {
         return writer.pageByFlat(id, page, size, sortBy, direction);
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.manage()")
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
         return membershipLock.withMemberLock(memberId, () -> writer.end(memberId, membershipId, request));
     }

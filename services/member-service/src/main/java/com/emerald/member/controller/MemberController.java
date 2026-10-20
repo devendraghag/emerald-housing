@@ -54,8 +54,9 @@ public class MemberController {
     }
 
     @GetMapping("/{memberId}")
-    public MemberResponse get(@PathVariable UUID memberId) {
-        return memberService.get(memberId);
+    public ResponseEntity<MemberResponse> get(@PathVariable UUID memberId,@RequestHeader(value="If-None-Match",required=false) String ifNoneMatch) {
+        var body=memberService.get(memberId);
+        return com.emerald.member.api.VersionPreconditions.read(body,com.emerald.member.api.VersionPreconditions.tag("member",memberId,body.version()),ifNoneMatch);
     }
 
     @GetMapping
@@ -67,19 +68,26 @@ public class MemberController {
     public PageResponse<MemberResponse> getPage(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String direction) {
-        return memberService.getPage(page, size, sortBy, direction);
+            @RequestParam(defaultValue = "desc") String direction,
+            @RequestParam(required=false) String search,@RequestParam(required=false) String status) {
+        return memberService.searchPage(page, size, sortBy, direction,search,status);
     }
 
+    @GetMapping("/cursor")
+    public com.emerald.member.api.CursorPage<MemberResponse> cursor(@RequestParam(defaultValue="20") int limit,@RequestParam(required=false) String after,@RequestParam(required=false) String search,@RequestParam(required=false) String status) {
+        return memberService.cursor(limit,after,search,status);
+    }
     @PutMapping("/{memberId}")
-    public MemberResponse update(@PathVariable UUID memberId,
-                                 @Valid @RequestBody UpdateMemberRequest request) {
-        return memberService.update(memberId, request);
+    public ResponseEntity<MemberResponse> update(@PathVariable UUID memberId,
+            @Valid @RequestBody UpdateMemberRequest request,@RequestHeader(value="If-Match",required=false) String ifMatch) {
+        var body=memberService.update(memberId,request,ifMatch);
+        return ResponseEntity.ok().eTag(com.emerald.member.api.VersionPreconditions.tag("member",memberId,body.version())).body(body);
     }
 
     @PatchMapping("/{memberId}/deactivate")
-    public MemberResponse deactivate(@PathVariable UUID memberId) {
-        return memberService.deactivate(memberId);
+    public ResponseEntity<MemberResponse> deactivate(@PathVariable UUID memberId,@RequestHeader(value="If-Match",required=false) String ifMatch) {
+        var body=memberService.deactivate(memberId,ifMatch);
+        return ResponseEntity.ok().eTag(com.emerald.member.api.VersionPreconditions.tag("member",memberId,body.version())).body(body);
     }
 
     @PostMapping("/{memberId}/flats")

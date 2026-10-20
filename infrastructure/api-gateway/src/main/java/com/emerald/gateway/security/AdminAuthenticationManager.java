@@ -36,6 +36,12 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
         this.serviceToken = serviceToken;
     }
 
+    public Mono<AdminIdentityResponse> current(java.util.UUID id) {
+        String url = credentialUrl.substring(0, credentialUrl.lastIndexOf('/')) + "/accounts/" + id;
+        return memberClient.get().uri(url).header("X-Gateway-Authentication-Token", serviceToken)
+                .retrieve().bodyToMono(AdminIdentityResponse.class);
+    }
+
     @Override
     public Mono<Authentication> authenticate(Authentication authentication) {
         if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
@@ -56,12 +62,12 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
                 })
                 .switchIfEmpty(Mono.error(new AuthServiceUnavailableException()))
                 .<Authentication>map(identity -> {
-                    if (identity.adminId() == null || identity.username() == null || !"ADMIN".equals(identity.role())) {
+                    if (identity.adminId() == null || identity.username() == null || identity.role() == null || !"EMERALD".equals(identity.societyCode()) || !java.util.Set.of("ADMIN","SOCIETY_ADMIN","COMMITTEE","RESIDENT").contains(identity.role())) {
                         throw new AuthServiceUnavailableException();
                     }
-                    AdminIdentity principal = new AdminIdentity(identity.adminId(), identity.username());
+                    AdminIdentity principal = new AdminIdentity(identity.adminId(), identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds());
                     return UsernamePasswordAuthenticationToken.authenticated(principal, null,
-                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+                            List.of(new SimpleGrantedAuthority("ROLE_"+identity.role())));
                 })
                 .onErrorMap(error -> error instanceof BadCredentialsException || error instanceof AuthServiceUnavailableException
                         ? error : error instanceof WebClientRequestException

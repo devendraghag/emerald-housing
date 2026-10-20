@@ -44,8 +44,8 @@ public class GatewaySessionValidationClient {
                     if (!incoming.getStatusCode().is2xxSuccessful()) throw new IllegalStateException("Session validation rejected the request");
                     return incoming.bodyTo(SessionIdentityResponse.class);
                 });
-        if (identity == null || identity.adminId() == null || identity.username() == null
-                || !"ADMIN".equals(identity.role())) return Optional.empty();
+        if (identity == null || identity.adminId() == null || identity.username() == null || identity.role() == null
+                || !java.util.Set.of("ADMIN","SOCIETY_ADMIN","COMMITTEE","RESIDENT").contains(identity.role())) return Optional.empty();
         return Optional.of(identity);
     }
 

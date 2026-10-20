@@ -29,7 +29,8 @@ public class BackendSecurityContextFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return request.getRequestURI().startsWith("/actuator/health")
                 || request.getRequestURI().equals("/actuator/prometheus")
-                || request.getRequestURI().equals("/internal/auth/credentials");
+                || request.getRequestURI().equals("/internal/auth/credentials")
+                || request.getRequestURI().startsWith("/internal/auth/accounts/");
     }
 
     @Override

@@ -60,7 +60,8 @@ public class MemberSecurityConfiguration {
                 .logout(logout -> logout.disable())
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus",
-                                "/internal/auth/credentials").permitAll()
+                                "/internal/auth/credentials", "/internal/auth/accounts/**").permitAll()
+                        .requestMatchers("/actuator/metrics", "/actuator/metrics/**").hasAnyRole("ADMIN", "SOCIETY_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> securityErrors.write(

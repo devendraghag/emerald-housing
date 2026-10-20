@@ -30,6 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
 class MemberMembershipIntegrationTest {
+    @org.junit.jupiter.api.BeforeEach void authenticate() {
+        var actor=new com.emerald.member.security.SessionIdentityResponse(UUID.randomUUID(),"integration-admin","ADMIN");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(actor,null,java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        org.mockito.Mockito.when(locks.withMemberLock(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenAnswer(call->((java.util.function.Supplier<?>)call.getArgument(1)).get());
+    }
+    @org.junit.jupiter.api.AfterEach void clearAuthentication() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    @MockitoBean com.emerald.member.lock.RedisMembershipLock locks;
     @Container static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
     @DynamicPropertySource static void database(DynamicPropertyRegistry properties) {
         properties.add("app.datasource.writer.jdbc-url", POSTGRES::getJdbcUrl);

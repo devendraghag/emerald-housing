@@ -25,6 +25,7 @@ public class InternalCredentialController {
     private final AuthenticationManager authenticationManager;
     private final AdminAccountRepository accounts;
     private final byte[] expectedToken;
+    @org.springframework.beans.factory.annotation.Autowired private AccountIdentityService identities;
 
     public InternalCredentialController(AuthenticationManager authenticationManager,
             AdminAccountRepository accounts,
@@ -34,6 +35,13 @@ public class InternalCredentialController {
         this.expectedToken = expectedToken.getBytes(StandardCharsets.UTF_8);
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/accounts/{id}")
+    public ResponseEntity<?> current(@org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
+            @RequestHeader(name=SERVICE_TOKEN_HEADER,required=false) String token) {
+        if(expectedToken.length<32 || token==null || !MessageDigest.isEqual(expectedToken,token.getBytes(StandardCharsets.UTF_8)))
+            return ResponseEntity.status(403).build();
+        return ResponseEntity.ok(identities.current(id));
+    }
     @PostMapping("/credentials")
     public ResponseEntity<?> authenticate(@RequestHeader(name = SERVICE_TOKEN_HEADER, required = false) String token,
             @jakarta.validation.Valid @RequestBody CredentialRequest request) {
@@ -50,7 +58,7 @@ public class InternalCredentialController {
             var authenticated = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(request.username(), request.password()));
             AdminAccountEntity account = accounts.findByUsername(authenticated.getName()).orElseThrow();
-            return ResponseEntity.ok(new AdminIdentityResponse(account.getId(), account.getUsername(), account.getRole()));
+            return ResponseEntity.ok(identities.current(account.getId()));
         } catch (AuthenticationException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Username or password is invalid"));

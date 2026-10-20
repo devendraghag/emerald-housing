@@ -91,7 +91,7 @@ public class AuthController {
                                     .then(csrfTokens.saveToken(exchange, null))
                                     .then(Mono.fromSupplier(() -> (ResponseEntity<?>) ResponseEntity.ok(
                                             new LoginResponse(((AdminIdentity) authentication.getPrincipal()).adminId(),
-                                                    ((AdminIdentity) authentication.getPrincipal()).username(), "ADMIN", true)))));
+                                                    ((AdminIdentity) authentication.getPrincipal()).username(), ((AdminIdentity) authentication.getPrincipal()).role(), true)))));
                 })
                 .onErrorResume(BadCredentialsException.class, exception -> Mono.<ResponseEntity<?>>just(
                         ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(exchange, HttpStatus.UNAUTHORIZED,
@@ -108,9 +108,17 @@ public class AuthController {
     @GetMapping("/me")
     public Mono<LoginResponse> currentAdmin() {
         return ReactiveSecurityContextHolder.getContext().map(SecurityContext::getAuthentication)
-                .map(authentication -> {
+                .flatMap(authentication -> {
                     AdminIdentity admin = (AdminIdentity) authentication.getPrincipal();
-                    return new LoginResponse(admin.adminId(), admin.username(), "ADMIN", true);
+                    if (authenticationManager instanceof AdminAuthenticationManager accounts) {
+                        return accounts.current(admin.adminId())
+                                .map(identity -> new LoginResponse(identity.adminId(), identity.username(), identity.role(), true))
+                                .onErrorMap(org.springframework.web.reactive.function.client.WebClientResponseException.Unauthorized.class,
+                                        error -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is unavailable"))
+                                .onErrorMap(error -> !(error instanceof org.springframework.web.server.ResponseStatusException),
+                                        error -> new org.springframework.web.server.ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Account validation is unavailable"));
+                    }
+                    return Mono.just(new LoginResponse(admin.adminId(), admin.username(), admin.role(), true));
                 });
     }
 

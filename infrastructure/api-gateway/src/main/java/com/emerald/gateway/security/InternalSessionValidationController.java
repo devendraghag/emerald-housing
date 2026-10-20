@@ -21,6 +21,7 @@ import reactor.core.publisher.Mono;
 public class InternalSessionValidationController {
     private final ServerSecurityContextRepository securityContexts;
     private final byte[] expectedToken;
+    @org.springframework.beans.factory.annotation.Autowired private AdminAuthenticationManager accounts;
 
     public InternalSessionValidationController(ServerSecurityContextRepository securityContexts,
             @Value("${emerald.security.session-validation-token:}") String expectedToken) {
@@ -36,18 +37,15 @@ public class InternalSessionValidationController {
             return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(exchange,
                     HttpStatus.FORBIDDEN, "INTERNAL_CALL_FORBIDDEN", "Internal validation is not permitted")));
         }
-        Mono<ResponseEntity<?>> result = securityContexts.load(exchange).map(context -> {
-            Authentication authentication = context.getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()
-                    || !(authentication.getPrincipal() instanceof AdminIdentity admin)) {
-                ResponseEntity<?> unauthorized = ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(exchange,
-                        HttpStatus.UNAUTHORIZED, "SESSION_INVALID", "The session is not valid"));
-                return unauthorized;
-            }
-            ResponseEntity<?> valid = ResponseEntity.ok(new SessionValidationResponse(admin.adminId(), admin.username(), "ADMIN"));
-            return valid;
-        }).defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body((Object) error(exchange, HttpStatus.UNAUTHORIZED,
-                "SESSION_INVALID", "The session is not valid")));
+        Mono<ResponseEntity<?>> result = securityContexts.load(exchange).<ResponseEntity<?>>flatMap(context -> {
+            Authentication authentication=context.getAuthentication();
+            if(authentication==null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AdminIdentity principal)) return Mono.empty();
+            return accounts.current(principal.adminId()).<ResponseEntity<?>>map(identity -> ResponseEntity.ok(
+                new SessionValidationResponse(identity.adminId(),identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds())));
+        }).defaultIfEmpty(ResponseEntity.status(401).body((Object)error(exchange,HttpStatus.UNAUTHORIZED,"SESSION_INVALID","The session is not valid")))
+          .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.Unauthorized.class,
+                failure -> Mono.just(ResponseEntity.status(401).body(error(exchange,HttpStatus.UNAUTHORIZED,"SESSION_INVALID","Account is unavailable"))))
+          .onErrorResume(failure -> Mono.just(ResponseEntity.status(503).body(error(exchange,HttpStatus.SERVICE_UNAVAILABLE,"SESSION_VALIDATION_UNAVAILABLE","Account validation is unavailable"))));
         return result;
     }
 

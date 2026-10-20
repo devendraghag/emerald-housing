@@ -44,6 +44,11 @@ import java.util.regex.Pattern;
 
 @Service
 public class MemberService {
+    @Autowired private com.emerald.member.audit.AuditTrail audit;
+    @Autowired private com.emerald.member.security.MemberAccess access;
+    @Autowired private com.emerald.member.api.DirectoryQueries queries;
+    @Autowired private com.emerald.member.api.VersionPreconditions versions;
+    private void audit(String action,UUID id,Object before,Object after) { if(audit!=null) audit.record(action,"MEMBER",id,before,after); }
     private final MemberRepository members;
     private final IdempotencyRecordRepository idempotencyRecords;
     private final JsonMapper jsonMapper;
@@ -86,12 +91,12 @@ public class MemberService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.manage()")
     public MemberResponse create(CreateMemberRequest request) {
         return createNewMember(request);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.manage()")
     public MemberCreationResult createIdempotent(CreateMemberRequest request, String idempotencyKey, UUID actorId) {
         if (idempotencyKey == null || !SAFE_IDEMPOTENCY_KEY.matcher(idempotencyKey).matches())
             throw new InvalidIdempotencyKeyException();
@@ -141,8 +146,9 @@ public class MemberService {
         if (members.existsByMobileNumberAndStatus(mobile, MemberStatus.ACTIVE)) throw new DuplicateMobileNumberException();
         Instant now = Instant.now();
         try {
-            return toResponse(members.saveAndFlush(new MemberEntity(UUID.randomUUID(), normalizeName(request.fullName()), mobile,
+            var created = toResponse(members.saveAndFlush(new MemberEntity(UUID.randomUUID(), normalizeName(request.fullName()), mobile,
                     normalizeEmail(request.email()), MemberStatus.ACTIVE, now, now)));
+            audit("CREATE",created.memberId(),null,created);return created;
         } catch (DataIntegrityViolationException ex) { throw new DuplicateMobileNumberException(); }
     }
 
@@ -157,39 +163,59 @@ public class MemberService {
         }
     }
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.member(#p0)")
     public MemberResponse get(UUID id) { return toResponse(find(id)); }
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<MemberResponse> getAll() { return members.findAllByOrderByCreatedAtDesc().stream().map(MemberService::toResponse).toList(); }
+    @PreAuthorize("@memberAccess.read()")
+    public List<MemberResponse> getAll() { return access!=null && access.resident() ? members.findById(access.ownMember()).map(MemberService::toResponse).stream().toList() : members.findAllByOrderByCreatedAtDesc().stream().map(MemberService::toResponse).toList(); }
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.read()")
     public PageResponse<MemberResponse> getPage(int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
                 Set.of("createdAt", "updatedAt", "fullName", "mobileNumber", "email", "status"));
-        Page<MemberEntity> result = members.findAll(pageable);
+        Page<MemberEntity> result = queries==null ? members.findAll(pageable) : queries.page(null,null,null,pageable);
         return PageResponse.from(result, MemberService::toResponse, sortBy, direction);
     }
+    @Transactional(readOnly=true) @PreAuthorize("@memberAccess.read()")
+    public PageResponse<MemberResponse> searchPage(int page,int size,String sortBy,String direction,String search,String status) {
+        var pageable=PageRequests.of(page,size,sortBy,direction,Set.of("createdAt","updatedAt","fullName","mobileNumber","email","status"));
+        return PageResponse.from(queries.page(search,status,null,pageable),MemberService::toResponse,sortBy,direction);
+    }
+    @Transactional(readOnly=true) @PreAuthorize("@memberAccess.read()")
+    public com.emerald.member.api.CursorPage<MemberResponse> cursor(int limit,String after,String search,String status) {
+        var result=queries.cursor(search,status,null,limit,after);
+        return new com.emerald.member.api.CursorPage<>(result.items().stream().map(MemberService::toResponse).toList(),result.nextCursor(),result.hasNext());
+    }
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
-    public MemberResponse update(UUID id, UpdateMemberRequest request) {
+    @PreAuthorize("@memberAccess.manage()")
+    public MemberResponse update(UUID id, UpdateMemberRequest request) { return update(id,request,null); }
+    @Transactional @PreAuthorize("@memberAccess.manage()")
+    public MemberResponse update(UUID id, UpdateMemberRequest request,String ifMatch) {
         MemberEntity member = find(id);
+        if(versions!=null) versions.check(ifMatch,"member",id,member.getVersion());
+        var before=toResponse(member);
         String mobile = normalizeMobile(request.mobileNumber());
         if (member.getStatus() == MemberStatus.ACTIVE && !member.getMobileNumber().equals(mobile)
                 && members.existsByMobileNumberAndStatus(mobile, MemberStatus.ACTIVE)) throw new DuplicateMobileNumberException();
         member.update(normalizeName(request.fullName()), mobile, normalizeEmail(request.email()), Instant.now());
-        try { return toResponse(members.saveAndFlush(member)); }
+        try { var result=toResponse(members.saveAndFlush(member));audit("UPDATE",id,before,result);return result; }
         catch (DataIntegrityViolationException ex) { throw new DuplicateMobileNumberException(); }
     }
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
-    public MemberResponse deactivate(UUID id) {
+    @PreAuthorize("@memberAccess.manage()")
+    public MemberResponse deactivate(UUID id) { return deactivate(id,null); }
+    @Transactional @PreAuthorize("@memberAccess.manage()")
+    public MemberResponse deactivate(UUID id,String ifMatch) {
         MemberEntity member = find(id);
-        member.deactivate(Instant.now());
-        return toResponse(members.save(member));
+        if(versions!=null) versions.check(ifMatch,"member",id,member.getVersion());
+        var before=toResponse(member);
+        boolean changed=member.deactivate(Instant.now());
+        var result=toResponse(members.saveAndFlush(member));
+        if(changed)audit("DEACTIVATE",id,before,result);
+        return result;
     }
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@memberAccess.manage()")
     public void requireActive(UUID id) {
         MemberEntity member = find(id);
         if (member.getStatus() != MemberStatus.ACTIVE) throw new InactiveMemberException();
@@ -198,5 +224,5 @@ public class MemberService {
     private static String normalizeName(String s) { return s.trim().replaceAll("\\s+", " "); }
     private static String normalizeMobile(String s) { return s.trim(); }
     private static String normalizeEmail(String s) { return s == null || s.isBlank() ? null : s.trim().toLowerCase(Locale.ROOT); }
-    private static MemberResponse toResponse(MemberEntity m) { return new MemberResponse(m.getId(), m.getFullName(), m.getMobileNumber(), m.getEmail(), m.getStatus(), m.getCreatedAt(), m.getUpdatedAt()); }
+    private static MemberResponse toResponse(MemberEntity m) { return new MemberResponse(m.getId(), m.getFullName(), m.getMobileNumber(), m.getEmail(), m.getStatus(), m.getCreatedAt(), m.getUpdatedAt(), m.getVersion()); }
 }

@@ -24,7 +24,7 @@ spring:
               uri: ${MEMBER_SERVICE_URL:http://localhost:8082}
               order: -10
               predicates:
-                - Path=/api/v1/members,/api/v1/members/**,/api/v1/flats/*/memberships/**
+                - Path=/api/v1/accounts,/api/v1/accounts/**,/api/v1/members,/api/v1/members/**,/api/v1/flats/*/memberships/**
               filters:
                 - name: RequestRateLimiter
                   args:

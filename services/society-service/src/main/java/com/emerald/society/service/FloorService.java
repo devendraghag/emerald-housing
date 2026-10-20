@@ -25,14 +25,14 @@ public class FloorService {
     public FloorService(FloorRepository floorRepository) {
         this(floorRepository, new SocietyCacheMetrics(new SimpleMeterRegistry()));
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@societyAccess.read()")
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = SocietyCacheConfiguration.FLOOR_LIST, key = "'all'", sync = true)
     public List<FloorResponse> getFloors() {
         return cacheMetrics.recordDatabaseLoad("floors", () -> floorRepository.findAllByOrderByFloorNumberAsc().stream()
                 .map(floor -> new FloorResponse(floor.getFloorNumber())).toList());
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@societyAccess.read()")
     @Transactional(readOnly = true)
     public FloorResponse getFloor(int floorNumber) {
         return floorRepository.findByFloorNumber(floorNumber)

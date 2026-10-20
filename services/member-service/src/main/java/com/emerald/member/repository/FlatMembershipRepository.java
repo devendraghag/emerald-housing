@@ -15,4 +15,5 @@ public interface FlatMembershipRepository extends JpaRepository<FlatMembershipEn
     List<FlatMembershipEntity> findAllByFlatIdOrderByStartDateDesc(UUID flatId);
     Page<FlatMembershipEntity> findAllByMemberId(UUID memberId, Pageable pageable);
     Page<FlatMembershipEntity> findAllByFlatId(UUID flatId, Pageable pageable);
+    Page<FlatMembershipEntity> findAllByFlatIdAndMemberId(UUID flatId,UUID memberId,Pageable pageable);
 }

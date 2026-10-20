@@ -1,0 +1,24 @@
+{
+  "consumer": "member-service",
+  "provider": "society-service",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/flats/00000000-0000-0000-0000-000000000101"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "flatId": "00000000-0000-0000-0000-000000000101",
+      "flatNumber": "A-101",
+      "floorId": "00000000-0000-0000-0000-000000000001",
+      "floorNumber": 1,
+      "status": "ACTIVE",
+      "version": 3
+    }
+  },
+  "missing": {
+    "path": "/api/v1/flats/00000000-0000-0000-0000-000000000404",
+    "status": 404,
+    "code": "RESOURCE_NOT_FOUND"
+  }
+}

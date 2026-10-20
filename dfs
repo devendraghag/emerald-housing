@@ -1,0 +1,11 @@
+| Existing area | Features or improvements to add |
+|---|---|
+| Architecture | Architecture tests enforcing package boundaries and preventing circular dependencies |
+| API contracts | OpenAPI documentation, API compatibility checks, and a versioning/deprecation policy |
+| Validation and errors | Consistent Problem Details responses and reusable business-rule validators |
+| Authentication | MFA, password reset/change, active-session listing, and session revocation |
+| Authorization | Fine-grained permissions, permission-change history, and broader negative-access tests |
+| Society isolation | Full multi-society tenancy with tenant-aware queries, constraints, indexes, and caches |
+| Audit trails | Retention policies, archival, tamper evidence, and controlled audit exports |
+| Search and filtering | PostgreSQL full-text/trigram search, indexed query plans, and additional validated filters |
+| Cursor pagination | Backward navigation, cursor expiry, and more concurrent-change tests |

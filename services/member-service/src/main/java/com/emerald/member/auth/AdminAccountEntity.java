@@ -31,6 +31,17 @@ public class AdminAccountEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @jakarta.persistence.Version @Column(nullable=false) private long version;
+    @Column(name="society_code",nullable=false,length=40) private String societyCode="EMERALD";
+    @Column(name="member_id") private UUID memberId;
+    public AdminAccountEntity(UUID id,String username,String passwordHash,String role,String societyCode,UUID memberId) {
+        this.id=id;this.username=username;this.passwordHash=passwordHash;this.role=role;this.societyCode=societyCode;this.memberId=memberId;
+        this.enabled=true;this.createdAt=Instant.now();this.updatedAt=this.createdAt;
+    }
+    public void permissions(String role,String societyCode,UUID memberId,boolean enabled) { this.role=role;this.societyCode=societyCode;this.memberId=memberId;this.enabled=enabled;this.updatedAt=Instant.now(); }
+    public long getVersion() { return version; }
+    public String getSocietyCode() { return societyCode; }
+    public UUID getMemberId() { return memberId; }
     protected AdminAccountEntity() { }
 
     public UUID getId() { return id; }

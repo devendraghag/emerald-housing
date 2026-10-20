@@ -31,8 +31,13 @@ public class FlatController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "flatNumber") String sortBy,
-            @RequestParam(defaultValue = "asc") String direction) {
-        return flatService.page(page, size, sortBy, direction);
+            @RequestParam(defaultValue = "asc") String direction,
+            @RequestParam(required=false) String search,@RequestParam(required=false) String status,@RequestParam(required=false) Integer floorNumber) {
+        return flatService.searchPage(page, size, sortBy, direction,search,status,floorNumber);
+    }
+    @GetMapping("/cursor")
+    public com.emerald.society.api.CursorPage<FlatResponse> cursor(@RequestParam(defaultValue="20") int limit,@RequestParam(required=false) String after,@RequestParam(required=false) String search,@RequestParam(required=false) String status,@RequestParam(required=false) Integer floorNumber) {
+        return flatService.cursor(limit,after,search,status,floorNumber);
     }
     @GetMapping("/by-floor/{floorNumber}")
     public List<FlatResponse> byFloor(@PathVariable int floorNumber) { return flatService.listByFloorNumber(floorNumber); }
@@ -44,18 +49,22 @@ public class FlatController {
             @RequestParam(defaultValue = "asc") String direction) {
         return flatService.pageByFloorNumber(floorNumber, page, size, sortBy, direction);
     }
-    @GetMapping("/{flatId}") public FlatResponse get(@PathVariable UUID flatId, Authentication authentication) {
+    @GetMapping("/{flatId}") public ResponseEntity<FlatResponse> get(@PathVariable UUID flatId, Authentication authentication,
+            @org.springframework.web.bind.annotation.RequestHeader(value="If-None-Match",required=false) String ifNoneMatch) {
         boolean memberValidation = authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> "SERVICE_MEMBER_FLAT_READ".equals(authority.getAuthority()));
-        return memberValidation ? flatService.get(flatId) : flatService.getCached(flatId);
+        var body=memberValidation ? flatService.get(flatId) : flatService.getCached(flatId);
+        return com.emerald.society.api.VersionPreconditions.read(body,com.emerald.society.api.VersionPreconditions.tag("flat",flatId,body.version()),ifNoneMatch);
     }
     @PostMapping public ResponseEntity<FlatResponse> create(@Valid @RequestBody CreateFlatRequest request) {
         FlatResponse flat = flatService.create(request);
         return ResponseEntity.created(URI.create("/api/v1/flats/" + flat.flatId())).body(flat);
     }
-    @PutMapping("/{flatId}") public FlatResponse update(@PathVariable UUID flatId,
-            @Valid @RequestBody UpdateFlatRequest request) { return flatService.update(flatId, request); }
-    @PatchMapping("/{flatId}/deactivate") public FlatResponse deactivate(@PathVariable UUID flatId) {
-        return flatService.deactivate(flatId);
+    @PutMapping("/{flatId}") public ResponseEntity<FlatResponse> update(@PathVariable UUID flatId,
+            @Valid @RequestBody UpdateFlatRequest request,@org.springframework.web.bind.annotation.RequestHeader(value="If-Match",required=false) String ifMatch) {
+        var body=flatService.update(flatId,request,ifMatch);return ResponseEntity.ok().eTag(com.emerald.society.api.VersionPreconditions.tag("flat",flatId,body.version())).body(body);
+    }
+    @PatchMapping("/{flatId}/deactivate") public ResponseEntity<FlatResponse> deactivate(@PathVariable UUID flatId,@org.springframework.web.bind.annotation.RequestHeader(value="If-Match",required=false) String ifMatch) {
+        var body=flatService.deactivate(flatId,ifMatch);return ResponseEntity.ok().eTag(com.emerald.society.api.VersionPreconditions.tag("flat",flatId,body.version())).body(body);
     }
 }

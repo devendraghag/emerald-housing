@@ -14,6 +14,8 @@ import java.util.UUID;
 @Table(name = "members")
 public class MemberEntity {
     @Id private UUID id;
+    @jakarta.persistence.Version @Column(nullable=false) private long version;
+    public long getVersion() { return version; }
     @Column(name = "full_name", nullable = false, length = 160) private String fullName;
     @Column(name = "mobile_number", nullable = false, length = 10) private String mobileNumber;
     @Column(length = 254) private String email;

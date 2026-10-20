@@ -325,7 +325,7 @@ public class SocietyCacheConfiguration implements CachingConfigurer {
                     return Duration.ofMillis(ttl.toMillis() - reduction);
                 })
                 .disableCachingNullValues()
-                .computePrefixWith(cacheName -> "society:cache:" + cacheName + "::")
+                .computePrefixWith(cacheName -> "society:cache:v2:" + cacheName + "::")
                 .serializeKeysWith(SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(SerializationPair.fromSerializer(valueSerializer));
     }

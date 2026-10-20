@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MembershipWriter {
+    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.audit.AuditTrail audit;
+    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
     private final FlatMembershipRepository memberships;
     private final MemberRepository members;
     public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) { this.memberships=memberships; this.members=members; }
@@ -40,7 +42,7 @@ public class MembershipWriter {
         try {
             FlatMembershipEntity saved = memberships.saveAndFlush(new FlatMembershipEntity(UUID.randomUUID(), memberId,
                     request.flatId(), relationship, request.startDate(), now));
-            return response(saved);
+            var result=response(saved);if(audit!=null)audit.record("ASSIGN","MEMBERSHIP",saved.getId(),null,result);return result;
         } catch (DataIntegrityViolationException ex) { throw new DuplicateMembershipException(); }
     }
     @Transactional(readOnly = true)
@@ -50,7 +52,7 @@ public class MembershipWriter {
     }
     @Transactional(readOnly = true)
     public List<MembershipResponse> byFlat(UUID flatId) {
-        return memberships.findAllByFlatIdOrderByStartDateDesc(flatId).stream().map(MembershipWriter::response).toList();
+        return memberships.findAllByFlatIdOrderByStartDateDesc(flatId).stream().filter(row->access==null || !access.resident() || row.getMemberId().equals(access.ownMember())).map(MembershipWriter::response).toList();
     }
     @Transactional(readOnly = true)
     public PageResponse<MembershipResponse> pageByMember(UUID memberId, int page, int size, String sortBy, String direction) {
@@ -64,7 +66,7 @@ public class MembershipWriter {
     public PageResponse<MembershipResponse> pageByFlat(UUID flatId, int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
                 Set.of("startDate", "endDate", "createdAt", "updatedAt", "relationshipType"));
-        Page<FlatMembershipEntity> result = memberships.findAllByFlatId(flatId, pageable);
+        Page<FlatMembershipEntity> result = access!=null && access.resident() ? memberships.findAllByFlatIdAndMemberId(flatId,access.ownMember(),pageable) : memberships.findAllByFlatId(flatId, pageable);
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
     }
     @Transactional
@@ -74,8 +76,10 @@ public class MembershipWriter {
                 .orElseThrow(() -> new MembershipNotFoundException(membershipId));
         if (request.endDate().isBefore(membership.getStartDate())) throw new InvalidMembershipEndDateException();
         if (membership.getEndDate() == null) {
+            var before=response(membership);
             membership.end(request.endDate(), Instant.now());
             memberships.saveAndFlush(membership);
+            if(audit!=null)audit.record("END","MEMBERSHIP",membership.getId(),before,response(membership));
         }
         return response(membership);
     }

@@ -1,5 +1,7 @@
 package com.emerald.society;
 
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,6 +28,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
 class SocietyPersistenceIntegrationTest {
+    @org.junit.jupiter.api.BeforeEach void authenticate() {
+        var actor=new com.emerald.society.security.SessionIdentityResponse(UUID.randomUUID(),"integration-admin","ADMIN");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(actor,null,java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    }
+    @org.junit.jupiter.api.AfterEach void clearAuthentication() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
     @Container static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
     @DynamicPropertySource static void database(DynamicPropertyRegistry properties) {
         properties.add("app.datasource.writer.jdbc-url", POSTGRES::getJdbcUrl);

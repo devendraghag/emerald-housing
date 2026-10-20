@@ -41,6 +41,7 @@ public class SocietySecurityConfiguration {
                 .logout(logout -> logout.disable())
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/metrics", "/actuator/metrics/**").hasAnyRole("ADMIN", "SOCIETY_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> securityErrors.write(request, response,

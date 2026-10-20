@@ -14,10 +14,10 @@ public class SocietyService {
         this.societyRepository = societyRepository;
         this.floorRepository = floorRepository;
     }
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@societyAccess.read()")
     public SocietyResponse getSociety() {
         var society = societyRepository.findBySocietyCode("EMERALD")
                 .orElseThrow(() -> new IllegalStateException("Configured society is missing"));
-        return new SocietyResponse(society.getSocietyCode(), society.getName(), Math.toIntExact(floorRepository.count()));
+        return new SocietyResponse(society.getSocietyCode(), society.getName(), Math.toIntExact(floorRepository.countBySocietySocietyCode("EMERALD")));
     }
 }

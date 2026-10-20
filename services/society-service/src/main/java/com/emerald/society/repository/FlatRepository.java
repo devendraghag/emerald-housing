@@ -16,17 +16,17 @@ public interface FlatRepository extends JpaRepository<FlatEntity, UUID> {
 
     @Query("""
             select new com.emerald.society.dto.FlatResponse(
-                f.id, f.flatNumber, f.floorId, flr.floorNumber, f.status)
-            from FlatEntity f join f.floor flr
+                f.id, f.flatNumber, f.floorId, flr.floorNumber, f.status, f.version)
+            from FlatEntity f join f.floor flr where f.society.societyCode = 'EMERALD'
             order by f.flatNumber asc
             """)
     List<FlatResponse> findAllResponsesByFlatNumberAsc();
 
     @Query(value = """
             select new com.emerald.society.dto.FlatResponse(
-                f.id, f.flatNumber, f.floorId, flr.floorNumber, f.status)
-            from FlatEntity f join f.floor flr
+                f.id, f.flatNumber, f.floorId, flr.floorNumber, f.status, f.version)
+            from FlatEntity f join f.floor flr where f.society.societyCode = 'EMERALD'
             """,
-            countQuery = "select count(f) from FlatEntity f")
+            countQuery = "select count(f) from FlatEntity f where f.society.societyCode = 'EMERALD'")
     Page<FlatResponse> findAllResponses(Pageable pageable);
 }

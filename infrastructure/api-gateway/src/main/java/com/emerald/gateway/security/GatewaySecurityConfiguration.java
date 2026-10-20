@@ -57,7 +57,7 @@ public class GatewaySecurityConfiguration {
                         .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus", "/api/v1/auth/csrf",
                                 "/api/v1/auth/login", "/internal/auth/session").permitAll()
                         .pathMatchers("/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
-                        .pathMatchers("/api/v1/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/**").hasAnyRole("ADMIN", "SOCIETY_ADMIN", "COMMITTEE", "RESIDENT")
                         .anyExchange().denyAll())
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((exchange, error) -> errors.write(exchange, HttpStatus.UNAUTHORIZED,
