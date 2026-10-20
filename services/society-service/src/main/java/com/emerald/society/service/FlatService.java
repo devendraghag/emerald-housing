@@ -70,8 +70,7 @@ public class FlatService {
     @PreAuthorize("hasRole('ADMIN')")
     @Cacheable(cacheNames = SocietyCacheConfiguration.ALL_FLATS, key = "'all'", sync = true)
     public List<FlatResponse> list() {
-        return cacheMetrics.recordDatabaseLoad("all-flats", () -> flats.findAllByOrderByFlatNumberAsc().stream()
-                .map(this::responseWithFloor).toList());
+        return cacheMetrics.recordDatabaseLoad("all-flats", flats::findAllResponsesByFlatNumberAsc);
     }
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
@@ -88,8 +87,8 @@ public class FlatService {
     @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<FlatResponse> page(int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction, Set.of("flatNumber", "status", "createdAt", "updatedAt"));
-        Page<FlatEntity> result = flats.findAll(pageable);
-        return PageResponse.from(result, this::responseWithFloor, sortBy, direction);
+        Page<FlatResponse> result = flats.findAllResponses(pageable);
+        return PageResponse.from(result, flat -> flat, sortBy, direction);
     }
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")

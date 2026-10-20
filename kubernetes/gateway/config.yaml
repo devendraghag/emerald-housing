@@ -4,6 +4,8 @@ metadata:
   name: api-gateway-config
   namespace: emerald-housing
 data:
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
   TRACING_OTLP_ENABLED: "false"
   TRACING_SAMPLING_PROBABILITY: "0.1"
   INSTANCE_ID: "api-gateway"
