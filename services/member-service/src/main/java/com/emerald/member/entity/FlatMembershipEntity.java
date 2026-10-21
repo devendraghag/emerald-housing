@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "flat_memberships")
-public class FlatMembershipEntity {
+public class FlatMembershipEntity implements MembershipPeriod {
     @Id private UUID id;
     @jakarta.persistence.Version @Column(nullable=false) private long version;
     public long getVersion() { return version; }

@@ -23,6 +23,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class MembershipServiceTest {
+    @Test void inactiveFlatNeverAcquiresLockOrPersists() {
+        UUID memberId = UUID.randomUUID(), flatId = UUID.randomUUID();
+        var request = new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.of(2026, 10, 1));
+        when(society.getFlat(flatId)).thenReturn(new SocietyFlatResponse(flatId, "A-1", UUID.randomUUID(), 1, "INACTIVE"));
+        assertThrows(com.emerald.member.exception.FlatNotEligibleException.class, () -> service.assign(memberId, request));
+        verifyNoInteractions(membershipLock, writer);
+    }
+
+    @Test void lockFailureNeverPersistsAssignment() {
+        UUID memberId = UUID.randomUUID(), flatId = UUID.randomUUID();
+        var request = new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.of(2026, 10, 1));
+        when(society.getFlat(flatId)).thenReturn(new SocietyFlatResponse(flatId, "A-1", UUID.randomUUID(), 1, "ACTIVE"));
+        var failure = new IllegalStateException("Lock unavailable");
+        when(membershipLock.withMemberLock(eq(memberId), any())).thenThrow(failure);
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> service.assign(memberId, request)));
+        verifyNoInteractions(writer);
+    }
+
     @Mock MemberService members;
     @Mock SocietyClient society;
     @Mock MembershipWriter writer;

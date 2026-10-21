@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.emerald.member.repository.*;
 import com.emerald.member.service.MemberStatus;
 import com.emerald.member.api.ApiFailure;
+import com.emerald.member.entity.FlatMembershipEntity;
+import com.emerald.member.entity.MembershipPeriod;
 @Service
 public class AccountIdentityService {
  private final AdminAccountRepository accounts; private final MemberRepository members; private final FlatMembershipRepository memberships;
@@ -20,8 +22,8 @@ public class AccountIdentityService {
     throw new ApiFailure(401,"ACCOUNT_UNLINKED","Resident account must link to an active member");
    var today=java.time.LocalDate.now(java.time.ZoneOffset.UTC);
    flatIds=memberships.findAllByMemberIdOrderByStartDateDesc(account.getMemberId()).stream()
-    .filter(row->!row.getStartDate().isAfter(today) && row.getEndDate()==null)
-    .map(row->row.getFlatId()).collect(Collectors.toUnmodifiableSet());
+    .filter(MembershipPeriod.currentOn(today))
+    .map(FlatMembershipEntity::getFlatId).collect(Collectors.toUnmodifiableSet());
   }
   return new AdminIdentityResponse(account.getId(),account.getUsername(),account.getRole(),account.getSocietyCode(),account.getMemberId(),flatIds);
  }

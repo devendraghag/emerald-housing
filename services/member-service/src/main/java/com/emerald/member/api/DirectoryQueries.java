@@ -1,6 +1,7 @@
 package com.emerald.member.api;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.*;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,10 @@ public class DirectoryQueries {
   var cb=em.getCriteriaBuilder();var query=cb.createQuery(MemberEntity.class);var root=query.from(MemberEntity.class);
   
   query.where(predicates(cb,root,search,status,floor).toArray(Predicate[]::new));
-  var orders=new ArrayList<Order>();page.getSort().forEach(sort->orders.add(sort.isAscending()?cb.asc(root.get(sort.getProperty())):cb.desc(root.get(sort.getProperty()))));
+  // Keep this collection mutable: the deterministic ID tie-breaker is appended below.
+  List<Order> orders=page.getSort().stream()
+   .map(sort->sort.isAscending()?cb.asc(root.get(sort.getProperty())):cb.desc(root.get(sort.getProperty())))
+   .collect(Collectors.toCollection(ArrayList::new));
   orders.add(cb.asc(root.get("id")));query.orderBy(orders);
   if(page.getOffset()>Integer.MAX_VALUE)throw new ApiFailure(400,"INVALID_PAGE","Use cursor pagination for deep browsing");
   var rows=em.createQuery(query).setFirstResult((int)page.getOffset()).setMaxResults(page.getPageSize()).getResultList();
@@ -44,7 +48,7 @@ public class DirectoryQueries {
  public CursorPage<MemberEntity> cursor(String search,String status,Integer floor,int limit,String after) {
   if(limit<1||limit>100)throw new ApiFailure(400,"INVALID_PAGE","limit must be between 1 and 100");
   search=search(search);status=status(status);
-  String scope=CursorCodec.scope(search+"|"+status+"|"+floor+"|"+access.identity().adminId()+"|"+access.identity().role()+"|"+access.ownMember()+"|"+access.ownFlats().stream().sorted().toList());
+  String scope=CursorCodec.scope(search+"|"+status+"|"+floor+"|"+access.identity().adminId()+"|"+access.identity().role()+"|"+access.ownMember()+"|"+access.ownFlats().stream().sorted(Comparator.naturalOrder()).toList());
   var position=CursorCodec.decode(after,scope);
   var cb=em.getCriteriaBuilder();var query=cb.createQuery(MemberEntity.class);var root=query.from(MemberEntity.class);
   

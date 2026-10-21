@@ -21,6 +21,23 @@ import com.emerald.member.api.*;
 @SpringBootTest(properties={"society.cache.warmup.enabled=false","TRACING_OTLP_ENABLED=false","management.otlp.metrics.export.enabled=false"})
 @Testcontainers(disabledWithoutDocker=true)
 class FeaturesPersistenceTest {
+ @Test void idempotencyReplayReturnsOriginalMemberWithoutDuplicateWrites() {
+  var request=new com.emerald.member.dto.CreateMemberRequest("Asha Replay","9876543291",null);
+  var first=service.createIdempotent(request,"create-replay",actor);
+  var replay=service.createIdempotent(request,"create-replay",actor);
+  assertFalse(first.replayed());assertTrue(replay.replayed());
+  assertEquals(first.member(),replay.member());
+  assertEquals(1,jdbc.queryForObject("select count(*) from members",Integer.class));
+  assertEquals(1,jdbc.queryForObject("select count(*) from audit_events where entity_id=?",Integer.class,first.member().memberId()));
+ }
+ @Test void idempotencyConflictPreservesOriginalMember() {
+  var request=new com.emerald.member.dto.CreateMemberRequest("Asha Original","9876543292",null);
+  var first=service.createIdempotent(request,"create-conflict",actor);
+  assertThrows(com.emerald.member.exception.IdempotencyConflictException.class,()->service.createIdempotent(
+   new com.emerald.member.dto.CreateMemberRequest("Changed","9876543293",null),"create-conflict",actor));
+  assertEquals("Asha Original",service.get(first.member().memberId()).fullName());
+  assertEquals(1,jdbc.queryForObject("select count(*) from members",Integer.class));
+ }
  @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:16-alpine");
  @DynamicPropertySource static void database(DynamicPropertyRegistry p) { p.add("app.datasource.writer.jdbc-url",POSTGRES::getJdbcUrl);p.add("app.datasource.writer.username",POSTGRES::getUsername);p.add("app.datasource.writer.password",POSTGRES::getPassword); }
  @Autowired MemberService service; @Autowired JdbcTemplate jdbc; @Autowired PlatformTransactionManager manager;
