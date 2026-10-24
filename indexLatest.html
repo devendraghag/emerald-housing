@@ -419,7 +419,32 @@ Older audit events: append &amp;before={lastReturnedSequence}</code></pre>
 <p><strong>Do not overclaim CAP:</strong> CAP concerns behavior during a network partition. This code uses synchronous validation and fails closed for security/locking dependencies. That does not justify labeling the entire system “CP” or “AP” without a specific data operation and failure model.</p></section><details class="reference-shelf" data-reference="system-design"><summary><span>Detailed reference</span><strong>System design and operational guidance</strong><small>Open APIs, commands, diagrams and deeper explanations</small></summary><div class="reference-content"><section class="doc-group" id="system-design"><h2>System design and operational guidance</h2><section class="doc-section" id="phase14" style="--accent:var(--p3)">
 
 <h2>See how the implemented design fits together</h2>
-<p class="lead">This phase gathers the system design ideas already present in Emerald Housing and connects each one to its implementation. It describes the current project architecture and its operational boundaries.</p><h3>Complete system architecture</h3><figure id="complete-architecture-diagram" class="diagram system-diagram"><svg viewBox="0 0 1500 790" role="img" aria-label="Complete Emerald Housing architecture: clients enter through optional HTTPS ingress and Spring Gateway; Kubernetes routes to Member and Society Pods; services use separate PostgreSQL databases, Redis roles, and optional external PostgreSQL read replicas."><defs><marker id="arch-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker><marker id="arch-dash-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker></defs><rect x="215" y="45" width="900" height="690" rx="22" fill="none" stroke="var(--p4)" stroke-width="3" stroke-dasharray="10 8"/><text x="665" y="78" text-anchor="middle" font-size="20" font-weight="800">Kubernetes cluster · emerald-housing</text><rect class="box" x="20" y="300" width="165" height="80" rx="12"/><text x="102" y="332" text-anchor="middle" font-weight="800">Admin / Postman</text><text x="102" y="357" text-anchor="middle">HTTPS or local URL</text><rect class="bluebox" x="245" y="300" width="195" height="80" rx="12"/><text x="342" y="332" text-anchor="middle" font-weight="800">NGINX HTTPS edge</text><text x="342" y="357" text-anchor="middle">optional cluster ingress</text><rect class="bluebox" x="490" y="300" width="195" height="80" rx="12"/><text x="587" y="332" text-anchor="middle" font-weight="800">Spring Cloud Gateway</text><text x="587" y="357" text-anchor="middle">route · session · limits</text><rect class="softbox" x="770" y="160" width="235" height="90" rx="12"/><text x="887" y="193" text-anchor="middle" font-weight="800">Member Service Deployment</text><text x="887" y="219" text-anchor="middle">Member Pods · ClusterIP Service</text><rect class="softbox" x="770" y="420" width="235" height="90" rx="12"/><text x="887" y="453" text-anchor="middle" font-weight="800">Society Service Deployment</text><text x="887" y="479" text-anchor="middle">Society Pods · ClusterIP Service</text><rect class="softbox" x="485" y="535" width="265" height="80" rx="12"/><text x="617" y="566" text-anchor="middle" font-weight="800">Redis · sessions / rate limits</text><text x="617" y="590" text-anchor="middle">and Member membership locks</text><rect class="softbox" x="790" y="575" width="215" height="65" rx="12"/><text x="897" y="603" text-anchor="middle" font-weight="800">Redis · Society cache</text><text x="897" y="625" text-anchor="middle">separate cache deployment</text><rect class="box" x="1190" y="155" width="260" height="90" rx="12"/><text x="1320" y="190" text-anchor="middle" font-weight="800">member_db · PostgreSQL</text><text x="1320" y="217" text-anchor="middle">Member is the data owner</text><rect class="box" x="1190" y="420" width="260" height="90" rx="12"/><text x="1320" y="455" text-anchor="middle" font-weight="800">society_db · PostgreSQL</text><text x="1320" y="482" text-anchor="middle">Society is the data owner</text><rect class="softbox" x="1220" y="285" width="210" height="60" rx="10"/><text x="1325" y="310" text-anchor="middle" font-weight="750">Optional Member reader</text><text x="1325" y="331" text-anchor="middle">external replica · off by default</text><rect class="softbox" x="1220" y="550" width="210" height="60" rx="10"/><text x="1325" y="575" text-anchor="middle" font-weight="750">Optional Society reader</text><text x="1325" y="596" text-anchor="middle">external replica · off by default</text><path d="M185 340h54M440 340h44M685 325C720 300 725 205 763 205M685 355C720 380 725 465 763 465" fill="none" stroke="var(--p3)" stroke-width="3" marker-end="url(#arch-arrow)"/><path d="M1005 190h177M1005 465h177" fill="none" stroke="var(--p2)" stroke-width="3" marker-end="url(#arch-arrow)"/><path d="M885 250H1075V465H1012" fill="none" stroke="var(--p5)" stroke-width="3" marker-end="url(#arch-arrow)"/><text x="1077" y="360" text-anchor="middle" font-size="14">Member validates flats</text><text x="1077" y="380" text-anchor="middle" font-size="14">over authenticated HTTP</text><path d="M585 380v147M795 250C760 350 750 510 735 555M880 510v57" fill="none" stroke="var(--p4)" stroke-width="2.5" marker-end="url(#arch-arrow)"/><path d="M1320 245v35M1320 510v32" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arch-dash-arrow)"/><text x="1320" y="690" text-anchor="middle" font-size="14" fill="var(--muted)">Read routing is opt-in. Writes and assignment validation use the primary.</text></svg><figcaption>Services own separate PostgreSQL data. Gateway/session Redis and Society cache Redis have separate roles; Kubernetes provides stable Service names and routes traffic to ready Pods.</figcaption></figure><h3>Complete request flow and key outcomes</h3><figure id="complete-request-flow-diagram" class="diagram system-diagram"><svg viewBox="0 0 1500 690" role="img" aria-label="End-to-end request flow: client enters through HTTPS edge and Gateway, then Society reads use cache-aside while member flat assignment acquires a Redis lock, validates with Society and writes only after success; rejected requests do not write."><defs><marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker></defs><text x="750" y="38" text-anchor="middle" font-size="18" font-weight="800">Common protected entry path</text><rect class="box" x="20" y="70" width="175" height="70" rx="10"/><text x="107" y="99" text-anchor="middle" font-weight="800">Client</text><text x="107" y="122" text-anchor="middle">cookie + request</text><rect class="bluebox" x="260" y="70" width="195" height="70" rx="10"/><text x="357" y="99" text-anchor="middle" font-weight="800">HTTPS edge</text><text x="357" y="122" text-anchor="middle">NGINX when enabled</text><rect class="bluebox" x="520" y="70" width="225" height="70" rx="10"/><text x="632" y="99" text-anchor="middle" font-weight="800">Spring Gateway</text><text x="632" y="122" text-anchor="middle">auth · CSRF · route</text><path d="M195 105h58M455 105h58" stroke="var(--p3)" stroke-width="3" marker-end="url(#flow-arrow)"/><rect class="softbox" x="810" y="70" width="230" height="70" rx="10"/><text x="925" y="99" text-anchor="middle" font-weight="800">Route by API path</text><text x="925" y="122" text-anchor="middle">Society read or Member write</text><path d="M745 105h58" stroke="var(--p3)" stroke-width="3" marker-end="url(#flow-arrow)"/><rect x="1120" y="60" width="340" height="90" rx="10" fill="var(--warn)" stroke="var(--p5)" stroke-width="2"/><text x="1290" y="95" text-anchor="middle" font-weight="800">No valid session / CSRF</text><text x="1290" y="122" text-anchor="middle">401 / 403 · stop before business write</text><path d="M745 85C900 15 1030 15 1112 85" fill="none" stroke="var(--p5)" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#flow-arrow)"/><text x="1050" y="32" text-anchor="middle" font-size="13">authorization failure</text><path d="M925 140v100M925 240H310v35M925 240h275v35" fill="none" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><text x="540" y="224" text-anchor="middle" font-size="14" font-weight="750">Society reference read</text><text x="1210" y="224" text-anchor="middle" font-size="14" font-weight="750">Member flat assignment</text><rect class="softbox" x="110" y="275" width="215" height="75" rx="10"/><text x="217" y="306" text-anchor="middle" font-weight="800">Society Service</text><text x="217" y="331" text-anchor="middle">GET floors / flats</text><rect class="softbox" x="405" y="275" width="215" height="75" rx="10"/><text x="512" y="306" text-anchor="middle" font-weight="800">Spring Cache → Redis</text><text x="512" y="331" text-anchor="middle">cache hit returns value</text><rect class="box" x="710" y="275" width="215" height="75" rx="10"/><text x="817" y="306" text-anchor="middle" font-weight="800">society_db</text><text x="817" y="331" text-anchor="middle">miss → load + populate</text><path d="M325 312h72M620 300h82" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><path d="M620 328C665 365 675 365 710 328" fill="none" stroke="var(--p4)" stroke-width="2" marker-end="url(#flow-arrow)"/><text x="666" y="382" text-anchor="middle" font-size="13">miss</text><rect class="softbox" x="1085" y="275" width="215" height="75" rx="10"/><text x="1192" y="306" text-anchor="middle" font-weight="800">Member Service</text><text x="1192" y="331" text-anchor="middle">check member first</text><rect class="softbox" x="1085" y="420" width="215" height="75" rx="10"/><text x="1192" y="451" text-anchor="middle" font-weight="800">Redis membership lock</text><text x="1192" y="476" text-anchor="middle">serialize per member</text><rect class="softbox" x="780" y="420" width="215" height="75" rx="10"/><text x="887" y="451" text-anchor="middle" font-weight="800">Society validates flat</text><text x="887" y="476" text-anchor="middle">authenticated HTTP → primary</text><polygon class="bluebox" points="635,458 700,420 765,458 700,496"/><text x="700" y="454" text-anchor="middle" font-weight="800">Valid?</text><text x="700" y="474" text-anchor="middle" font-size="12">active flat</text><rect class="box" x="395" y="420" width="205" height="75" rx="10"/><text x="497" y="451" text-anchor="middle" font-weight="800">member_db write</text><text x="497" y="476" text-anchor="middle">transaction + constraints</text><rect x="250" y="555" width="380" height="65" rx="10" fill="var(--good)" stroke="var(--p2)" stroke-width="2"/><text x="440" y="583" text-anchor="middle" font-weight="800">Success response</text><text x="440" y="606" text-anchor="middle">membership committed → return 2xx</text><rect x="760" y="555" width="550" height="65" rx="10" fill="var(--warn)" stroke="var(--p5)" stroke-width="2"/><text x="1035" y="583" text-anchor="middle" font-weight="800">No membership write</text><text x="1035" y="606" text-anchor="middle">invalid flat / Society timeout or open circuit / lock unavailable or busy</text><path d="M1085 350v62M1085 458h-82M780 458h-14M635 458h-35M395 495v52M700 496v51" fill="none" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><text x="640" y="443" text-anchor="middle" font-size="13">yes</text><text x="720" y="535" text-anchor="start" font-size="13">no / dependency error</text></svg><figcaption>On flat assignment, Society validation happens before Member writes. Redis locks and the database constraints protect concurrent updates; a failed validation or dependency check does not create the membership.</figcaption></figure>
+<p class="lead">This phase gathers the system design ideas already present in Emerald Housing and connects each one to its implementation. It describes the current project architecture and its operational boundaries.</p><h3>Repository architecture: images, runtime and request paths</h3>
+<figure id="repo-architecture-diagram" class="diagram system-diagram"><svg viewBox="0 0 1500 860" role="img" aria-labelledby="repo-arch-title repo-arch-desc">
+<title id="repo-arch-title">Emerald Housing repository architecture</title><desc id="repo-arch-desc">Three Dockerfiles produce the API Gateway, Member Service and Society Service images. Kubernetes runs them behind ClusterIP Services. NGINX Gateway API redirects HTTP to HTTPS and forwards only API paths to Spring Cloud Gateway. The services use separate PostgreSQL databases outside the application namespace, while two Redis deployments serve separate purposes. Member calls Society over HTTP to validate flats. An optional observability Kustomize overlay adds monitoring tools.</desc>
+<defs><marker id="repo-arch-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker><marker id="repo-arch-dash" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker></defs>
+<rect x="295" y="90" width="920" height="640" rx="22" fill="none" stroke="var(--p4)" stroke-width="3" stroke-dasharray="10 8"/><text x="755" y="120" text-anchor="middle" font-size="20" font-weight="800">Kubernetes · emerald-housing namespace</text>
+<rect class="box" x="20" y="300" width="185" height="82" rx="12"/><text x="112" y="331" text-anchor="middle" font-weight="800">Browser / API client</text><text x="112" y="356" text-anchor="middle">Portal · Postman · app</text>
+<rect class="bluebox" x="335" y="175" width="220" height="96" rx="12"/><text x="445" y="207" text-anchor="middle" font-weight="800">NGINX Gateway API</text><text x="445" y="232" text-anchor="middle">HTTP → HTTPS redirect</text><text x="445" y="253" text-anchor="middle" font-size="13">/api/** route only</text>
+<rect class="bluebox" x="635" y="285" width="250" height="100" rx="12"/><text x="760" y="319" text-anchor="middle" font-weight="800">Spring Cloud API Gateway</text><text x="760" y="344" text-anchor="middle">Auth · session · CSRF · rate limits</text><text x="760" y="367" text-anchor="middle" font-size="13">Bundles /portal.html, CSS and JS</text>
+<rect class="softbox" x="955" y="170" width="220" height="120" rx="12"/><text x="1065" y="200" text-anchor="middle" font-weight="800">Member Service</text><text x="1065" y="224" text-anchor="middle">ClusterIP → Pods</text><text x="1065" y="248" text-anchor="middle" font-size="13">Controller → service → repository</text><text x="1065" y="271" text-anchor="middle" font-size="13">membership · access · accounts</text>
+<rect class="softbox" x="955" y="430" width="220" height="120" rx="12"/><text x="1065" y="460" text-anchor="middle" font-weight="800">Society Service</text><text x="1065" y="484" text-anchor="middle">ClusterIP → Pods</text><text x="1065" y="508" text-anchor="middle" font-size="13">Controller → service → repository</text><text x="1065" y="531" text-anchor="middle" font-size="13">society · floors · flats</text>
+<rect class="softbox" x="650" y="535" width="220" height="78" rx="12"/><text x="760" y="566" text-anchor="middle" font-weight="800">Redis · redis</text><text x="760" y="590" text-anchor="middle" font-size="13">Gateway session / rate limit · Member lock</text>
+<rect class="softbox" x="955" y="620" width="220" height="75" rx="12"/><text x="1065" y="650" text-anchor="middle" font-weight="800">Redis · redis-cache</text><text x="1065" y="675" text-anchor="middle" font-size="13">Society data cache</text>
+<rect class="box" x="1250" y="180" width="225" height="92" rx="12"/><text x="1362" y="214" text-anchor="middle" font-weight="800">PostgreSQL</text><text x="1362" y="239" text-anchor="middle">member_db · Member owns data</text>
+<rect class="box" x="1250" y="440" width="225" height="92" rx="12"/><text x="1362" y="474" text-anchor="middle" font-weight="800">PostgreSQL</text><text x="1362" y="499" text-anchor="middle">society_db · Society owns data</text>
+<text x="1362" y="565" text-anchor="middle" font-size="13" fill="var(--muted)">Outside app namespace</text><text x="1362" y="586" text-anchor="middle" font-size="13" fill="var(--muted)">Configured host: host.docker.internal</text>
+<path d="M205 320C270 320 280 220 327 220M555 220C605 220 600 330 627 330M885 320C915 275 920 230 947 230M885 350C920 385 920 490 947 490M1175 218h67M1175 480h67M1065 290v130M760 385v142M870 575C920 575 915 660 947 660" fill="none" stroke="var(--p3)" stroke-width="2.8" marker-end="url(#repo-arch-arrow)"/>
+<text x="1105" y="365" text-anchor="middle" font-size="13">Member validates a flat</text><text x="1105" y="385" text-anchor="middle" font-size="13">using Society HTTP API</text>
+<path d="M760 385v142M955 275C900 340 885 480 850 545M1065 550v62" fill="none" stroke="var(--p4)" stroke-width="2.5" marker-end="url(#repo-arch-arrow)"/>
+<text x="760" y="515" text-anchor="middle" font-size="13">sessions · rate limits · locks</text><text x="1065" y="600" text-anchor="middle" font-size="13">cache-aside</text>
+<path d="M205 365C330 430 500 430 627 365" fill="none" stroke="var(--p5)" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#repo-arch-dash)"/><text x="420" y="420" text-anchor="middle" font-size="13">Local / port-forward portal access</text><text x="420" y="440" text-anchor="middle" font-size="13">direct to Gateway; current HTTPRoute routes /api/** only</text>
+<rect class="softbox" x="25" y="610" width="480" height="125" rx="12"/><text x="265" y="641" text-anchor="middle" font-weight="800">Docker build inputs in this repository</text><text x="265" y="667" text-anchor="middle" font-size="13">infrastructure/api-gateway/Dockerfile</text><text x="265" y="689" text-anchor="middle" font-size="13">services/member-service/Dockerfile · services/society-service/Dockerfile</text><text x="265" y="715" text-anchor="middle" font-size="13">Kubernetes Deployments run the resulting images</text>
+<rect class="softbox" x="550" y="765" width="625" height="65" rx="12"/><text x="862" y="792" text-anchor="middle" font-weight="750">Optional observability overlay: kubernetes-observability/kustomization.yaml</text><text x="862" y="815" text-anchor="middle" font-size="13">Prometheus · Grafana · Loki · Tempo · Alloy (separate from base kustomization)</text>
+</svg><figcaption>Solid arrows show the configured request and dependency paths. The dashed portal path indicates local or port-forward access: the current NGINX HTTPRoutes redirect HTTP and route only <code>/api/**</code>. Dockerfiles build the three application images; Kubernetes Deployments run them. PostgreSQL is configured at a host address outside this namespace. The optional observability overlay is separate. The manifests define the NGINX Gateway API resources; the NGINX Gateway controller itself is installed separately.</figcaption></figure>
+<p><strong>How to read the application code:</strong> inside each Spring service, the usual request path is controller → service → repository → its owned database. Member additionally calls Society over authenticated HTTP when it needs to verify a flat. These are code layers inside the service Pods, not separate Kubernetes services.</p>
+<p class="small">Checked against <a href="kubernetes/kustomization.yaml">base Kustomize resources</a>, <a href="kubernetes/nginx/httproutes.yaml">NGINX HTTPRoutes</a>, <a href="kubernetes/config/application-config.yaml">runtime service and database settings</a>, <a href="infrastructure/api-gateway/src/main/resources/application.yml">Gateway API routes</a>, and <a href="kubernetes-observability/kustomization.yaml">observability overlay</a>.</p>
+<h3>Complete system architecture</h3><figure id="complete-architecture-diagram" class="diagram system-diagram"><svg viewBox="0 0 1500 790" role="img" aria-label="Complete Emerald Housing architecture: clients enter through optional HTTPS ingress and Spring Gateway; Kubernetes routes to Member and Society Pods; services use separate PostgreSQL databases, Redis roles, and optional external PostgreSQL read replicas."><defs><marker id="arch-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker><marker id="arch-dash-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker></defs><rect x="215" y="45" width="900" height="690" rx="22" fill="none" stroke="var(--p4)" stroke-width="3" stroke-dasharray="10 8"/><text x="665" y="78" text-anchor="middle" font-size="20" font-weight="800">Kubernetes cluster · emerald-housing</text><rect class="box" x="20" y="300" width="165" height="80" rx="12"/><text x="102" y="332" text-anchor="middle" font-weight="800">Admin / Postman</text><text x="102" y="357" text-anchor="middle">HTTPS or local URL</text><rect class="bluebox" x="245" y="300" width="195" height="80" rx="12"/><text x="342" y="332" text-anchor="middle" font-weight="800">NGINX HTTPS edge</text><text x="342" y="357" text-anchor="middle">optional cluster ingress</text><rect class="bluebox" x="490" y="300" width="195" height="80" rx="12"/><text x="587" y="332" text-anchor="middle" font-weight="800">Spring Cloud Gateway</text><text x="587" y="357" text-anchor="middle">route · session · limits</text><rect class="softbox" x="770" y="160" width="235" height="90" rx="12"/><text x="887" y="193" text-anchor="middle" font-weight="800">Member Service Deployment</text><text x="887" y="219" text-anchor="middle">Member Pods · ClusterIP Service</text><rect class="softbox" x="770" y="420" width="235" height="90" rx="12"/><text x="887" y="453" text-anchor="middle" font-weight="800">Society Service Deployment</text><text x="887" y="479" text-anchor="middle">Society Pods · ClusterIP Service</text><rect class="softbox" x="485" y="535" width="265" height="80" rx="12"/><text x="617" y="566" text-anchor="middle" font-weight="800">Redis · sessions / rate limits</text><text x="617" y="590" text-anchor="middle">and Member membership locks</text><rect class="softbox" x="790" y="575" width="215" height="65" rx="12"/><text x="897" y="603" text-anchor="middle" font-weight="800">Redis · Society cache</text><text x="897" y="625" text-anchor="middle">separate cache deployment</text><rect class="box" x="1190" y="155" width="260" height="90" rx="12"/><text x="1320" y="190" text-anchor="middle" font-weight="800">member_db · PostgreSQL</text><text x="1320" y="217" text-anchor="middle">Member is the data owner</text><rect class="box" x="1190" y="420" width="260" height="90" rx="12"/><text x="1320" y="455" text-anchor="middle" font-weight="800">society_db · PostgreSQL</text><text x="1320" y="482" text-anchor="middle">Society is the data owner</text><rect class="softbox" x="1220" y="285" width="210" height="60" rx="10"/><text x="1325" y="310" text-anchor="middle" font-weight="750">Optional Member reader</text><text x="1325" y="331" text-anchor="middle">external replica · off by default</text><rect class="softbox" x="1220" y="550" width="210" height="60" rx="10"/><text x="1325" y="575" text-anchor="middle" font-weight="750">Optional Society reader</text><text x="1325" y="596" text-anchor="middle">external replica · off by default</text><path d="M185 340h54M440 340h44M685 325C720 300 725 205 763 205M685 355C720 380 725 465 763 465" fill="none" stroke="var(--p3)" stroke-width="3" marker-end="url(#arch-arrow)"/><path d="M1005 190h177M1005 465h177" fill="none" stroke="var(--p2)" stroke-width="3" marker-end="url(#arch-arrow)"/><path d="M885 250H1075V465H1012" fill="none" stroke="var(--p5)" stroke-width="3" marker-end="url(#arch-arrow)"/><text x="1077" y="360" text-anchor="middle" font-size="14">Member validates flats</text><text x="1077" y="380" text-anchor="middle" font-size="14">over authenticated HTTP</text><path d="M585 380v147M795 250C760 350 750 510 735 555M880 510v57" fill="none" stroke="var(--p4)" stroke-width="2.5" marker-end="url(#arch-arrow)"/><path d="M1320 245v35M1320 510v32" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arch-dash-arrow)"/><text x="1320" y="690" text-anchor="middle" font-size="14" fill="var(--muted)">Read routing is opt-in. Writes and assignment validation use the primary.</text></svg><figcaption>Services own separate PostgreSQL data. Gateway/session Redis and Society cache Redis have separate roles; Kubernetes provides stable Service names and routes traffic to ready Pods.</figcaption></figure><h3>Complete request flow and key outcomes</h3><figure id="complete-request-flow-diagram" class="diagram system-diagram"><svg viewBox="0 0 1500 690" role="img" aria-label="End-to-end request flow: client enters through HTTPS edge and Gateway, then Society reads use cache-aside while member flat assignment acquires a Redis lock, validates with Society and writes only after success; rejected requests do not write."><defs><marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="currentColor"/></marker></defs><text x="750" y="38" text-anchor="middle" font-size="18" font-weight="800">Common protected entry path</text><rect class="box" x="20" y="70" width="175" height="70" rx="10"/><text x="107" y="99" text-anchor="middle" font-weight="800">Client</text><text x="107" y="122" text-anchor="middle">cookie + request</text><rect class="bluebox" x="260" y="70" width="195" height="70" rx="10"/><text x="357" y="99" text-anchor="middle" font-weight="800">HTTPS edge</text><text x="357" y="122" text-anchor="middle">NGINX when enabled</text><rect class="bluebox" x="520" y="70" width="225" height="70" rx="10"/><text x="632" y="99" text-anchor="middle" font-weight="800">Spring Gateway</text><text x="632" y="122" text-anchor="middle">auth · CSRF · route</text><path d="M195 105h58M455 105h58" stroke="var(--p3)" stroke-width="3" marker-end="url(#flow-arrow)"/><rect class="softbox" x="810" y="70" width="230" height="70" rx="10"/><text x="925" y="99" text-anchor="middle" font-weight="800">Route by API path</text><text x="925" y="122" text-anchor="middle">Society read or Member write</text><path d="M745 105h58" stroke="var(--p3)" stroke-width="3" marker-end="url(#flow-arrow)"/><rect x="1120" y="60" width="340" height="90" rx="10" fill="var(--warn)" stroke="var(--p5)" stroke-width="2"/><text x="1290" y="95" text-anchor="middle" font-weight="800">No valid session / CSRF</text><text x="1290" y="122" text-anchor="middle">401 / 403 · stop before business write</text><path d="M745 85C900 15 1030 15 1112 85" fill="none" stroke="var(--p5)" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#flow-arrow)"/><text x="1050" y="32" text-anchor="middle" font-size="13">authorization failure</text><path d="M925 140v100M925 240H310v35M925 240h275v35" fill="none" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><text x="540" y="224" text-anchor="middle" font-size="14" font-weight="750">Society reference read</text><text x="1210" y="224" text-anchor="middle" font-size="14" font-weight="750">Member flat assignment</text><rect class="softbox" x="110" y="275" width="215" height="75" rx="10"/><text x="217" y="306" text-anchor="middle" font-weight="800">Society Service</text><text x="217" y="331" text-anchor="middle">GET floors / flats</text><rect class="softbox" x="405" y="275" width="215" height="75" rx="10"/><text x="512" y="306" text-anchor="middle" font-weight="800">Spring Cache → Redis</text><text x="512" y="331" text-anchor="middle">cache hit returns value</text><rect class="box" x="710" y="275" width="215" height="75" rx="10"/><text x="817" y="306" text-anchor="middle" font-weight="800">society_db</text><text x="817" y="331" text-anchor="middle">miss → load + populate</text><path d="M325 312h72M620 300h82" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><path d="M620 328C665 365 675 365 710 328" fill="none" stroke="var(--p4)" stroke-width="2" marker-end="url(#flow-arrow)"/><text x="666" y="382" text-anchor="middle" font-size="13">miss</text><rect class="softbox" x="1085" y="275" width="215" height="75" rx="10"/><text x="1192" y="306" text-anchor="middle" font-weight="800">Member Service</text><text x="1192" y="331" text-anchor="middle">check member first</text><rect class="softbox" x="1085" y="420" width="215" height="75" rx="10"/><text x="1192" y="451" text-anchor="middle" font-weight="800">Redis membership lock</text><text x="1192" y="476" text-anchor="middle">serialize per member</text><rect class="softbox" x="780" y="420" width="215" height="75" rx="10"/><text x="887" y="451" text-anchor="middle" font-weight="800">Society validates flat</text><text x="887" y="476" text-anchor="middle">authenticated HTTP → primary</text><polygon class="bluebox" points="635,458 700,420 765,458 700,496"/><text x="700" y="454" text-anchor="middle" font-weight="800">Valid?</text><text x="700" y="474" text-anchor="middle" font-size="12">active flat</text><rect class="box" x="395" y="420" width="205" height="75" rx="10"/><text x="497" y="451" text-anchor="middle" font-weight="800">member_db write</text><text x="497" y="476" text-anchor="middle">transaction + constraints</text><rect x="250" y="555" width="380" height="65" rx="10" fill="var(--good)" stroke="var(--p2)" stroke-width="2"/><text x="440" y="583" text-anchor="middle" font-weight="800">Success response</text><text x="440" y="606" text-anchor="middle">membership committed → return 2xx</text><rect x="760" y="555" width="550" height="65" rx="10" fill="var(--warn)" stroke="var(--p5)" stroke-width="2"/><text x="1035" y="583" text-anchor="middle" font-weight="800">No membership write</text><text x="1035" y="606" text-anchor="middle">invalid flat / Society timeout or open circuit / lock unavailable or busy</text><path d="M1085 350v62M1085 458h-82M780 458h-14M635 458h-35M395 495v52M700 496v51" fill="none" stroke="var(--p3)" stroke-width="2.5" marker-end="url(#flow-arrow)"/><text x="640" y="443" text-anchor="middle" font-size="13">yes</text><text x="720" y="535" text-anchor="start" font-size="13">no / dependency error</text></svg><figcaption>On flat assignment, Society validation happens before Member writes. Redis locks and the database constraints protect concurrent updates; a failed validation or dependency check does not create the membership.</figcaption></figure>
 
 <h3>Implemented system design features</h3>
 <div class="tablebox"><table><thead><tr><th>Design area</th><th>Implemented feature</th><th>Tradeoff or boundary</th></tr></thead><tbody>
@@ -2015,7 +2040,1217 @@ kubectl --context docker-desktop logs deployment/api-gateway -n emerald-housing 
 docker build -t emerald/society-service:step4-audit .\services\society-service</code></pre></article><article class="card"><h3>Inspect container details</h3><p>Shows configuration, network and state details. Output may include environment values, so avoid sharing secrets.</p><pre><code>docker inspect emerald-local-redis</code></pre></article><article class="card"><h3>See resource usage</h3><p>Shows live CPU and memory usage. Ctrl+C exits this display.</p><pre><code>docker stats</code></pre></article><article class="card"><h3>Remove a stopped container (optional cleanup)</h3><p>Deletes this container and its writable-layer data. Run only if you intend to recreate it; stop it first. This is not required for a normal fresh start.</p><pre><code>docker stop emerald-local-redis
 docker rm emerald-local-redis</code></pre></article><article class="card"><h3>Remove an unused project image (optional cleanup)</h3><p>Deletes the local Society image when no container needs it. Rebuild it before the next deployment.</p><pre><code>docker rmi emerald/society-service:step4-audit</code></pre></article></section><section class="doc-section" id="k8s-basics"><h2>Kubernetes basic commands</h2><p>These examples use Docker Desktop Kubernetes and namespace <code>emerald-housing</code>. A context selects the cluster. A namespace groups project resources. A Deployment manages application Pods; a Service gives Pods a stable network address. Enable Kubernetes in Docker Desktop and wait for it to be ready.</p><div class="callout warning"><strong>Before changing resources:</strong> run the context commands below. Continue only when current-context prints <code>docker-desktop</code>. Commands use the currently selected context. Replace <code>PASTE_POD_NAME</code> with an actual name from <code>kubectl get pods -n emerald-housing</code>.</div><article class="card"><h3>Check kubectl version</h3><p>Shows the client version without requiring a running cluster.</p><pre><code>kubectl version --client</code></pre></article><article class="card"><h3>List cluster contexts</h3><p>Shows the clusters configured on this computer. An asterisk marks the selected context.</p><pre><code>kubectl config get-contexts</code></pre></article><article class="card"><h3>Select Docker Desktop</h3><p>Changes the cluster used by subsequent kubectl commands. Stop if this context does not exist.</p><pre><code>kubectl config use-context docker-desktop</code></pre></article><article class="card"><h3>Confirm the selected cluster</h3><p>Must print docker-desktop for this guide.</p><pre><code>kubectl config current-context</code></pre></article><article class="card"><h3>Check cluster connection</h3><p>Shows cluster endpoint information.</p><pre><code>kubectl cluster-info</code></pre></article><article class="card"><h3>Check nodes</h3><p>Shows cluster machines. Wait until the Docker Desktop node is Ready.</p><pre><code>kubectl get nodes</code></pre></article><article class="card"><h3>List namespaces</h3><p>Shows project areas in the current cluster.</p><pre><code>kubectl get namespaces</code></pre></article><article class="card"><h3>Create the project namespace</h3><p>Run from the repository root. Applying the existing file is safe to repeat.</p><pre><code>Set-Location 'D:\Devendra Ghag Interview Preparation\02_Spring\emerald-housing'
 kubectl apply -f .\kubernetes\namespace.yaml</code></pre></article><article class="card"><h3>List Deployments</h3><p>Shows desired and ready application replicas.</p><pre><code>kubectl get deployments -n emerald-housing</code></pre></article><article class="card"><h3>List Pods</h3><p>Shows application instances and their status. Copy a Pod name from this output when needed.</p><pre><code>kubectl get pods -n emerald-housing</code></pre></article><article class="card"><h3>Watch Pods start</h3><p>Continuously displays changes. Ctrl+C stops watching without stopping Pods.</p><pre><code>kubectl get pods -n emerald-housing --watch</code></pre></article><article class="card"><h3>List Services</h3><p>Shows stable network addresses and ports. ClusterIP addresses are normally internal to Kubernetes.</p><pre><code>kubectl get services -n emerald-housing</code></pre></article><article class="card"><h3>List ConfigMaps</h3><p>Shows configuration resource names; it does not show their complete contents.</p><pre><code>kubectl get configmaps -n emerald-housing</code></pre></article><article class="card"><h3>List Secrets</h3><p>Shows Secret names and metadata, not the stored passwords. Do not print or share Secret contents.</p><pre><code>kubectl get secrets -n emerald-housing</code></pre></article><article class="card"><h3>Apply application configuration</h3><p>Creates or updates the ConfigMap from its file. Existing Pods using environment variables need a restart to receive changes.</p><pre><code>kubectl apply -f .\kubernetes\config\application-config.yaml</code></pre></article><article class="card"><h3>Apply a service workload</h3><p>Creates or updates Society Deployment and Service. Complete Option B secrets, configuration and images first.</p><pre><code>kubectl apply -f .\kubernetes\society\</code></pre></article><article class="card"><h3>Wait for Society rollout</h3><p>Waits until the Deployment is ready, or reports a timeout. A timeout needs investigation.</p><pre><code>kubectl rollout status deployment/society-service -n emerald-housing --timeout=300s</code></pre></article><article class="card"><h3>Read Society logs</h3><p>Shows logs from a Society Pod selected by the Deployment. Use a Pod name instead if investigating a specific replica.</p><pre><code>kubectl logs deployment/society-service -n emerald-housing</code></pre></article><article class="card"><h3>Read Member logs</h3><p>Helps diagnose database, provisioning and dependency startup errors.</p><pre><code>kubectl logs deployment/member-service -n emerald-housing</code></pre></article><article class="card"><h3>Read Gateway logs</h3><p>Helps diagnose routing, Redis and authentication errors.</p><pre><code>kubectl logs deployment/api-gateway -n emerald-housing</code></pre></article><article class="card"><h3>Follow Gateway logs</h3><p>Streams new log messages. Ctrl+C stops viewing.</p><pre><code>kubectl logs -f deployment/api-gateway -n emerald-housing</code></pre></article><article class="card"><h3>Describe one Pod</h3><p>YOUR INPUT: replace PASTE_POD_NAME. Shows state, probes, image errors and recent Pod events.</p><pre><code>kubectl describe pod PASTE_POD_NAME -n emerald-housing</code></pre></article><article class="card"><h3>Read logs from the previous container</h3><p>YOUR INPUT: replace PASTE_POD_NAME. Useful after a container restarts; it requires previous-container logs to exist.</p><pre><code>kubectl logs PASTE_POD_NAME -n emerald-housing --previous</code></pre></article><article class="card"><h3>List recent namespace events</h3><p>Shows scheduling, image pull and startup messages.</p><pre><code>kubectl get events -n emerald-housing --sort-by=.lastTimestamp</code></pre></article><article class="card"><h3>Restart Society</h3><p>Starts a rolling replacement of Society Pods, for example after updating environment-backed configuration.</p><pre><code>kubectl rollout restart deployment/society-service -n emerald-housing</code></pre></article><article class="card"><h3>Restart Member</h3><p>Starts a rolling replacement of Member Pods.</p><pre><code>kubectl rollout restart deployment/member-service -n emerald-housing</code></pre></article><article class="card"><h3>Restart Gateway</h3><p>Starts a rolling replacement of Gateway Pods. A port-forward may need restarting afterward.</p><pre><code>kubectl rollout restart deployment/api-gateway -n emerald-housing</code></pre></article><article class="card"><h3>Access Gateway from localhost</h3><p>Keep this terminal open. In the simple Option B HTTP setup, Postman uses http://localhost:8080. Ctrl+C stops forwarding only.</p><pre><code>kubectl port-forward service/api-gateway 8080:8080 -n emerald-housing</code></pre></article><article class="card"><h3>Check Gateway readiness</h3><p>Run in another PowerShell terminal while port-forward is running. Expected status: UP.</p><pre><code>Invoke-RestMethod http://localhost:8080/actuator/health/readiness</code></pre></article><article class="card"><h3>View rollout history</h3><p>Shows retained Society Deployment revisions.</p><pre><code>kubectl rollout history deployment/society-service -n emerald-housing</code></pre></article><article class="card"><h3>Undo the last Society rollout (only when needed)</h3><p>Restores the previous retained Pod template. It does not undo database migrations or external ConfigMap/Secret changes. Check rollout status afterward.</p><pre><code>kubectl rollout undo deployment/society-service -n emerald-housing
-kubectl rollout status deployment/society-service -n emerald-housing --timeout=300s</code></pre></article><article class="card"><h3>Set Society to two replicas</h3><p>Requests two Society Pods. If an HPA is installed, it may change this count automatically.</p><pre><code>kubectl scale deployment/society-service --replicas=2 -n emerald-housing</code></pre></article><article class="card"><h3>Check autoscalers</h3><p>Lists HPAs if installed. No resources found is expected when optional autoscaling has not been configured.</p><pre><code>kubectl get hpa -n emerald-housing</code></pre></article></section></section></div></details></section><footer>Emerald Housing Society · Project documentation based on the repository source.</footer></main></div><script>(function(){const r=document.documentElement,t=document.getElementById('theme');if(localStorage.getItem('emerald-theme')==='dark')r.setAttribute('data-theme','dark');function label(){t.textContent=r.getAttribute('data-theme')==='dark'?'Use light theme':'Use dark theme'}label();t.addEventListener('click',function(){const d=r.getAttribute('data-theme')==='dark';if(d)r.removeAttribute('data-theme');else r.setAttribute('data-theme','dark');localStorage.setItem('emerald-theme',d?'light':'dark');label()});const s=document.getElementById('side'),m=document.getElementById('menubtn');m.addEventListener('click',function(){const o=s.classList.toggle('open');m.setAttribute('aria-expanded',String(o))});function reveal(id){const x=document.getElementById(id);if(x){x.open=true;x.scrollIntoView({behavior:'smooth',block:'center'})}}document.querySelectorAll('[data-open],[data-file]').forEach(function(x){function go(){reveal(x.getAttribute('data-open')||x.getAttribute('data-file'))}x.addEventListener('click',go);x.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});document.querySelectorAll('pre').forEach(function(p){const c=p.querySelector('code');if(!c)return;const b=document.createElement('button');b.className='copy';b.type='button';b.textContent='Copy';b.addEventListener('click',async function(){try{await navigator.clipboard.writeText(c.innerText);b.textContent='Copied'}catch(e){b.textContent='Select and copy'}setTimeout(function(){b.textContent='Copy'},1300)});p.appendChild(b)})})();</script>
+kubectl rollout status deployment/society-service -n emerald-housing --timeout=300s</code></pre></article><article class="card"><h3>Set Society to two replicas</h3><p>Requests two Society Pods. If an HPA is installed, it may change this count automatically.</p><pre><code>kubectl scale deployment/society-service --replicas=2 -n emerald-housing</code></pre></article><article class="card"><h3>Check autoscalers</h3><p>Lists HPAs if installed. No resources found is expected when optional autoscaling has not been configured.</p><pre><code>kubectl get hpa -n emerald-housing</code></pre></article></section></section></div></details></section><footer>Emerald Housing Society · Project documentation based on the repository source.</footer><section id="markdown-documents" class="doc-group"><h2>Project Markdown documents</h2><nav aria-label="Converted documents"><ul>
+<li><a href="#markdown-docs-backend-access-and-query-features-md">docs/backend-access-and-query-features.md</a></li>
+<li><a href="#markdown-docs-dynamic-access-and-family-management-md">docs/dynamic-access-and-family-management.md</a></li>
+<li><a href="#markdown-docs-java-language-features-md">docs/java-language-features.md</a></li>
+<li><a href="#markdown-docs-option-b-verification-md">docs/option-b-verification.md</a></li>
+<li><a href="#markdown-docs-postman-option-b-md">docs/postman-option-b.md</a></li>
+<li><a href="#markdown-readme-md">README.md</a></li>
+</ul></nav>
+<article class="doc-section" id="markdown-docs-backend-access-and-query-features-md"><h2>docs/backend-access-and-query-features.md</h2>
+<h3 id="markdown-docs-backend-access-and-query-features-md-audit-permissions-search-cursors-and-concurrency">Audit, permissions, search, cursors and concurrency</h3>
+<p>The later <a href="#markdown-docs-dynamic-access-and-family-management-md">dynamic access and family management phase</a> replaces the fixed role model below and adds the Gateway-hosted <code>/portal.html</code> administration interface. The remaining sections describe the original API behaviour and its compatibility contracts.</p>
+<p>This change adds backend behavior only. Existing frontend screens remain compatible, but they do not yet expose account management, audit history, server search or conditional updates.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-scope-and-roles">Scope and roles</h4>
+<p>The deployment still serves <strong>one society, EMERALD</strong>. This is not a multi-tenant schema. Identities from another society are denied. Existing <code>ADMIN</code> accounts continue to work.</p>
+<div class="tablebox"><table><thead><tr><th>Role</th><th>Read society/floors</th><th>Read members</th><th>Read flats</th><th>Change business records</th><th>Manage accounts / view audits</th></tr></thead><tbody>
+<tr><td>ADMIN / SOCIETY_ADMIN</td><td>Yes</td><td>All in this deployment</td><td>All in EMERALD</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>COMMITTEE</td><td>Yes</td><td>All in this deployment</td><td>All in EMERALD</td><td>No</td><td>No</td></tr>
+<tr><td>RESIDENT</td><td>Yes</td><td>Own linked member only</td><td>Currently assigned flats only</td><td>No</td><td>No</td></tr>
+</tbody></table></div>
+<p>Residents see their own membership history. A flat&#x27;s membership list is filtered to their own entries. Lists, search results and cursor queries enforce the same access scope as individual-record reads. Service-to-service flat validation retains its narrow existing token-based permission.</p>
+<p>Gateway permits the supported roles through its API routes. Each backend independently validates the session and applies method/object permissions. Gateway refreshes account role, enabled state and resident flat assignments from Member during internal session validation. Permission changes therefore affect subsequent backend requests; a disabled or unlinked resident account is rejected. Gateway fails closed when that lookup is unavailable.</p>
+<h5 id="markdown-docs-backend-access-and-query-features-md-account-apis-administrators-only">Account APIs (administrators only)</h5>
+<p><code>POST /api/v1/accounts</code></p>
+<pre><code class="language-json">{
+  &quot;username&quot;: &quot;resident-example&quot;,
+  &quot;password&quot;: &quot;REPLACE_WITH_A_PRIVATE_PASSWORD&quot;,
+  &quot;role&quot;: &quot;RESIDENT&quot;,
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: &quot;REPLACE_WITH_EXISTING_MEMBER_UUID&quot;
+}</code></pre>
+<p>Supported roles: <code>ADMIN</code>, <code>SOCIETY_ADMIN</code>, <code>COMMITTEE</code>, <code>RESIDENT</code>. Passwords must be 14–72 UTF-8 bytes and are BCrypt-hashed. Resident accounts must link to an existing active member to authenticate. A linked member is identified by an application account mapping, never a browser-supplied identity header. Account responses never include the password or hash.</p>
+<p><code>GET /api/v1/accounts/{accountId}</code> returns the account and its <code>version</code>.</p>
+<p><code>PUT /api/v1/accounts/{accountId}/permissions</code></p>
+<pre><code class="language-json">{
+  &quot;role&quot;: &quot;COMMITTEE&quot;,
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: null,
+  &quot;enabled&quot;: true,
+  &quot;version&quot;: 0
+}</code></pre>
+<p>Send the version returned by GET. A stale version returns <code>409 VERSION_CONFLICT</code>. An administrator cannot change their own permissions using this endpoint, to reduce accidental lockout. Use another administrator. The existing provisioning process still creates ADMIN accounts only and never resets an existing password.</p>
+<p>All mutation examples require the existing session cookie and current CSRF token. Login, logout and <code>/api/v1/auth/me</code> URLs are unchanged. Re-login after rolling out the new principal/session representation.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-audit-trail">Audit trail</h4>
+<p>Each service has its own <code>audit_events</code> table. Member records member, membership and account/permission changes. Society records flat changes. Audit inserts use the same transaction as the business write: either both persist or both roll back. A failed audit insert fails the business write. Replayed idempotent creates do not produce another creation event.</p>
+<p>Events include a sequence, actor account ID/name, action, entity type/ID, before/after JSON snapshots, UTC timestamp and correlation ID. Passwords, hashes, cookies and internal tokens are not part of audit snapshots. Snapshots of member changes do contain personal record details, so only administrators can retrieve them. There is no public update/delete audit API. This is application-level auditing, not tamper-proof logging of arbitrary SQL run by a database administrator. Retention/archival is an operational policy, not an automatic deletion task in this change.</p>
+<pre><code class="language-text">GET /api/v1/members/audit?entityType=MEMBER&amp;entityId={memberId}&amp;limit=50
+GET /api/v1/society/audit?entityType=FLAT&amp;entityId={flatId}&amp;limit=50</code></pre>
+<p>Use <code>before={sequence}</code> from the last returned event to retrieve older events. Limit is 1–100. Entity filters are optional. These endpoints route through the existing Gateway member/society routes.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-server-side-search-and-filters">Server-side search and filters</h4>
+<pre><code class="language-text">GET /api/v1/members/page?search=asha&amp;status=ACTIVE&amp;page=0&amp;size=20
+GET /api/v1/flats/page?search=A-1&amp;status=ACTIVE&amp;floorNumber=1&amp;page=0&amp;size=20</code></pre>
+<p>Member search matches name, mobile or email. Flat search matches flat number. Search is case-insensitive, literal substring matching, capped at 120 characters. <code>%</code> and <code>_</code> are treated literally. Allowed statuses are ACTIVE and INACTIVE. Existing paging and sort validation still applies; the response format is unchanged. Filtering and authorization happen in the database before paging/counting. Substring search may need trigram/full-text indexing at larger measured volumes; the new cursor indexes do not make arbitrary substring searches index-only.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-cursor-pagination">Cursor pagination</h4>
+<pre><code class="language-text">GET /api/v1/members/cursor?limit=20&amp;status=ACTIVE
+GET /api/v1/flats/cursor?limit=20&amp;floorNumber=1</code></pre>
+<pre><code class="language-json">{
+  &quot;items&quot;: [],
+  &quot;nextCursor&quot;: null,
+  &quot;hasNext&quot;: false
+}</code></pre>
+<p>When <code>hasNext</code> is true, URL-encode <code>nextCursor</code> into <code>after</code> on the next request. Keep all other filters identical:</p>
+<pre><code class="language-text">GET /api/v1/members/cursor?limit=20&amp;status=ACTIVE&amp;after={encodedNextCursor}</code></pre>
+<p>Cursor endpoints use ascending <code>(createdAt, id)</code> keyset ordering and read at most <code>limit + 1</code> rows without a total-count query. Matching indexes are provided. Tokens bind to normalized filters and the current actor/role/object scope; changing them requires restarting pagination. Invalid tokens return <code>400 INVALID_CURSOR</code>. Tokens are opaque encodings, not authentication credentials or signed security tokens: record authorization is always enforced independently. Pagination is not a frozen database snapshot, and concurrent changes to filters may move records into/out of the result set. Existing page-number endpoints remain available for direct page navigation.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-optimistic-locking-and-etags">Optimistic locking and ETags</h4>
+<p>JPA <code>@Version</code> columns protect members, flats, memberships and application accounts. Member/flat response bodies now contain <code>version</code>. Existing service constructors and older stored idempotent member responses remain supported.</p>
+<p>GET an individual record:</p>
+<pre><code class="language-text">GET /api/v1/members/{memberId}
+GET /api/v1/flats/{flatId}</code></pre>
+<p>The response includes a strong ETag such as <code>&quot;member-{uuid}-v2&quot;</code>. Responses use <code>Cache-Control: private, no-cache</code>. Revalidate a read with <code>If-None-Match</code>; an unchanged representation returns <code>304</code> without a body. Access is checked before returning either 200 or 304.</p>
+<p>Send the current ETag in <code>If-Match</code> when updating or deactivating a member/flat. A stale tag returns <code>412 PRECONDITION_FAILED</code>. Weak tags cannot satisfy If-Match. The service checks the expected version inside the transaction, and JPA&#x27;s versioned update prevents a race between that check and the commit. Concurrent version conflicts return 412 for conditional writes or 409 for legacy writes.</p>
+<p>To preserve existing clients, missing If-Match remains allowed by default. Enable <code>app.http.require-if-match=true</code> (environment variable <code>APP_HTTP_REQUIRE_IF_MATCH=true</code>) in both backends to require it; missing headers then return <code>428 PRECONDITION_REQUIRED</code>. Enable this only after clients start sending ETags. Without If-Match, optimistic locking catches overlapping database transactions but cannot detect a browser form that was stale before its request started. <code>If-Match: *</code> asserts existence only; it does not protect against stale form versions.</p>
+<p>The Society cache uses a versioned serialization prefix to avoid reusing pre-version flat responses. Membership workflows retain their Redis and database locks in addition to the new version column.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-contract-verification-and-tests">Contract verification and tests</h4>
+<p>The Member-owned <code>contracts/member-to-society-flat-v1.json</code> fixture is shared by:</p>
+<ul>
+<li><code>SocietyConsumerContractTest</code>: exercises the real Member SocietyClient against the contract&#x27;s success and missing-resource responses.</li>
+<li><code>SocietyProviderContractTest</code>: exercises Society&#x27;s actual controller/serialization/error handling against that contract, including ETag revalidation. Business persistence is isolated using a mocked service.</li>
+</ul>
+<p>Normal <code>mvn test</code> runs these checks. From the repository root on Windows:</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-contracts.ps1</code></pre>
+<p>The script stops if either consumer or provider verification fails. No broker or Pact server is required. This is shared contract verification in this repository, not a separately hosted contract-publishing platform.</p>
+<p>PostgreSQL integration tests cover migrations, scoped search, cursor continuation, audit rollback and conflicting concurrent entity updates. Docker must be running for these tests; otherwise Testcontainers marks them skipped. Test-only <code>docker-java.properties</code> selects API 1.44 for compatibility with current Docker Desktop and the existing Testcontainers dependency.</p>
+<h4 id="markdown-docs-backend-access-and-query-features-md-deployment">Deployment</h4>
+<p>Flyway adds Member V5 and Society V4; previously applied migrations are untouched. No migration has been run against your live databases by this code change.</p>
+<p>Build new images for all three applications and roll out compatible versions together: the Gateway now refreshes account permissions through Member&#x27;s new internal endpoint. Kubernetes Gateway routing includes <code>/api/v1/accounts</code>. Redis session format changed, so sign in again after deployment. Keep the existing session validation and Gateway authentication tokens consistent across services. Do not expose the new internal account endpoint outside the trusted service path.</p>
+<p>An old Member/Gateway image cannot supply or interpret the new authorization scope correctly. Prefer a coordinated development restart over mixed application versions. Do not delete PostgreSQL databases to deploy this change.</p>
+<details><summary>Original Markdown source</summary><pre><code># Audit, permissions, search, cursors and concurrency
+
+The later [dynamic access and family management phase](dynamic-access-and-family-management.md) replaces the fixed role model below and adds the Gateway-hosted `/portal.html` administration interface. The remaining sections describe the original API behaviour and its compatibility contracts.
+
+This change adds backend behavior only. Existing frontend screens remain compatible, but they do not yet expose account management, audit history, server search or conditional updates.
+
+## Scope and roles
+
+The deployment still serves **one society, EMERALD**. This is not a multi-tenant schema. Identities from another society are denied. Existing `ADMIN` accounts continue to work.
+
+| Role | Read society/floors | Read members | Read flats | Change business records | Manage accounts / view audits |
+| --- | --- | --- | --- | --- | --- |
+| ADMIN / SOCIETY_ADMIN | Yes | All in this deployment | All in EMERALD | Yes | Yes |
+| COMMITTEE | Yes | All in this deployment | All in EMERALD | No | No |
+| RESIDENT | Yes | Own linked member only | Currently assigned flats only | No | No |
+
+Residents see their own membership history. A flat&#x27;s membership list is filtered to their own entries. Lists, search results and cursor queries enforce the same access scope as individual-record reads. Service-to-service flat validation retains its narrow existing token-based permission.
+
+Gateway permits the supported roles through its API routes. Each backend independently validates the session and applies method/object permissions. Gateway refreshes account role, enabled state and resident flat assignments from Member during internal session validation. Permission changes therefore affect subsequent backend requests; a disabled or unlinked resident account is rejected. Gateway fails closed when that lookup is unavailable.
+
+### Account APIs (administrators only)
+
+`POST /api/v1/accounts`
+
+```json
+{
+  &quot;username&quot;: &quot;resident-example&quot;,
+  &quot;password&quot;: &quot;REPLACE_WITH_A_PRIVATE_PASSWORD&quot;,
+  &quot;role&quot;: &quot;RESIDENT&quot;,
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: &quot;REPLACE_WITH_EXISTING_MEMBER_UUID&quot;
+}
+```
+
+Supported roles: `ADMIN`, `SOCIETY_ADMIN`, `COMMITTEE`, `RESIDENT`. Passwords must be 14–72 UTF-8 bytes and are BCrypt-hashed. Resident accounts must link to an existing active member to authenticate. A linked member is identified by an application account mapping, never a browser-supplied identity header. Account responses never include the password or hash.
+
+`GET /api/v1/accounts/{accountId}` returns the account and its `version`.
+
+`PUT /api/v1/accounts/{accountId}/permissions`
+
+```json
+{
+  &quot;role&quot;: &quot;COMMITTEE&quot;,
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: null,
+  &quot;enabled&quot;: true,
+  &quot;version&quot;: 0
+}
+```
+
+Send the version returned by GET. A stale version returns `409 VERSION_CONFLICT`. An administrator cannot change their own permissions using this endpoint, to reduce accidental lockout. Use another administrator. The existing provisioning process still creates ADMIN accounts only and never resets an existing password.
+
+All mutation examples require the existing session cookie and current CSRF token. Login, logout and `/api/v1/auth/me` URLs are unchanged. Re-login after rolling out the new principal/session representation.
+
+## Audit trail
+
+Each service has its own `audit_events` table. Member records member, membership and account/permission changes. Society records flat changes. Audit inserts use the same transaction as the business write: either both persist or both roll back. A failed audit insert fails the business write. Replayed idempotent creates do not produce another creation event.
+
+Events include a sequence, actor account ID/name, action, entity type/ID, before/after JSON snapshots, UTC timestamp and correlation ID. Passwords, hashes, cookies and internal tokens are not part of audit snapshots. Snapshots of member changes do contain personal record details, so only administrators can retrieve them. There is no public update/delete audit API. This is application-level auditing, not tamper-proof logging of arbitrary SQL run by a database administrator. Retention/archival is an operational policy, not an automatic deletion task in this change.
+
+```text
+GET /api/v1/members/audit?entityType=MEMBER&amp;entityId={memberId}&amp;limit=50
+GET /api/v1/society/audit?entityType=FLAT&amp;entityId={flatId}&amp;limit=50
+```
+
+Use `before={sequence}` from the last returned event to retrieve older events. Limit is 1–100. Entity filters are optional. These endpoints route through the existing Gateway member/society routes.
+
+## Server-side search and filters
+
+```text
+GET /api/v1/members/page?search=asha&amp;status=ACTIVE&amp;page=0&amp;size=20
+GET /api/v1/flats/page?search=A-1&amp;status=ACTIVE&amp;floorNumber=1&amp;page=0&amp;size=20
+```
+
+Member search matches name, mobile or email. Flat search matches flat number. Search is case-insensitive, literal substring matching, capped at 120 characters. `%` and `_` are treated literally. Allowed statuses are ACTIVE and INACTIVE. Existing paging and sort validation still applies; the response format is unchanged. Filtering and authorization happen in the database before paging/counting. Substring search may need trigram/full-text indexing at larger measured volumes; the new cursor indexes do not make arbitrary substring searches index-only.
+
+## Cursor pagination
+
+```text
+GET /api/v1/members/cursor?limit=20&amp;status=ACTIVE
+GET /api/v1/flats/cursor?limit=20&amp;floorNumber=1
+```
+
+```json
+{
+  &quot;items&quot;: [],
+  &quot;nextCursor&quot;: null,
+  &quot;hasNext&quot;: false
+}
+```
+
+When `hasNext` is true, URL-encode `nextCursor` into `after` on the next request. Keep all other filters identical:
+
+```text
+GET /api/v1/members/cursor?limit=20&amp;status=ACTIVE&amp;after={encodedNextCursor}
+```
+
+Cursor endpoints use ascending `(createdAt, id)` keyset ordering and read at most `limit + 1` rows without a total-count query. Matching indexes are provided. Tokens bind to normalized filters and the current actor/role/object scope; changing them requires restarting pagination. Invalid tokens return `400 INVALID_CURSOR`. Tokens are opaque encodings, not authentication credentials or signed security tokens: record authorization is always enforced independently. Pagination is not a frozen database snapshot, and concurrent changes to filters may move records into/out of the result set. Existing page-number endpoints remain available for direct page navigation.
+
+## Optimistic locking and ETags
+
+JPA `@Version` columns protect members, flats, memberships and application accounts. Member/flat response bodies now contain `version`. Existing service constructors and older stored idempotent member responses remain supported.
+
+GET an individual record:
+
+```text
+GET /api/v1/members/{memberId}
+GET /api/v1/flats/{flatId}
+```
+
+The response includes a strong ETag such as `&quot;member-{uuid}-v2&quot;`. Responses use `Cache-Control: private, no-cache`. Revalidate a read with `If-None-Match`; an unchanged representation returns `304` without a body. Access is checked before returning either 200 or 304.
+
+Send the current ETag in `If-Match` when updating or deactivating a member/flat. A stale tag returns `412 PRECONDITION_FAILED`. Weak tags cannot satisfy If-Match. The service checks the expected version inside the transaction, and JPA&#x27;s versioned update prevents a race between that check and the commit. Concurrent version conflicts return 412 for conditional writes or 409 for legacy writes.
+
+To preserve existing clients, missing If-Match remains allowed by default. Enable `app.http.require-if-match=true` (environment variable `APP_HTTP_REQUIRE_IF_MATCH=true`) in both backends to require it; missing headers then return `428 PRECONDITION_REQUIRED`. Enable this only after clients start sending ETags. Without If-Match, optimistic locking catches overlapping database transactions but cannot detect a browser form that was stale before its request started. `If-Match: *` asserts existence only; it does not protect against stale form versions.
+
+The Society cache uses a versioned serialization prefix to avoid reusing pre-version flat responses. Membership workflows retain their Redis and database locks in addition to the new version column.
+
+## Contract verification and tests
+
+The Member-owned `contracts/member-to-society-flat-v1.json` fixture is shared by:
+
+- `SocietyConsumerContractTest`: exercises the real Member SocietyClient against the contract&#x27;s success and missing-resource responses.
+- `SocietyProviderContractTest`: exercises Society&#x27;s actual controller/serialization/error handling against that contract, including ETag revalidation. Business persistence is isolated using a mocked service.
+
+Normal `mvn test` runs these checks. From the repository root on Windows:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-contracts.ps1
+```
+
+The script stops if either consumer or provider verification fails. No broker or Pact server is required. This is shared contract verification in this repository, not a separately hosted contract-publishing platform.
+
+PostgreSQL integration tests cover migrations, scoped search, cursor continuation, audit rollback and conflicting concurrent entity updates. Docker must be running for these tests; otherwise Testcontainers marks them skipped. Test-only `docker-java.properties` selects API 1.44 for compatibility with current Docker Desktop and the existing Testcontainers dependency.
+
+## Deployment
+
+Flyway adds Member V5 and Society V4; previously applied migrations are untouched. No migration has been run against your live databases by this code change.
+
+Build new images for all three applications and roll out compatible versions together: the Gateway now refreshes account permissions through Member&#x27;s new internal endpoint. Kubernetes Gateway routing includes `/api/v1/accounts`. Redis session format changed, so sign in again after deployment. Keep the existing session validation and Gateway authentication tokens consistent across services. Do not expose the new internal account endpoint outside the trusted service path.
+
+An old Member/Gateway image cannot supply or interpret the new authorization scope correctly. Prefer a coordinated development restart over mixed application versions. Do not delete PostgreSQL databases to deploy this change.
+</code></pre></details></article>
+<article class="doc-section" id="markdown-docs-dynamic-access-and-family-management-md"><h2>docs/dynamic-access-and-family-management.md</h2>
+<h3 id="markdown-docs-dynamic-access-and-family-management-md-dynamic-access-registered-owners-and-families">Dynamic access, registered owners, and families</h3>
+<p>This phase extends the existing Member, Society, and Gateway applications. Member owns users, role assignments, permissions, ownership memberships, family records, and their audit events. Society continues to own flats and floors. The deployment remains a single society, <code>EMERALD</code>.</p>
+<h4 id="markdown-docs-dynamic-access-and-family-management-md-start-and-use-the-portal">Start and use the portal</h4>
+<p>Build and restart all three applications together using the repository&#x27;s existing local or Kubernetes setup. Member automatically applies Flyway migration <strong>V6</strong> to its configured database at startup. Existing migrations and passwords are unchanged. Sign in again after updating the applications.</p>
+<p>Open <strong><code>/portal.html</code> on the Gateway origin</strong>, for example <code>http://localhost:8080/portal.html</code> when the Gateway uses port 8080. The portal uses the existing cookie session and CSRF flow. No frontend package installation or separate web server is required.</p>
+<ol>
+<li>Sign in with the existing provisioned administrator.</li>
+<li>In <strong>Owners &amp; flats</strong>, register an owner, select their flat, and provide initial login credentials. The person, OWNER membership, and FLAT_OWNER account are created atomically.</li>
+<li>The owner signs in and opens <strong>My family</strong> to add or update family records. A family record does not create a user account.</li>
+<li>In <strong>Roles</strong>, an administrator creates a role and chooses permissions and their scopes. In <strong>Users</strong>, assign one or more roles to an account.</li>
+<li>For a family login, an administrator creates/links a person record, links it to the family record, and creates a FAMILY_MEMBER account for that person. The link is an administrative operation; owners cannot attach arbitrary existing identities.</li>
+</ol>
+<h4 id="markdown-docs-dynamic-access-and-family-management-md-seeded-roles">Seeded roles</h4>
+<div class="tablebox"><table><thead><tr><th>Role</th><th>Initial access</th></tr></thead><tbody>
+<tr><td>ADMIN, SOCIETY_ADMIN</td><td>All initially implemented permissions at society scope. These two recovery roles cannot be edited or disabled.</td></tr>
+<tr><td>COMMITTEE</td><td>Read society information, members, and flats.</td></tr>
+<tr><td>FLAT_OWNER</td><td>Read own person/assigned flats and manage family records under their current OWNER memberships.</td></tr>
+<tr><td>RESIDENT</td><td>Read own person/assigned flats and explicitly linked family record.</td></tr>
+<tr><td>FAMILY_MEMBER</td><td>Read own person, permitted flat information, and explicitly linked family record.</td></tr>
+<tr><td>TENANT</td><td>Read own person/assigned flats and explicitly linked family record.</td></tr>
+</tbody></table></div>
+<p>Custom roles are data, not a Java enum. An account can have multiple enabled roles; their grants are combined. Disabling a role leaves its assignments in place but removes its effective grants. Re-enabling restores them. Accounts with no enabled role cannot authenticate.</p>
+<p>Any role granting SELF or OWN_FLATS access requires an active linked person, including custom roles. This requirement follows the configured scope rather than a fixed list of role names. Ownership start dates are evaluated in UTC consistently with existing membership access.</p>
+<p>Role codes and permission codes are stable identifiers. Update descriptions, grants, status, or assignments instead of renaming codes. To retire a role, disable it. To retire a permission, remove it from roles; audit history is retained. Existing single-role account requests remain accepted using <code>role</code>; new requests should use <code>roles</code>.</p>
+<h4 id="markdown-docs-dynamic-access-and-family-management-md-scopes-and-business-rules">Scopes and business rules</h4>
+<ul>
+<li><code>SOCIETY</code>: all applicable records in EMERALD.</li>
+<li><code>SELF</code>: the linked person, or an explicitly linked active family record for FAMILY_VIEW.</li>
+<li><code>OWN_FLATS</code>: permitted flat records; for family operations, only records belonging to the actor&#x27;s own active OWNER membership. Joint owners manage the family records registered under their respective ownerships.</li>
+</ul>
+<p>MEMBER_VIEW accepts SOCIETY or SELF. FLAT_VIEW accepts SOCIETY or OWN_FLATS. FAMILY_VIEW accepts all three scopes; family mutations accept SOCIETY or OWN_FLATS. Other implemented permissions require SOCIETY. One role assigns one scope to each permission; multiple roles can combine scopes.</p>
+<p>Backend checks enforce the permissions independently of visible controls. A role name alone grants no network access. Member refreshes enabled roles, grants, linked-person status, and flat assignments during Gateway session validation on subsequent requests. The existing trusted internal tokens are still required.</p>
+<p>Only users granted owner-registration and person/account administration permissions can register an owner. The seeded owner role cannot create registered persons, users, roles, or ownership assignments. Adding FLAT_OWNER to an account does not create ownership: a current OWNER membership must exist. Owners may hold multiple flats; multiple owners may be linked to a flat.</p>
+<p>Ending ownership immediately removes its current access, including linked family flat access, even if a future end date is recorded. Transfers are immediate and must use a date no later than today. They end the selected previous ownership and create the new ownership in one transaction. Joint ownerships are independent: select each outgoing ownership that must end. Old family records remain attached to historical ownership and visible to authorized society staff. They are not silently transferred to the incoming owner. An outgoing owner retains any access independently granted by other memberships or staff roles.</p>
+<p>Family records support names, free-text relationships, optional mobile/email, optional administrator-controlled person links, active status, and versions. Family updates and deactivation require the last-read <code>version</code>; stale changes return 409. Inactive records cannot be edited. Account and role edits are versioned too.</p>
+<p>Self-permission changes are rejected. Account changes and linked-person deactivation cannot remove the last usable built-in administrator. Built-in administrator-role definitions are protected; create custom roles for configurable administration. Access changes and family/ownership mutations use a shared database transaction lock, plus existing membership locks, to serialize changes. Audit writes commit or roll back with business writes. Passwords are excluded from account audit snapshots.</p>
+<h4 id="markdown-docs-dynamic-access-and-family-management-md-api-reference">API reference</h4>
+<div class="tablebox"><table><thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/v1/accounts/me</code></td><td>Current account, assigned roles, effective permissions, and permitted flat IDs</td></tr>
+<tr><td>GET / POST</td><td><code>/api/v1/accounts</code></td><td>Page accounts / create a login</td></tr>
+<tr><td>GET</td><td><code>/api/v1/accounts/{id}</code></td><td>Read account with version</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/accounts/{id}/permissions</code></td><td>Set roles, person link, enabled status, and expected version</td></tr>
+<tr><td>GET / POST</td><td><code>/api/v1/access/roles</code></td><td>List / create roles</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/access/roles/{code}</code></td><td>Edit description, enabled status, and grants with expected version</td></tr>
+<tr><td>GET / POST</td><td><code>/api/v1/access/permissions</code></td><td>List / register permission definitions</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/access/permissions/{code}</code></td><td>Update a permission description without changing its stable code</td></tr>
+<tr><td>GET / POST</td><td><code>/api/v1/owners</code></td><td>Page scoped ownerships / register owner, ownership, and account</td></tr>
+<tr><td>POST</td><td><code>/api/v1/owners/transfer</code></td><td>Atomic ownership transfer to an existing active person</td></tr>
+<tr><td>GET / POST</td><td><code>/api/v1/families</code></td><td>Page scoped families / add family record</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/families/{id}</code></td><td>Update details with expected version</td></tr>
+<tr><td>PATCH</td><td><code>/api/v1/families/{id}/deactivate</code></td><td>Deactivate with expected version</td></tr>
+<tr><td>GET</td><td><code>/api/v1/members/audit</code></td><td>Existing audit timeline, now also including roles, permissions, and families</td></tr>
+</tbody></table></div>
+<p>Accounts, owners, and families support zero-based <code>page</code> and <code>size</code> (1–100). Family lists accept <code>flatId</code>. Existing member/flat search, membership assignment/end APIs, and society audit endpoints remain available.</p>
+<p>Example custom role:</p>
+<pre><code class="language-json">{
+  &quot;code&quot;: &quot;FAMILY_REVIEWER&quot;,
+  &quot;description&quot;: &quot;Review the society family directory&quot;,
+  &quot;enabled&quot;: true,
+  &quot;version&quot;: 0,
+  &quot;grants&quot;: [{&quot;permission&quot;: &quot;FAMILY_VIEW&quot;, &quot;scope&quot;: &quot;SOCIETY&quot;}]
+}</code></pre>
+<p>Example account creation:</p>
+<pre><code class="language-json">{
+  &quot;username&quot;: &quot;reviewer&quot;,
+  &quot;password&quot;: &quot;REPLACE_WITH_PRIVATE_PASSWORD&quot;,
+  &quot;roles&quot;: [&quot;COMMITTEE&quot;, &quot;FAMILY_REVIEWER&quot;],
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: null
+}</code></pre>
+<p>New role definitions and assignments need no code change. Registering a brand-new permission code adds catalogue data; implementing a new business action still requires code that checks that permission. The system does not execute arbitrary permission definitions or provide a general policy language. Built-in administrators receive the initially shipped catalogue; explicitly grant new permissions to a configurable role when adding new actions.</p>
+<h4 id="markdown-docs-dynamic-access-and-family-management-md-validation">Validation</h4>
+<p>Run Maven tests in Member and Society, and use the Member wrapper with <code>-f ../../infrastructure/api-gateway/pom.xml test</code> for Gateway. Existing Docker-based tests retain their normal prerequisites.</p>
+<p>For the new real-database integration suite without Docker:</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-local.ps1</code></pre>
+<p>The script uses locally installed PostgreSQL 18 by default (<code>-PostgresBin</code> overrides its bin directory), initializes a fresh temporary cluster, chooses a local port, runs tests in a unique schema, and stops that cluster in <code>finally</code>. Logs and test data remain in the printed temporary directory for diagnosis. It does not connect to the application&#x27;s databases. The integration test class is skipped during normal Maven runs unless <code>access.test.jdbc-url</code> is supplied.</p>
+<p>The portal has DOM component tests for administration screens, owner-only screens, form payloads, CSRF headers, and sign-out. Install their optional test dependency in a temporary directory:</p>
+<pre><code class="language-powershell">npm.cmd install --prefix &quot;$env:TEMP/emerald-portal-dom-tests&quot; --no-audit --no-fund jsdom
+node scripts/test-portal.cjs</code></pre>
+<p>These simulate the DOM and API responses; they do not replace visual browser testing or a full Redis/Gateway/backend deployment test.</p>
+<details><summary>Original Markdown source</summary><pre><code># Dynamic access, registered owners, and families
+
+This phase extends the existing Member, Society, and Gateway applications. Member owns users, role assignments, permissions, ownership memberships, family records, and their audit events. Society continues to own flats and floors. The deployment remains a single society, `EMERALD`.
+
+## Start and use the portal
+
+Build and restart all three applications together using the repository&#x27;s existing local or Kubernetes setup. Member automatically applies Flyway migration **V6** to its configured database at startup. Existing migrations and passwords are unchanged. Sign in again after updating the applications.
+
+Open **`/portal.html` on the Gateway origin**, for example `http://localhost:8080/portal.html` when the Gateway uses port 8080. The portal uses the existing cookie session and CSRF flow. No frontend package installation or separate web server is required.
+
+1. Sign in with the existing provisioned administrator.
+2. In **Owners &amp; flats**, register an owner, select their flat, and provide initial login credentials. The person, OWNER membership, and FLAT_OWNER account are created atomically.
+3. The owner signs in and opens **My family** to add or update family records. A family record does not create a user account.
+4. In **Roles**, an administrator creates a role and chooses permissions and their scopes. In **Users**, assign one or more roles to an account.
+5. For a family login, an administrator creates/links a person record, links it to the family record, and creates a FAMILY_MEMBER account for that person. The link is an administrative operation; owners cannot attach arbitrary existing identities.
+
+## Seeded roles
+
+| Role | Initial access |
+| --- | --- |
+| ADMIN, SOCIETY_ADMIN | All initially implemented permissions at society scope. These two recovery roles cannot be edited or disabled. |
+| COMMITTEE | Read society information, members, and flats. |
+| FLAT_OWNER | Read own person/assigned flats and manage family records under their current OWNER memberships. |
+| RESIDENT | Read own person/assigned flats and explicitly linked family record. |
+| FAMILY_MEMBER | Read own person, permitted flat information, and explicitly linked family record. |
+| TENANT | Read own person/assigned flats and explicitly linked family record. |
+
+Custom roles are data, not a Java enum. An account can have multiple enabled roles; their grants are combined. Disabling a role leaves its assignments in place but removes its effective grants. Re-enabling restores them. Accounts with no enabled role cannot authenticate.
+
+Any role granting SELF or OWN_FLATS access requires an active linked person, including custom roles. This requirement follows the configured scope rather than a fixed list of role names. Ownership start dates are evaluated in UTC consistently with existing membership access.
+
+Role codes and permission codes are stable identifiers. Update descriptions, grants, status, or assignments instead of renaming codes. To retire a role, disable it. To retire a permission, remove it from roles; audit history is retained. Existing single-role account requests remain accepted using `role`; new requests should use `roles`.
+
+## Scopes and business rules
+
+- `SOCIETY`: all applicable records in EMERALD.
+- `SELF`: the linked person, or an explicitly linked active family record for FAMILY_VIEW.
+- `OWN_FLATS`: permitted flat records; for family operations, only records belonging to the actor&#x27;s own active OWNER membership. Joint owners manage the family records registered under their respective ownerships.
+
+MEMBER_VIEW accepts SOCIETY or SELF. FLAT_VIEW accepts SOCIETY or OWN_FLATS. FAMILY_VIEW accepts all three scopes; family mutations accept SOCIETY or OWN_FLATS. Other implemented permissions require SOCIETY. One role assigns one scope to each permission; multiple roles can combine scopes.
+
+Backend checks enforce the permissions independently of visible controls. A role name alone grants no network access. Member refreshes enabled roles, grants, linked-person status, and flat assignments during Gateway session validation on subsequent requests. The existing trusted internal tokens are still required.
+
+Only users granted owner-registration and person/account administration permissions can register an owner. The seeded owner role cannot create registered persons, users, roles, or ownership assignments. Adding FLAT_OWNER to an account does not create ownership: a current OWNER membership must exist. Owners may hold multiple flats; multiple owners may be linked to a flat.
+
+Ending ownership immediately removes its current access, including linked family flat access, even if a future end date is recorded. Transfers are immediate and must use a date no later than today. They end the selected previous ownership and create the new ownership in one transaction. Joint ownerships are independent: select each outgoing ownership that must end. Old family records remain attached to historical ownership and visible to authorized society staff. They are not silently transferred to the incoming owner. An outgoing owner retains any access independently granted by other memberships or staff roles.
+
+Family records support names, free-text relationships, optional mobile/email, optional administrator-controlled person links, active status, and versions. Family updates and deactivation require the last-read `version`; stale changes return 409. Inactive records cannot be edited. Account and role edits are versioned too.
+
+Self-permission changes are rejected. Account changes and linked-person deactivation cannot remove the last usable built-in administrator. Built-in administrator-role definitions are protected; create custom roles for configurable administration. Access changes and family/ownership mutations use a shared database transaction lock, plus existing membership locks, to serialize changes. Audit writes commit or roll back with business writes. Passwords are excluded from account audit snapshots.
+
+## API reference
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/accounts/me` | Current account, assigned roles, effective permissions, and permitted flat IDs |
+| GET / POST | `/api/v1/accounts` | Page accounts / create a login |
+| GET | `/api/v1/accounts/{id}` | Read account with version |
+| PUT | `/api/v1/accounts/{id}/permissions` | Set roles, person link, enabled status, and expected version |
+| GET / POST | `/api/v1/access/roles` | List / create roles |
+| PUT | `/api/v1/access/roles/{code}` | Edit description, enabled status, and grants with expected version |
+| GET / POST | `/api/v1/access/permissions` | List / register permission definitions |
+| PUT | `/api/v1/access/permissions/{code}` | Update a permission description without changing its stable code |
+| GET / POST | `/api/v1/owners` | Page scoped ownerships / register owner, ownership, and account |
+| POST | `/api/v1/owners/transfer` | Atomic ownership transfer to an existing active person |
+| GET / POST | `/api/v1/families` | Page scoped families / add family record |
+| PUT | `/api/v1/families/{id}` | Update details with expected version |
+| PATCH | `/api/v1/families/{id}/deactivate` | Deactivate with expected version |
+| GET | `/api/v1/members/audit` | Existing audit timeline, now also including roles, permissions, and families |
+
+Accounts, owners, and families support zero-based `page` and `size` (1–100). Family lists accept `flatId`. Existing member/flat search, membership assignment/end APIs, and society audit endpoints remain available.
+
+Example custom role:
+
+```json
+{
+  &quot;code&quot;: &quot;FAMILY_REVIEWER&quot;,
+  &quot;description&quot;: &quot;Review the society family directory&quot;,
+  &quot;enabled&quot;: true,
+  &quot;version&quot;: 0,
+  &quot;grants&quot;: [{&quot;permission&quot;: &quot;FAMILY_VIEW&quot;, &quot;scope&quot;: &quot;SOCIETY&quot;}]
+}
+```
+
+Example account creation:
+
+```json
+{
+  &quot;username&quot;: &quot;reviewer&quot;,
+  &quot;password&quot;: &quot;REPLACE_WITH_PRIVATE_PASSWORD&quot;,
+  &quot;roles&quot;: [&quot;COMMITTEE&quot;, &quot;FAMILY_REVIEWER&quot;],
+  &quot;societyCode&quot;: &quot;EMERALD&quot;,
+  &quot;memberId&quot;: null
+}
+```
+
+New role definitions and assignments need no code change. Registering a brand-new permission code adds catalogue data; implementing a new business action still requires code that checks that permission. The system does not execute arbitrary permission definitions or provide a general policy language. Built-in administrators receive the initially shipped catalogue; explicitly grant new permissions to a configurable role when adding new actions.
+
+## Validation
+
+Run Maven tests in Member and Society, and use the Member wrapper with `-f ../../infrastructure/api-gateway/pom.xml test` for Gateway. Existing Docker-based tests retain their normal prerequisites.
+
+For the new real-database integration suite without Docker:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-local.ps1
+```
+
+The script uses locally installed PostgreSQL 18 by default (`-PostgresBin` overrides its bin directory), initializes a fresh temporary cluster, chooses a local port, runs tests in a unique schema, and stops that cluster in `finally`. Logs and test data remain in the printed temporary directory for diagnosis. It does not connect to the application&#x27;s databases. The integration test class is skipped during normal Maven runs unless `access.test.jdbc-url` is supplied.
+
+The portal has DOM component tests for administration screens, owner-only screens, form payloads, CSRF headers, and sign-out. Install their optional test dependency in a temporary directory:
+
+```powershell
+npm.cmd install --prefix &quot;$env:TEMP/emerald-portal-dom-tests&quot; --no-audit --no-fund jsdom
+node scripts/test-portal.cjs
+```
+
+These simulate the DOM and API responses; they do not replace visual browser testing or a full Redis/Gateway/backend deployment test.
+</code></pre></details></article>
+<article class="doc-section" id="markdown-docs-java-language-features-md"><h2>docs/java-language-features.md</h2>
+<h3 id="markdown-docs-java-language-features-md-java-language-and-collection-features-in-this-repository">Java language and collection features in this repository</h3>
+<p>The code uses Java 21. These are concrete application examples for interviews,</p>
+<p>not features added to domain entities solely for demonstration.</p>
+<div class="tablebox"><table><thead><tr><th>Feature</th><th>Example</th><th>Source</th></tr></thead><tbody>
+<tr><td>Lambda</td><td><code>sort -&gt; sort.isAscending() ? cb.asc(...) : cb.desc(...)</code> builds query orders</td><td>Both services&#x27; <code>api/DirectoryQueries.java</code></td></tr>
+<tr><td>Method reference</td><td><code>FlatMembershipEntity::getFlatId</code> maps memberships to flat IDs</td><td>Member <code>auth/AccountIdentityService.java</code></td></tr>
+<tr><td>Constructor reference</td><td><code>ArrayList::new</code> supplies a collection to a collector</td><td>Both <code>api/DirectoryQueries.java</code> files</td></tr>
+<tr><td>Streams</td><td><code>filter</code>, <code>map</code>, <code>sorted</code>, <code>collect</code> and <code>toList</code> transform/query in-memory values</td><td>Directory queries, account identity and service response mapping</td></tr>
+<tr><td>Collection factory methods</td><td><code>List.of(key)</code>, <code>Set.of(&quot;ACTIVE&quot;, &quot;INACTIVE&quot;)</code>, <code>Map.of(...)</code></td><td>Membership lock, query validation and API errors</td></tr>
+<tr><td>Defensive copy factories</td><td><code>List.copyOf(...)</code> snapshots cursor rows; <code>Set.copyOf(...)</code> protects identity scope</td><td>Directory queries and identity records</td></tr>
+<tr><td>Mutable list collector</td><td><code>Collectors.toCollection(ArrayList::new)</code> builds query orders before appending the ID tie-breaker</td><td>Both <code>api/DirectoryQueries.java</code> files</td></tr>
+<tr><td>Unmodifiable result</td><td><code>Stream.toList()</code> returns an unmodifiable list; <code>Collectors.toUnmodifiableSet()</code> returns an unmodifiable set</td><td>Query scope construction, response mapping and account identity</td></tr>
+<tr><td>Comparator</td><td><code>Comparator.naturalOrder()</code> explicitly selects natural UUID order for scope canonicalization</td><td>Both <code>api/DirectoryQueries.java</code> files</td></tr>
+<tr><td>Comparable</td><td>UUID&#x27;s built-in natural order supplies the comparison used by that comparator; Duration also provides <code>compareTo</code></td><td>Query scopes and Society cache duration validation</td></tr>
+<tr><td>Functional interfaces</td><td><code>Supplier&lt;T&gt;</code> wraps protected operations; <code>Function&lt;S,T&gt;</code> maps page results</td><td>RedisMembershipLock, SocietyCacheMetrics and PageResponse</td></tr>
+<tr><td>Static methods</td><td><code>PageResponse.from(...)</code> creates a response without an instance; <code>MembershipPeriod.currentOn(date)</code> builds a predicate</td><td>PageResponse and Member <code>entity/MembershipPeriod.java</code></td></tr>
+<tr><td>Interface default methods</td><td><code>isCurrentOn(date)</code> supplies reusable membership-access behavior to FlatMembershipEntity</td><td>Member <code>entity/MembershipPeriod.java</code></td></tr>
+<tr><td>Private interface methods</td><td><code>hasStartedOn(date)</code> encapsulates part of the default policy and is not exposed to callers</td><td>Member <code>entity/MembershipPeriod.java</code></td></tr>
+<tr><td>Private static methods</td><td><code>MembershipWriter.response(...)</code> maps entity data without using instance state</td><td>Member <code>service/MembershipWriter.java</code></td></tr>
+<tr><td>Records</td><td>Request/response DTOs, cursor positions, identity records and application events</td><td>Both services and Gateway</td></tr>
+<tr><td>Record compact constructors</td><td>PageResponse/CursorPage take shallow unmodifiable list snapshots with List.copyOf</td><td>Both services&#x27; page and cursor records</td></tr>
+<tr><td>Pattern-matching instanceof</td><td><code>principal instanceof SessionIdentityResponse actor</code> validates and binds the type without a separate cast</td><td>MemberAccess, SocietyAccess, audits and Gateway security</td></tr>
+<tr><td>ExecutorService / Executors</td><td>A Spring-managed ExecutorService owns the Society HTTP client&#x27;s virtual-thread tasks</td><td>Member SocietyRestClientConfig</td></tr>
+<tr><td>Virtual threads</td><td>A named Thread.ofVirtual factory creates one virtual thread per submitted HTTP-client task</td><td>Member SocietyRestClientConfig</td></tr>
+<tr><td>IntStream</td><td>rangeClosed generates numbered concurrent executor test tasks without boxing until a comparison needs it</td><td>Member SocietyRestClientConfigTest</td></tr>
+<tr><td>Bounded infinite stream</td><td>Stream.iterate(...).limit(3) creates a finite executor test batch</td><td>Member SocietyRestClientConfigTest</td></tr>
+</tbody></table></div>
+<h4 id="markdown-docs-java-language-features-md-important-distinctions">Important distinctions</h4>
+<ul>
+<li>Java has no <code>List.modifiableList()</code> factory. Use <code>new ArrayList&lt;&gt;()</code>,</li>
+</ul>
+<p>  <code>new ArrayList&lt;&gt;(existing)</code> or <code>Collectors.toCollection(ArrayList::new)</code> when</p>
+<p>  later changes are required. Query ordering needs a mutable list because an ID</p>
+<p>  tie-breaker is appended after mapping client-supplied sort orders.</p>
+<ul>
+<li><code>List.of</code>, <code>List.copyOf</code>, <code>Set.of</code> and <code>Map.of</code> produce unmodifiable collections.</li>
+</ul>
+<p>  Their elements/values are not necessarily deeply immutable. Copy factories make</p>
+<p>  a shallow snapshot and may reuse an already suitable unmodifiable input.</p>
+<ul>
+<li><code>Stream.toList()</code> is unmodifiable but permits null elements. <code>List.of</code>,</li>
+</ul>
+<p>  <code>List.copyOf</code> and <code>Collectors.toUnmodifiableList()</code> reject null elements.</p>
+<p>  <code>Collectors.toList()</code> does not guarantee a particular implementation or mutability.</p>
+<ul>
+<li><code>Collections.unmodifiableList(existing)</code> is a read-only view: changes made through</li>
+</ul>
+<p>  the original list remain visible. It is not the same as <code>List.copyOf(existing)</code>.</p>
+<p>  The application does not need an extra view wrapper where it already returns</p>
+<p>  an unmodifiable stream result or a defensive copy.</p>
+<ul>
+<li><code>Comparable</code> defines a type&#x27;s natural order through <code>compareTo</code>.</li>
+</ul>
+<p>  <code>Comparator</code> selects an external ordering strategy. Existing UUID, Duration,</p>
+<p>  Instant and other JDK types already supply natural orders; no custom domain</p>
+<p>  <code>implements Comparable</code> class is needed for the current workflows.</p>
+<ul>
+<li>UUID sorting in cursor scope construction makes the access-scope fingerprint</li>
+</ul>
+<p>  deterministic. It does not perform database pagination. PostgreSQL still sorts</p>
+<p>  and filters the actual cursor query; do not replace it with Java-side sorting.</p>
+<h4 id="markdown-docs-java-language-features-md-short-interview-answer">Short interview answer</h4>
+<p>“I use lambdas and method references with streams to map records and build query</p>
+<p>orders. Collection factories create fixed values, and copy factories protect</p>
+<p>returned identity and cursor collections. I collect into ArrayList when I need to</p>
+<p>append an ordering tie-breaker. Comparator.naturalOrder uses UUID&#x27;s Comparable</p>
+<p>implementation to canonicalize the access scope. I choose mutable or unmodifiable</p>
+<p>collections according to their purpose rather than using one everywhere.”</p>
+<h4 id="markdown-docs-java-language-features-md-static-default-and-private-methods">Static, default and private methods</h4>
+<ul>
+<li><strong>Static:</strong> belongs to the class/interface, not an instance. Use it for factories</li>
+</ul>
+<p>  and operations that need no object state. Call <code>MembershipPeriod.currentOn(date)</code></p>
+<p>  on the interface; it returns a predicate for a stream&#x27;s <code>filter</code>.</p>
+<ul>
+<li><strong>Default:</strong> an interface method with an inherited implementation. The entity</li>
+</ul>
+<p>  implements the period&#x27;s date accessors and inherits <code>isCurrentOn(date)</code>.</p>
+<p>  This method uses that particular entity&#x27;s dates. Default methods arrived in Java 8.</p>
+<ul>
+<li><strong>Private:</strong> implementation detail available only inside its declaring</li>
+</ul>
+<p>  class/interface. The interface&#x27;s <code>hasStartedOn(date)</code> helper supports the default</p>
+<p>  method without becoming part of the public contract. Private interface methods</p>
+<p>  arrived in Java 9 and are supported by this Java 21 project.</p>
+<ul>
+<li><strong>Private static:</strong> combine restricted visibility with no instance state. Existing</li>
+</ul>
+<p>  entity-to-response mappers are examples. Static/private helpers do not receive</p>
+<p>  instance-based Spring proxy interception; retain transaction and method-security</p>
+<p>  boundaries on suitable instance service methods.</p>
+<p>The resident flat lookup now reads:</p>
+<pre><code class="language-java">.filter(MembershipPeriod.currentOn(today))
+.map(FlatMembershipEntity::getFlatId)
+.collect(Collectors.toUnmodifiableSet());</code></pre>
+<p>The policy remains the previous one: a membership must have started and must have</p>
+<p>no end date. A future-dated start does not yet grant access; any explicitly recorded</p>
+<p>end date removes current access. It is not a general historical date-range check.</p>
+<p>The caller still supplies the UTC reference date used for account validation.</p>
+<p><strong>Interview answer:</strong> “I use static methods for factories, default interface methods</p>
+<p>for reusable instance behavior, and private methods for internal implementation.</p>
+<p>For example, a membership inherits a default current-access check, a static factory</p>
+<p>turns that check into a stream predicate, and a private helper checks its start date.</p>
+<p>I keep transaction and authorization methods as Spring-managed instance methods.”</p>
+<h4 id="markdown-docs-java-language-features-md-records-instanceof-and-collection-interfaces">Records, instanceof and collection interfaces</h4>
+<ul>
+<li><strong>Record:</strong> a concise data carrier with generated accessors, equals, hashCode and</li>
+</ul>
+<p>  toString. It is not automatically deeply immutable. Page and cursor records now</p>
+<p>  copy their lists so caller mutation cannot change the response&#x27;s list structure.</p>
+<p>  Their JSON fields remain unchanged. List.copyOf rejects null lists/elements.</p>
+<p>  Entity objects are still mutable JPA classes rather than being converted to records.</p>
+<ul>
+<li><strong>Pattern-matching instanceof:</strong> checks the runtime type and binds a typed variable</li>
+</ul>
+<p>  in one expression. Existing security and resilience checks already use it.</p>
+<ul>
+<li><strong>Interfaces versus implementations:</strong> declare <code>List&lt;Order&gt;</code> while collecting into</li>
+</ul>
+<p>  <code>ArrayList&lt;Order&gt;</code> when an ID ordering tie-breaker must be appended. Existing</p>
+<p>  code also uses Set, Map, Collection, ConcurrentMap, HashMap and ConcurrentHashMap.</p>
+<p>  Choose each implementation for ordering, uniqueness or concurrent access needs;</p>
+<p>  do not replace them simply to demonstrate another class.</p>
+<h4 id="markdown-docs-java-language-features-md-functional-interfaces-in-real-workflows">Functional interfaces in real workflows</h4>
+<p>A functional interface has one abstract method and can be implemented with a lambda</p>
+<p>or method reference. Default, static and private methods do not add abstract methods.</p>
+<div class="tablebox"><table><thead><tr><th>Interface</th><th>Method</th><th>Repository example</th></tr></thead><tbody>
+<tr><td>Function&lt;S,T&gt;</td><td>apply</td><td>PageResponse.from accepts a mapping function</td></tr>
+<tr><td>Supplier&lt;T&gt;</td><td>get</td><td>RedisMembershipLock and SocietyCacheMetrics wrap protected operations</td></tr>
+<tr><td>Predicate&lt;T&gt;</td><td>test</td><td>MembershipPeriod.currentOn builds a filter policy</td></tr>
+<tr><td>Consumer&lt;T&gt;</td><td>accept</td><td>forEach processes cache names or sort entries</td></tr>
+<tr><td>Comparator&lt;T&gt;</td><td>compare</td><td>Natural ordering canonicalizes the flat-access scope</td></tr>
+<tr><td>Callable&lt;T&gt;</td><td>call</td><td>ExecutorService.submit accepts result-producing HTTP-executor test tasks</td></tr>
+<tr><td>Runnable</td><td>run</td><td>ExecutorService.execute accepts work with no result; the HTTP client schedules internal work</td></tr>
+<tr><td>ThreadFactory</td><td>newThread</td><td>The configured factory creates named virtual threads</td></tr>
+</tbody></table></div>
+<p>There is no need to wrap these standard contracts in an unused custom functional</p>
+<p>interface solely for interview coverage. Collectors is a utility class; Collector</p>
+<p>is the interface describing reduction into a result container. Streams are lazy</p>
+<p>until a terminal operation, and parallelStream is not a virtual-thread executor.</p>
+<h4 id="markdown-docs-java-language-features-md-virtual-threads-and-executor-lifecycle">Virtual threads and executor lifecycle</h4>
+<p>Member&#x27;s SocietyRestClientConfig registers a dedicated ExecutorService backed by:</p>
+<pre><code class="language-java">Executors.newThreadPerTaskExecutor(
+    Thread.ofVirtual().name(&quot;society-http-&quot;, 0).factory());</code></pre>
+<p>HttpClient uses it for asynchronous/dependent transport tasks. Spring owns both</p>
+<p>resources and closes the HTTP client before closing its executor. The executor is</p>
+<p>marked <code>defaultCandidate=false</code> so it does not replace Boot&#x27;s general application</p>
+<p>executor. This is a live application use, not an unused demonstration bean.</p>
+<p>This does <strong>not</strong> enable virtual threads for every servlet request, change database</p>
+<p>transactions into async transactions, or replace Gateway&#x27;s Reactor event loop.</p>
+<p>Security context and transactions remain on the calling business request. Existing</p>
+<p>Society bulkhead, retry and timeout policies continue to limit logical calls. The</p>
+<p>executor itself creates an unbounded number of lightweight threads; it is not a</p>
+<p>concurrency limiter and does not increase database capacity or speed up CPU work.</p>
+<p>No throughput improvement is claimed without measurement.</p>
+<p>Tests check virtual task execution, resource closure, actual HTTP transport and</p>
+<p>read-timeout behavior. Java 21 does not require preview flags for virtual threads.</p>
+<h4 id="markdown-docs-java-language-features-md-intstream-and-infinite-streams">IntStream and infinite streams</h4>
+<p>Interpreting “IninitStream” as IntStream, the executor test generates numbered tasks:</p>
+<pre><code class="language-java">IntStream.rangeClosed(1, 8)
+    .mapToObj(index -&gt; executor.submit(() -&gt;
+        new TaskObservation(index, Thread.currentThread().isVirtual())))
+    .toList();</code></pre>
+<p>IntStream is a primitive-int stream. range excludes its upper bound, rangeClosed</p>
+<p>includes it, boxed converts to Stream&lt;Integer&gt;, and mapToObj creates object results.</p>
+<p>The example is intentionally in a concurrency test; the application has no new</p>
+<p>numeric business loop that needs an artificial IntStream refactor.</p>
+<p>If “IninitStream” meant an <strong>infinite stream</strong>, the test also covers a bounded form:</p>
+<pre><code class="language-java">Stream.iterate(1, index -&gt; index + 1).limit(3);</code></pre>
+<p>The two-argument iterate and generate can produce unbounded streams. Add a finite</p>
+<p>termination policy before collecting or submitting tasks. Do not put an unbounded</p>
+<p>stream into an API request or use it to enqueue unlimited executor work.</p>
+<p><strong>Interview answer:</strong> “I use records for API data, pattern-matching instanceof for</p>
+<p>typed checks, and standard functional interfaces with streams. A dedicated managed</p>
+<p>virtual-thread ExecutorService handles the Society HTTP client&#x27;s transport tasks.</p>
+<p>I retain timeouts, bulkheads and database limits. IntStream and a limited infinite</p>
+<p>stream generate finite task batches in tests.”</p>
+<p>References: <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Executors.html">Java 21 Executors</a>,</p>
+<p><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.Builder.html#executor(java.util.concurrent.Executor">HttpClient executor contract</a>),</p>
+<p><a href="https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html">Spring Boot custom executors</a>.</p>
+<details><summary>Original Markdown source</summary><pre><code># Java language and collection features in this repository
+
+The code uses Java 21. These are concrete application examples for interviews,
+not features added to domain entities solely for demonstration.
+
+| Feature | Example | Source |
+| --- | --- | --- |
+| Lambda | `sort -&gt; sort.isAscending() ? cb.asc(...) : cb.desc(...)` builds query orders | Both services&#x27; `api/DirectoryQueries.java` |
+| Method reference | `FlatMembershipEntity::getFlatId` maps memberships to flat IDs | Member `auth/AccountIdentityService.java` |
+| Constructor reference | `ArrayList::new` supplies a collection to a collector | Both `api/DirectoryQueries.java` files |
+| Streams | `filter`, `map`, `sorted`, `collect` and `toList` transform/query in-memory values | Directory queries, account identity and service response mapping |
+| Collection factory methods | `List.of(key)`, `Set.of(&quot;ACTIVE&quot;, &quot;INACTIVE&quot;)`, `Map.of(...)` | Membership lock, query validation and API errors |
+| Defensive copy factories | `List.copyOf(...)` snapshots cursor rows; `Set.copyOf(...)` protects identity scope | Directory queries and identity records |
+| Mutable list collector | `Collectors.toCollection(ArrayList::new)` builds query orders before appending the ID tie-breaker | Both `api/DirectoryQueries.java` files |
+| Unmodifiable result | `Stream.toList()` returns an unmodifiable list; `Collectors.toUnmodifiableSet()` returns an unmodifiable set | Query scope construction, response mapping and account identity |
+| Comparator | `Comparator.naturalOrder()` explicitly selects natural UUID order for scope canonicalization | Both `api/DirectoryQueries.java` files |
+| Comparable | UUID&#x27;s built-in natural order supplies the comparison used by that comparator; Duration also provides `compareTo` | Query scopes and Society cache duration validation |
+| Functional interfaces | `Supplier&lt;T&gt;` wraps protected operations; `Function&lt;S,T&gt;` maps page results | RedisMembershipLock, SocietyCacheMetrics and PageResponse |
+| Static methods | `PageResponse.from(...)` creates a response without an instance; `MembershipPeriod.currentOn(date)` builds a predicate | PageResponse and Member `entity/MembershipPeriod.java` |
+| Interface default methods | `isCurrentOn(date)` supplies reusable membership-access behavior to FlatMembershipEntity | Member `entity/MembershipPeriod.java` |
+| Private interface methods | `hasStartedOn(date)` encapsulates part of the default policy and is not exposed to callers | Member `entity/MembershipPeriod.java` |
+| Private static methods | `MembershipWriter.response(...)` maps entity data without using instance state | Member `service/MembershipWriter.java` |
+| Records | Request/response DTOs, cursor positions, identity records and application events | Both services and Gateway |
+| Record compact constructors | PageResponse/CursorPage take shallow unmodifiable list snapshots with List.copyOf | Both services&#x27; page and cursor records |
+| Pattern-matching instanceof | `principal instanceof SessionIdentityResponse actor` validates and binds the type without a separate cast | MemberAccess, SocietyAccess, audits and Gateway security |
+| ExecutorService / Executors | A Spring-managed ExecutorService owns the Society HTTP client&#x27;s virtual-thread tasks | Member SocietyRestClientConfig |
+| Virtual threads | A named Thread.ofVirtual factory creates one virtual thread per submitted HTTP-client task | Member SocietyRestClientConfig |
+| IntStream | rangeClosed generates numbered concurrent executor test tasks without boxing until a comparison needs it | Member SocietyRestClientConfigTest |
+| Bounded infinite stream | Stream.iterate(...).limit(3) creates a finite executor test batch | Member SocietyRestClientConfigTest |
+
+## Important distinctions
+
+- Java has no `List.modifiableList()` factory. Use `new ArrayList&lt;&gt;()`,
+  `new ArrayList&lt;&gt;(existing)` or `Collectors.toCollection(ArrayList::new)` when
+  later changes are required. Query ordering needs a mutable list because an ID
+  tie-breaker is appended after mapping client-supplied sort orders.
+- `List.of`, `List.copyOf`, `Set.of` and `Map.of` produce unmodifiable collections.
+  Their elements/values are not necessarily deeply immutable. Copy factories make
+  a shallow snapshot and may reuse an already suitable unmodifiable input.
+- `Stream.toList()` is unmodifiable but permits null elements. `List.of`,
+  `List.copyOf` and `Collectors.toUnmodifiableList()` reject null elements.
+  `Collectors.toList()` does not guarantee a particular implementation or mutability.
+- `Collections.unmodifiableList(existing)` is a read-only view: changes made through
+  the original list remain visible. It is not the same as `List.copyOf(existing)`.
+  The application does not need an extra view wrapper where it already returns
+  an unmodifiable stream result or a defensive copy.
+- `Comparable` defines a type&#x27;s natural order through `compareTo`.
+  `Comparator` selects an external ordering strategy. Existing UUID, Duration,
+  Instant and other JDK types already supply natural orders; no custom domain
+  `implements Comparable` class is needed for the current workflows.
+- UUID sorting in cursor scope construction makes the access-scope fingerprint
+  deterministic. It does not perform database pagination. PostgreSQL still sorts
+  and filters the actual cursor query; do not replace it with Java-side sorting.
+
+## Short interview answer
+
+“I use lambdas and method references with streams to map records and build query
+orders. Collection factories create fixed values, and copy factories protect
+returned identity and cursor collections. I collect into ArrayList when I need to
+append an ordering tie-breaker. Comparator.naturalOrder uses UUID&#x27;s Comparable
+implementation to canonicalize the access scope. I choose mutable or unmodifiable
+collections according to their purpose rather than using one everywhere.”
+
+## Static, default and private methods
+
+- **Static:** belongs to the class/interface, not an instance. Use it for factories
+  and operations that need no object state. Call `MembershipPeriod.currentOn(date)`
+  on the interface; it returns a predicate for a stream&#x27;s `filter`.
+- **Default:** an interface method with an inherited implementation. The entity
+  implements the period&#x27;s date accessors and inherits `isCurrentOn(date)`.
+  This method uses that particular entity&#x27;s dates. Default methods arrived in Java 8.
+- **Private:** implementation detail available only inside its declaring
+  class/interface. The interface&#x27;s `hasStartedOn(date)` helper supports the default
+  method without becoming part of the public contract. Private interface methods
+  arrived in Java 9 and are supported by this Java 21 project.
+- **Private static:** combine restricted visibility with no instance state. Existing
+  entity-to-response mappers are examples. Static/private helpers do not receive
+  instance-based Spring proxy interception; retain transaction and method-security
+  boundaries on suitable instance service methods.
+
+The resident flat lookup now reads:
+
+```java
+.filter(MembershipPeriod.currentOn(today))
+.map(FlatMembershipEntity::getFlatId)
+.collect(Collectors.toUnmodifiableSet());
+```
+
+The policy remains the previous one: a membership must have started and must have
+no end date. A future-dated start does not yet grant access; any explicitly recorded
+end date removes current access. It is not a general historical date-range check.
+The caller still supplies the UTC reference date used for account validation.
+
+**Interview answer:** “I use static methods for factories, default interface methods
+for reusable instance behavior, and private methods for internal implementation.
+For example, a membership inherits a default current-access check, a static factory
+turns that check into a stream predicate, and a private helper checks its start date.
+I keep transaction and authorization methods as Spring-managed instance methods.”
+
+## Records, instanceof and collection interfaces
+
+- **Record:** a concise data carrier with generated accessors, equals, hashCode and
+  toString. It is not automatically deeply immutable. Page and cursor records now
+  copy their lists so caller mutation cannot change the response&#x27;s list structure.
+  Their JSON fields remain unchanged. List.copyOf rejects null lists/elements.
+  Entity objects are still mutable JPA classes rather than being converted to records.
+- **Pattern-matching instanceof:** checks the runtime type and binds a typed variable
+  in one expression. Existing security and resilience checks already use it.
+- **Interfaces versus implementations:** declare `List&lt;Order&gt;` while collecting into
+  `ArrayList&lt;Order&gt;` when an ID ordering tie-breaker must be appended. Existing
+  code also uses Set, Map, Collection, ConcurrentMap, HashMap and ConcurrentHashMap.
+  Choose each implementation for ordering, uniqueness or concurrent access needs;
+  do not replace them simply to demonstrate another class.
+
+## Functional interfaces in real workflows
+
+A functional interface has one abstract method and can be implemented with a lambda
+or method reference. Default, static and private methods do not add abstract methods.
+
+| Interface | Method | Repository example |
+| --- | --- | --- |
+| Function&lt;S,T&gt; | apply | PageResponse.from accepts a mapping function |
+| Supplier&lt;T&gt; | get | RedisMembershipLock and SocietyCacheMetrics wrap protected operations |
+| Predicate&lt;T&gt; | test | MembershipPeriod.currentOn builds a filter policy |
+| Consumer&lt;T&gt; | accept | forEach processes cache names or sort entries |
+| Comparator&lt;T&gt; | compare | Natural ordering canonicalizes the flat-access scope |
+| Callable&lt;T&gt; | call | ExecutorService.submit accepts result-producing HTTP-executor test tasks |
+| Runnable | run | ExecutorService.execute accepts work with no result; the HTTP client schedules internal work |
+| ThreadFactory | newThread | The configured factory creates named virtual threads |
+
+There is no need to wrap these standard contracts in an unused custom functional
+interface solely for interview coverage. Collectors is a utility class; Collector
+is the interface describing reduction into a result container. Streams are lazy
+until a terminal operation, and parallelStream is not a virtual-thread executor.
+
+## Virtual threads and executor lifecycle
+
+Member&#x27;s SocietyRestClientConfig registers a dedicated ExecutorService backed by:
+
+```java
+Executors.newThreadPerTaskExecutor(
+    Thread.ofVirtual().name(&quot;society-http-&quot;, 0).factory());
+```
+
+HttpClient uses it for asynchronous/dependent transport tasks. Spring owns both
+resources and closes the HTTP client before closing its executor. The executor is
+marked `defaultCandidate=false` so it does not replace Boot&#x27;s general application
+executor. This is a live application use, not an unused demonstration bean.
+
+This does **not** enable virtual threads for every servlet request, change database
+transactions into async transactions, or replace Gateway&#x27;s Reactor event loop.
+Security context and transactions remain on the calling business request. Existing
+Society bulkhead, retry and timeout policies continue to limit logical calls. The
+executor itself creates an unbounded number of lightweight threads; it is not a
+concurrency limiter and does not increase database capacity or speed up CPU work.
+No throughput improvement is claimed without measurement.
+
+Tests check virtual task execution, resource closure, actual HTTP transport and
+read-timeout behavior. Java 21 does not require preview flags for virtual threads.
+
+## IntStream and infinite streams
+
+Interpreting “IninitStream” as IntStream, the executor test generates numbered tasks:
+
+```java
+IntStream.rangeClosed(1, 8)
+    .mapToObj(index -&gt; executor.submit(() -&gt;
+        new TaskObservation(index, Thread.currentThread().isVirtual())))
+    .toList();
+```
+
+IntStream is a primitive-int stream. range excludes its upper bound, rangeClosed
+includes it, boxed converts to Stream&lt;Integer&gt;, and mapToObj creates object results.
+The example is intentionally in a concurrency test; the application has no new
+numeric business loop that needs an artificial IntStream refactor.
+
+If “IninitStream” meant an **infinite stream**, the test also covers a bounded form:
+
+```java
+Stream.iterate(1, index -&gt; index + 1).limit(3);
+```
+
+The two-argument iterate and generate can produce unbounded streams. Add a finite
+termination policy before collecting or submitting tasks. Do not put an unbounded
+stream into an API request or use it to enqueue unlimited executor work.
+
+**Interview answer:** “I use records for API data, pattern-matching instanceof for
+typed checks, and standard functional interfaces with streams. A dedicated managed
+virtual-thread ExecutorService handles the Society HTTP client&#x27;s transport tasks.
+I retain timeouts, bulkheads and database limits. IntStream and a limited infinite
+stream generate finite task batches in tests.”
+
+References: [Java 21 Executors](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Executors.html),
+[HttpClient executor contract](https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.Builder.html#executor(java.util.concurrent.Executor)),
+[Spring Boot custom executors](https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html).
+</code></pre></details></article>
+<article class="doc-section" id="markdown-docs-option-b-verification-md"><h2>docs/option-b-verification.md</h2>
+<h3 id="markdown-docs-option-b-verification-md-option-b-verification--24-october-2026">Option B verification — 24 October 2026</h3>
+<p>The Docker Desktop Kubernetes localhost setup was deployed and verified against the existing <code>society_db</code> and <code>member_db</code> databases. Their existing PostgreSQL login was configured in <code>emerald-db-credentials</code>; database passwords were not reset and databases were not replaced.</p>
+<div class="tablebox"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+<tr><td>Society Service</td><td>1/1 Ready</td></tr>
+<tr><td>Member Service</td><td>1/1 Ready</td></tr>
+<tr><td>API Gateway</td><td>1/1 Ready</td></tr>
+<tr><td>Session/lock Redis</td><td>1/1 Ready</td></tr>
+<tr><td>Society cache Redis</td><td>1/1 Ready</td></tr>
+<tr><td>Gateway readiness</td><td>UP</td></tr>
+<tr><td>Portal</td><td>HTTP 200</td></tr>
+<tr><td>Automated Postman requests</td><td>111 passed</td></tr>
+<tr><td>Postman assertions</td><td>123 passed, zero failures</td></tr>
+<tr><td>Repeatability</td><td>Three successful complete runs, including after redeployment</td></tr>
+<tr><td>Whole-collection execution</td><td>Automated requests run; opt-in manual reference requests skipped</td></tr>
+<tr><td>Deployment helper</td><td>Build, unique image tags, rollout and final status completed successfully</td></tr>
+</tbody></table></div>
+<p>The three applications use the verified image tag <code>option-b-20261024135904</code>. Docker Desktop&#x27;s existing kind-provisioned cluster was retained; no separate kind CLI or cluster reset was needed.</p>
+<ul>
+<li><a href="docs/verification/option-b/option-b-verification-summary.json">Latest Postman results</a></li>
+<li><a href="docs/verification/option-b/option-b-kubernetes-status.json">Kubernetes and portal status</a></li>
+<li><a href="docs/verification/option-b/option-b-gateway-smoke-summary.json">Gateway smoke results</a></li>
+<li><a href="#markdown-docs-postman-option-b-md">Postman usage</a></li>
+</ul>
+<p>The automated suite checks administrator, owner and family sessions; dynamic and multiple roles; immediate permission changes; family privacy; ownership transfer; validation and authorization failures; idempotency; pagination/search/cursors; ETags; audit; account disablement; and logout. Its uniquely named verification records and audit history are retained, and its test login accounts are disabled. Pre-existing business records are not modified.</p>
+<p><code>indexLatest.html#option-b</code> now documents normal startup without namespace deletion, first-deployment-only secret generation, the shared <code>emerald</code> PostgreSQL username with a hidden password prompt, immutable build tags, and automated verification. Public Postman environment JSON keeps credentials blank. A ready-to-import private environment was exported to the user&#x27;s temporary directory; regenerate it with:</p>
+<pre><code class="language-powershell">node scripts/run-postman-option-b.cjs --export-environment</code></pre>
+<p>To verify the running installation again without redeploying:</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/kubernetes/deploy-option-b.ps1 -VerifyOnly
+node scripts/run-postman-option-b.cjs --all
+node scripts/capture-option-b-status.cjs</code></pre>
+<p>The localhost port-forward must remain running. Restart it after a Gateway rollout:</p>
+<pre><code class="language-powershell">kubectl --context docker-desktop port-forward service/api-gateway 8080:8080 -n emerald-housing</code></pre>
+<details><summary>Original Markdown source</summary><pre><code># Option B verification — 24 October 2026
+
+The Docker Desktop Kubernetes localhost setup was deployed and verified against the existing `society_db` and `member_db` databases. Their existing PostgreSQL login was configured in `emerald-db-credentials`; database passwords were not reset and databases were not replaced.
+
+| Check | Result |
+| --- | --- |
+| Society Service | 1/1 Ready |
+| Member Service | 1/1 Ready |
+| API Gateway | 1/1 Ready |
+| Session/lock Redis | 1/1 Ready |
+| Society cache Redis | 1/1 Ready |
+| Gateway readiness | UP |
+| Portal | HTTP 200 |
+| Automated Postman requests | 111 passed |
+| Postman assertions | 123 passed, zero failures |
+| Repeatability | Three successful complete runs, including after redeployment |
+| Whole-collection execution | Automated requests run; opt-in manual reference requests skipped |
+| Deployment helper | Build, unique image tags, rollout and final status completed successfully |
+
+The three applications use the verified image tag `option-b-20261024135904`. Docker Desktop&#x27;s existing kind-provisioned cluster was retained; no separate kind CLI or cluster reset was needed.
+
+- [Latest Postman results](verification/option-b/option-b-verification-summary.json)
+- [Kubernetes and portal status](verification/option-b/option-b-kubernetes-status.json)
+- [Gateway smoke results](verification/option-b/option-b-gateway-smoke-summary.json)
+- [Postman usage](postman-option-b.md)
+
+The automated suite checks administrator, owner and family sessions; dynamic and multiple roles; immediate permission changes; family privacy; ownership transfer; validation and authorization failures; idempotency; pagination/search/cursors; ETags; audit; account disablement; and logout. Its uniquely named verification records and audit history are retained, and its test login accounts are disabled. Pre-existing business records are not modified.
+
+`indexLatest.html#option-b` now documents normal startup without namespace deletion, first-deployment-only secret generation, the shared `emerald` PostgreSQL username with a hidden password prompt, immutable build tags, and automated verification. Public Postman environment JSON keeps credentials blank. A ready-to-import private environment was exported to the user&#x27;s temporary directory; regenerate it with:
+
+```powershell
+node scripts/run-postman-option-b.cjs --export-environment
+```
+
+To verify the running installation again without redeploying:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/kubernetes/deploy-option-b.ps1 -VerifyOnly
+node scripts/run-postman-option-b.cjs --all
+node scripts/capture-option-b-status.cjs
+```
+
+The localhost port-forward must remain running. Restart it after a Gateway rollout:
+
+```powershell
+kubectl --context docker-desktop port-forward service/api-gateway 8080:8080 -n emerald-housing
+```
+</code></pre></details></article>
+<article class="doc-section" id="markdown-docs-postman-option-b-md"><h2>docs/postman-option-b.md</h2>
+<h3 id="markdown-docs-postman-option-b-md-kubernetes-localhost-verification-option-b">Kubernetes localhost verification (Option B)</h3>
+<p>Use <code>indexLatest.html#option-b</code>. The Gateway is <code>http://localhost:8080</code> through a Kubernetes port-forward. Both backend services and both Redis workloads must also be Ready before full API verification.</p>
+<p>The <code>postman</code> directory contains exactly these two import files:</p>
+<ul>
+<li><code>Emerald-Housing-Option-B.postman_collection.json</code></li>
+<li><code>Emerald-Housing-Option-B.postman_environment.json</code></li>
+</ul>
+<p>Documentation lives in <code>docs/postman-option-b.md</code>. Generated reports live in <code>docs/verification/option-b/</code>; running verification does not add files to <code>postman</code>.</p>
+<p>The collection contains:</p>
+<ul>
+<li><strong>Option B - Automated verification</strong>: 111 ordered requests, including CSRF/login, validation failures, flat/member CRUD, conditional requests, idempotency, membership history, custom roles, multiple-role accounts, owner/family privacy, live permission changes, ownership transfer, audit, and account disablement.</li>
+<li><strong>Manual reference (opt-in)</strong>: original exploratory requests, deliberate outages/load and optional HTTPS examples. These are skipped unless <code>runManualRequests=true</code>; their prerequisites are not part of Option B.</li>
+</ul>
+<p>Install Newman outside the repository, then run from the repository root:</p>
+<pre><code class="language-powershell">npm.cmd install --prefix &quot;$env:TEMP/emerald-postman-runner&quot; --no-audit --no-fund newman
+node scripts/check-postman-option-b.cjs
+node scripts/run-postman-option-b.cjs
+node scripts/run-postman-option-b.cjs --all</code></pre>
+<p>The full runner reads the existing Kubernetes provisioning credentials into memory. Alternatively provide <code>EMERALD_ADMIN_USERNAME</code> and <code>EMERALD_ADMIN_PASSWORD</code> in the runner process environment. <code>EMERALD_GATEWAY_URL</code> overrides the localhost base URL. No real credential belongs in the committed environment JSON.</p>
+<p>The full run writes a sanitized <code>docs/verification/option-b/option-b-verification-summary.json</code> and exits nonzero on any failure. It never exports raw Newman request/response data, session cookies, or passwords. Test records use unique run identifiers; existing records are not modified. Test accounts are disabled at the end, and audit/ownership history is retained. Failed runs can leave their uniquely named test records for diagnosis.</p>
+<p><code>--all</code> verifies collection-wide execution as well: the same automated requests run and the manual reference requests are skipped. The runner always forces <code>runManualRequests=false</code> and checks that every expected automated request was sent.</p>
+<p><code>node scripts/check-postman-option-b.cjs --gateway-smoke</code> runs only readiness, anonymous CSRF/session reset, and anonymous access denial. Its <code>option-b-gateway-smoke-summary.json</code> is explicitly a partial check; it does not establish backend or business-endpoint health.</p>
+<p>In the Postman UI, import both JSON files, select <strong>Emerald Housing - Option B Localhost</strong>, privately fill the admin credentials, enable cookies, and run the automated folder in order. Tokens, record IDs, ETags, versions, and separate owner/family sessions are captured automatically.</p>
+<p>To generate an immediately usable private Postman environment with the provisioned application login:</p>
+<pre><code class="language-powershell">node scripts/run-postman-option-b.cjs --export-environment</code></pre>
+<p>Import the printed file from the temporary directory and select <strong>Emerald Housing - Option B Localhost (private)</strong>. This export contains the application admin credentials; it stays outside the repository. It does not contain the PostgreSQL password. Public environment JSON deliberately keeps credentials blank.</p>
+<p>For deployment without namespace deletion:</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/kubernetes/deploy-option-b.ps1 -BuildImages -DatabaseCredentialsFile &quot;$env:TEMP/emerald-db-private.json&quot;</code></pre>
+<p>The private database file must contain the four existing credential fields <code>society-username</code>, <code>society-password</code>, <code>member-username</code>, and <code>member-password</code>. Keep it outside the repository. If <code>emerald-db-credentials</code> already exists and is correct, omit this parameter. The helper preserves existing Secrets by default and never resets database passwords or replaces existing databases.</p>
+<details><summary>Original Markdown source</summary><pre><code># Kubernetes localhost verification (Option B)
+
+Use `indexLatest.html#option-b`. The Gateway is `http://localhost:8080` through a Kubernetes port-forward. Both backend services and both Redis workloads must also be Ready before full API verification.
+
+The `postman` directory contains exactly these two import files:
+
+- `Emerald-Housing-Option-B.postman_collection.json`
+- `Emerald-Housing-Option-B.postman_environment.json`
+
+Documentation lives in `docs/postman-option-b.md`. Generated reports live in `docs/verification/option-b/`; running verification does not add files to `postman`.
+
+The collection contains:
+
+- **Option B - Automated verification**: 111 ordered requests, including CSRF/login, validation failures, flat/member CRUD, conditional requests, idempotency, membership history, custom roles, multiple-role accounts, owner/family privacy, live permission changes, ownership transfer, audit, and account disablement.
+- **Manual reference (opt-in)**: original exploratory requests, deliberate outages/load and optional HTTPS examples. These are skipped unless `runManualRequests=true`; their prerequisites are not part of Option B.
+
+Install Newman outside the repository, then run from the repository root:
+
+```powershell
+npm.cmd install --prefix &quot;$env:TEMP/emerald-postman-runner&quot; --no-audit --no-fund newman
+node scripts/check-postman-option-b.cjs
+node scripts/run-postman-option-b.cjs
+node scripts/run-postman-option-b.cjs --all
+```
+
+The full runner reads the existing Kubernetes provisioning credentials into memory. Alternatively provide `EMERALD_ADMIN_USERNAME` and `EMERALD_ADMIN_PASSWORD` in the runner process environment. `EMERALD_GATEWAY_URL` overrides the localhost base URL. No real credential belongs in the committed environment JSON.
+
+The full run writes a sanitized `docs/verification/option-b/option-b-verification-summary.json` and exits nonzero on any failure. It never exports raw Newman request/response data, session cookies, or passwords. Test records use unique run identifiers; existing records are not modified. Test accounts are disabled at the end, and audit/ownership history is retained. Failed runs can leave their uniquely named test records for diagnosis.
+
+`--all` verifies collection-wide execution as well: the same automated requests run and the manual reference requests are skipped. The runner always forces `runManualRequests=false` and checks that every expected automated request was sent.
+
+`node scripts/check-postman-option-b.cjs --gateway-smoke` runs only readiness, anonymous CSRF/session reset, and anonymous access denial. Its `option-b-gateway-smoke-summary.json` is explicitly a partial check; it does not establish backend or business-endpoint health.
+
+In the Postman UI, import both JSON files, select **Emerald Housing - Option B Localhost**, privately fill the admin credentials, enable cookies, and run the automated folder in order. Tokens, record IDs, ETags, versions, and separate owner/family sessions are captured automatically.
+
+To generate an immediately usable private Postman environment with the provisioned application login:
+
+```powershell
+node scripts/run-postman-option-b.cjs --export-environment
+```
+
+Import the printed file from the temporary directory and select **Emerald Housing - Option B Localhost (private)**. This export contains the application admin credentials; it stays outside the repository. It does not contain the PostgreSQL password. Public environment JSON deliberately keeps credentials blank.
+
+For deployment without namespace deletion:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/kubernetes/deploy-option-b.ps1 -BuildImages -DatabaseCredentialsFile &quot;$env:TEMP/emerald-db-private.json&quot;
+```
+
+The private database file must contain the four existing credential fields `society-username`, `society-password`, `member-username`, and `member-password`. Keep it outside the repository. If `emerald-db-credentials` already exists and is correct, omit this parameter. The helper preserves existing Secrets by default and never resets database passwords or replaces existing databases.
+</code></pre></details></article>
+<article class="doc-section" id="markdown-readme-md"><h2>README.md</h2>
+<h3 id="markdown-readme-md-emerald-housing">Emerald Housing</h3>
+<p><strong>Members, homes and society operations—connected through a service-based Java application.</strong></p>
+<p><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square" loading="lazy"></p>
+<p><img alt="Spring Boot" src="https://img.shields.io/badge/Spring_Boot-6DB33F?style=flat-square&amp;logo=springboot&amp;logoColor=white" loading="lazy"></p>
+<p><img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&amp;logo=postgresql&amp;logoColor=white" loading="lazy"></p>
+<p><img alt="Redis" src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&amp;logo=redis&amp;logoColor=white" loading="lazy"></p>
+<p><img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&amp;logo=kubernetes&amp;logoColor=white" loading="lazy"></p>
+<p>Emerald Housing is a housing society management project with dedicated Member and Society services behind an API Gateway. It brings together member records, flats, floors and memberships, with backend support for scoped permissions, auditing, search and concurrent updates.</p>
+<p><a href="#markdown-readme-md-features">Features</a> · <a href="#markdown-readme-md-architecture">Architecture</a> · <a href="#markdown-readme-md-build-and-tests">Build and tests</a> · <a href="#markdown-readme-md-api-guide">API guide</a> · <a href="#markdown-readme-md-repository-map">Repository map</a> · <a href="#markdown-readme-md-deployment-resources">Deployment resources</a></p>
+<h4 id="markdown-readme-md-features">Features</h4>
+<div class="tablebox"><table><thead><tr><th>Area</th><th>Backend capabilities</th></tr></thead><tbody>
+<tr><td>Society operations</td><td>Society, floor and flat information</td></tr>
+<tr><td>Member management</td><td>Member records, memberships and account mappings</td></tr>
+<tr><td>Scoped access</td><td>Administrator, society administrator, committee and resident roles</td></tr>
+<tr><td>Audit history</td><td>Transactional audit events for business and permission changes</td></tr>
+<tr><td>Search and navigation</td><td>Server-side filters, page-number queries and cursor pagination</td></tr>
+<tr><td>Concurrent updates</td><td>JPA versioning and ETag-based conditional writes</td></tr>
+<tr><td>Integration checks</td><td>Shared consumer/provider contract fixtures</td></tr>
+</tbody></table></div>
+<blockquote><p><strong>Current scope:</strong> the documented deployment serves one society, <strong>EMERALD</strong>. It is not a multi-tenant schema. Account management, audit history, server search and conditional updates are documented backend features; existing frontend screens do not yet expose all of them.</p></blockquote>
+<h4 id="markdown-readme-md-architecture">Architecture</h4>
+<pre><code class="language-mermaid">flowchart TD
+    UI[HTML interface] --&gt; Gateway[API Gateway]
+    Gateway --&gt; Member[Member Service]
+    Gateway --&gt; Society[Society Service]
+    Member --&gt;|Flat validation| Society
+    Member --&gt; Data[(PostgreSQL persistence)]
+    Society --&gt; Data</code></pre>
+<p>This is a logical overview; PostgreSQL database settings and deployment topology are defined by each service and its manifests.</p>
+<div class="tablebox"><table><thead><tr><th>Component</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><a href="infrastructure/api-gateway">API Gateway</a></td><td>API entry point, routing and session/account permission validation</td></tr>
+<tr><td><a href="services/member-service">Member Service</a></td><td>Members, memberships, application accounts and related auditing</td></tr>
+<tr><td><a href="services/society-service">Society Service</a></td><td>Society, floor and flat information, with flat auditing</td></tr>
+<tr><td>PostgreSQL and Flyway</td><td>Relational persistence and versioned database migrations</td></tr>
+<tr><td>Redis</td><td>Session/cache and coordination mechanisms described in the backend guide</td></tr>
+<tr><td><a href="indexLatest.html">HTML interfaces</a></td><td>Checked-in browser interface; an <a href="index.html">additional interface file</a> is also included</td></tr>
+</tbody></table></div>
+<p>Backend services independently validate sessions and enforce record-level permissions. See the <a href="#markdown-docs-backend-access-and-query-features-md">access and query guide</a> for the precise behavior and limitations.</p>
+<h4 id="markdown-readme-md-build-and-tests">Build and tests</h4>
+<h5 id="markdown-readme-md-prerequisites">Prerequisites</h5>
+<ul>
+<li>JDK 21 and Git.</li>
+<li>Network access for Maven dependencies and the wrapper distribution.</li>
+<li>Docker running for Testcontainers PostgreSQL integration tests.</li>
+<li>Kubernetes and kubectl when exploring the deployment manifests.</li>
+</ul>
+<pre><code class="language-bash">git clone https://github.com/devendraghag/emerald-housing.git
+cd emerald-housing
+java -version</code></pre>
+<h5 id="markdown-readme-md-build-a-service">Build a service</h5>
+<p>The repository contains separate Maven applications. For example, build Society Service from its own directory.</p>
+<p><strong>Windows PowerShell</strong></p>
+<pre><code class="language-powershell">cd services/society-service
+.\mvnw.cmd clean package</code></pre>
+<p><strong>macOS / Linux</strong></p>
+<pre><code class="language-bash">cd services/society-service
+sh mvnw clean package</code></pre>
+<p>A successful build packages the service; it does not provision PostgreSQL, Redis or a running deployment. Review the service configuration and Kubernetes resources before starting the application.</p>
+<h5 id="markdown-readme-md-verify-service-contracts">Verify service contracts</h5>
+<p>From the repository root on Windows:</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-contracts.ps1</code></pre>
+<p>The script runs Member consumer and Society provider checks against the shared <a href="contracts/member-to-society-flat-v1.json">flat-service contract</a>. No separately hosted contract broker is required.</p>
+<p>PostgreSQL integration tests cover migrations, scoped search, cursor continuation, audit rollback and concurrent entity updates. These tests require Docker; the backend guide notes that Testcontainers tests are skipped when Docker is unavailable. A skipped integration test is not evidence of a passing database integration.</p>
+<h4 id="markdown-readme-md-api-guide">API guide</h4>
+<p>The existing <a href="#markdown-docs-backend-access-and-query-features-md">backend access and query documentation</a> explains authentication context, request examples, response behavior and operational caveats.</p>
+<div class="tablebox"><table><thead><tr><th>Workflow</th><th>Example route</th></tr></thead><tbody>
+<tr><td>Create an application account</td><td><code>POST /api/v1/accounts</code></td></tr>
+<tr><td>Update account permissions</td><td><code>PUT /api/v1/accounts/{accountId}/permissions</code></td></tr>
+<tr><td>Search members</td><td><code>GET /api/v1/members/page?search=asha&amp;status=ACTIVE&amp;page=0&amp;size=20</code></td></tr>
+<tr><td>Browse flats with a cursor</td><td><code>GET /api/v1/flats/cursor?limit=20&amp;floorNumber=1</code></td></tr>
+<tr><td>Read member audit history</td><td><code>GET /api/v1/members/audit?entityType=MEMBER&amp;limit=50</code></td></tr>
+<tr><td>Read an individual flat</td><td><code>GET /api/v1/flats/{flatId}</code></td></tr>
+</tbody></table></div>
+<p>These routes require the appropriate authenticated session and permissions. Mutation requests use the existing CSRF protection. For conditional member/flat updates, retrieve the current ETag and send it with <code>If-Match</code>; see the guide for compatibility settings and conflict responses.</p>
+<h4 id="markdown-readme-md-repository-map">Repository map</h4>
+<div class="tablebox"><table><thead><tr><th>Path</th><th>What to explore</th></tr></thead><tbody>
+<tr><td><a href="services">services/</a></td><td>Member and Society backend applications</td></tr>
+<tr><td><a href="infrastructure/api-gateway">infrastructure/api-gateway/</a></td><td>Gateway application</td></tr>
+<tr><td><a href="contracts">contracts/</a></td><td>Shared service contract fixtures</td></tr>
+<tr><td><a href="docs">docs/</a></td><td>Backend feature and Java language documentation</td></tr>
+<tr><td><a href="postman">postman/</a></td><td>API exploration resources</td></tr>
+<tr><td><a href="kubernetes">kubernetes/</a></td><td>Deployment configuration</td></tr>
+<tr><td><a href="kubernetes-canary">kubernetes-canary/</a></td><td>Canary deployment resources</td></tr>
+<tr><td><a href="kubernetes-observability">kubernetes-observability/</a></td><td>Observability resources</td></tr>
+<tr><td><a href="scripts">scripts/</a></td><td>Contract, canary and operational helpers</td></tr>
+</tbody></table></div>
+<h4 id="markdown-readme-md-deployment-resources">Deployment resources</h4>
+<p>The repository includes Dockerfiles, Kubernetes manifests, canary validation/rollback helpers and observability resources. Review their environment-specific values and required secrets before deployment.</p>
+<p>For changes affecting session representations or internal authorization, the backend guide calls for compatible Gateway and backend versions and a fresh sign-in after deployment. Keep internal service endpoints within the trusted service path.</p>
+<h4 id="markdown-readme-md-explore-the-engineering">Explore the engineering</h4>
+<ul>
+<li><strong>Authorization:</strong> follow how account permissions become scoped backend access.</li>
+<li><strong>Consistency:</strong> examine transactional auditing and optimistic concurrency control.</li>
+<li><strong>Service boundaries:</strong> compare the shared contract with consumer/provider verification.</li>
+<li><strong>Operations:</strong> inspect the separation of core deployment, canary and observability resources.</li>
+</ul>
+<p>Start with the <a href="#markdown-docs-backend-access-and-query-features-md">backend feature guide</a>, then review the <a href="#markdown-docs-java-language-features-md">Java language feature notes</a> and service source.</p>
+<details><summary>Original Markdown source</summary><pre><code># Emerald Housing
+
+**Members, homes and society operations—connected through a service-based Java application.**
+
+![Java 21](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?style=flat-square&amp;logo=springboot&amp;logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&amp;logo=postgresql&amp;logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&amp;logo=redis&amp;logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&amp;logo=kubernetes&amp;logoColor=white)
+
+Emerald Housing is a housing society management project with dedicated Member and Society services behind an API Gateway. It brings together member records, flats, floors and memberships, with backend support for scoped permissions, auditing, search and concurrent updates.
+
+[Features](#features) · [Architecture](#architecture) · [Build and tests](#build-and-tests) · [API guide](#api-guide) · [Repository map](#repository-map) · [Deployment resources](#deployment-resources)
+
+## Features
+
+| Area | Backend capabilities |
+| --- | --- |
+| Society operations | Society, floor and flat information |
+| Member management | Member records, memberships and account mappings |
+| Scoped access | Administrator, society administrator, committee and resident roles |
+| Audit history | Transactional audit events for business and permission changes |
+| Search and navigation | Server-side filters, page-number queries and cursor pagination |
+| Concurrent updates | JPA versioning and ETag-based conditional writes |
+| Integration checks | Shared consumer/provider contract fixtures |
+
+&gt; **Current scope:** the documented deployment serves one society, **EMERALD**. It is not a multi-tenant schema. Account management, audit history, server search and conditional updates are documented backend features; existing frontend screens do not yet expose all of them.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    UI[HTML interface] --&gt; Gateway[API Gateway]
+    Gateway --&gt; Member[Member Service]
+    Gateway --&gt; Society[Society Service]
+    Member --&gt;|Flat validation| Society
+    Member --&gt; Data[(PostgreSQL persistence)]
+    Society --&gt; Data
+```
+
+This is a logical overview; PostgreSQL database settings and deployment topology are defined by each service and its manifests.
+
+| Component | Responsibility |
+| --- | --- |
+| [API Gateway](infrastructure/api-gateway) | API entry point, routing and session/account permission validation |
+| [Member Service](services/member-service) | Members, memberships, application accounts and related auditing |
+| [Society Service](services/society-service) | Society, floor and flat information, with flat auditing |
+| PostgreSQL and Flyway | Relational persistence and versioned database migrations |
+| Redis | Session/cache and coordination mechanisms described in the backend guide |
+| [HTML interfaces](indexLatest.html) | Checked-in browser interface; an [additional interface file](index.html) is also included |
+
+Backend services independently validate sessions and enforce record-level permissions. See the [access and query guide](docs/backend-access-and-query-features.md) for the precise behavior and limitations.
+
+## Build and tests
+
+### Prerequisites
+
+- JDK 21 and Git.
+- Network access for Maven dependencies and the wrapper distribution.
+- Docker running for Testcontainers PostgreSQL integration tests.
+- Kubernetes and kubectl when exploring the deployment manifests.
+
+```bash
+git clone https://github.com/devendraghag/emerald-housing.git
+cd emerald-housing
+java -version
+```
+
+### Build a service
+
+The repository contains separate Maven applications. For example, build Society Service from its own directory.
+
+**Windows PowerShell**
+
+```powershell
+cd services/society-service
+.\mvnw.cmd clean package
+```
+
+**macOS / Linux**
+
+```bash
+cd services/society-service
+sh mvnw clean package
+```
+
+A successful build packages the service; it does not provision PostgreSQL, Redis or a running deployment. Review the service configuration and Kubernetes resources before starting the application.
+
+### Verify service contracts
+
+From the repository root on Windows:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-contracts.ps1
+```
+
+The script runs Member consumer and Society provider checks against the shared [flat-service contract](contracts/member-to-society-flat-v1.json). No separately hosted contract broker is required.
+
+PostgreSQL integration tests cover migrations, scoped search, cursor continuation, audit rollback and concurrent entity updates. These tests require Docker; the backend guide notes that Testcontainers tests are skipped when Docker is unavailable. A skipped integration test is not evidence of a passing database integration.
+
+## API guide
+
+The existing [backend access and query documentation](docs/backend-access-and-query-features.md) explains authentication context, request examples, response behavior and operational caveats.
+
+| Workflow | Example route |
+| --- | --- |
+| Create an application account | `POST /api/v1/accounts` |
+| Update account permissions | `PUT /api/v1/accounts/{accountId}/permissions` |
+| Search members | `GET /api/v1/members/page?search=asha&amp;status=ACTIVE&amp;page=0&amp;size=20` |
+| Browse flats with a cursor | `GET /api/v1/flats/cursor?limit=20&amp;floorNumber=1` |
+| Read member audit history | `GET /api/v1/members/audit?entityType=MEMBER&amp;limit=50` |
+| Read an individual flat | `GET /api/v1/flats/{flatId}` |
+
+These routes require the appropriate authenticated session and permissions. Mutation requests use the existing CSRF protection. For conditional member/flat updates, retrieve the current ETag and send it with `If-Match`; see the guide for compatibility settings and conflict responses.
+
+## Repository map
+
+| Path | What to explore |
+| --- | --- |
+| [services/](services) | Member and Society backend applications |
+| [infrastructure/api-gateway/](infrastructure/api-gateway) | Gateway application |
+| [contracts/](contracts) | Shared service contract fixtures |
+| [docs/](docs) | Backend feature and Java language documentation |
+| [postman/](postman) | API exploration resources |
+| [kubernetes/](kubernetes) | Deployment configuration |
+| [kubernetes-canary/](kubernetes-canary) | Canary deployment resources |
+| [kubernetes-observability/](kubernetes-observability) | Observability resources |
+| [scripts/](scripts) | Contract, canary and operational helpers |
+
+## Deployment resources
+
+The repository includes Dockerfiles, Kubernetes manifests, canary validation/rollback helpers and observability resources. Review their environment-specific values and required secrets before deployment.
+
+For changes affecting session representations or internal authorization, the backend guide calls for compatible Gateway and backend versions and a fresh sign-in after deployment. Keep internal service endpoints within the trusted service path.
+
+## Explore the engineering
+
+- **Authorization:** follow how account permissions become scoped backend access.
+- **Consistency:** examine transactional auditing and optimistic concurrency control.
+- **Service boundaries:** compare the shared contract with consumer/provider verification.
+- **Operations:** inspect the separation of core deployment, canary and observability resources.
+
+Start with the [backend feature guide](docs/backend-access-and-query-features.md), then review the [Java language feature notes](docs/java-language-features.md) and service source.
+</code></pre></details></article>
+</section></main></div><script>(function(){const r=document.documentElement,t=document.getElementById('theme');if(localStorage.getItem('emerald-theme')==='dark')r.setAttribute('data-theme','dark');function label(){t.textContent=r.getAttribute('data-theme')==='dark'?'Use light theme':'Use dark theme'}label();t.addEventListener('click',function(){const d=r.getAttribute('data-theme')==='dark';if(d)r.removeAttribute('data-theme');else r.setAttribute('data-theme','dark');localStorage.setItem('emerald-theme',d?'light':'dark');label()});const s=document.getElementById('side'),m=document.getElementById('menubtn');m.addEventListener('click',function(){const o=s.classList.toggle('open');m.setAttribute('aria-expanded',String(o))});function reveal(id){const x=document.getElementById(id);if(x){x.open=true;x.scrollIntoView({behavior:'smooth',block:'center'})}}document.querySelectorAll('[data-open],[data-file]').forEach(function(x){function go(){reveal(x.getAttribute('data-open')||x.getAttribute('data-file'))}x.addEventListener('click',go);x.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});document.querySelectorAll('pre').forEach(function(p){const c=p.querySelector('code');if(!c)return;const b=document.createElement('button');b.className='copy';b.type='button';b.textContent='Copy';b.addEventListener('click',async function(){try{await navigator.clipboard.writeText(c.innerText);b.textContent='Copied'}catch(e){b.textContent='Select and copy'}setTimeout(function(){b.textContent='Copy'},1300)});p.appendChild(b)})})();</script>
 <script>
 (function(){
  const status=document.getElementById('explorerStatus');
