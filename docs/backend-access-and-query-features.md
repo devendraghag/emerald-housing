@@ -1,5 +1,7 @@
 # Audit, permissions, search, cursors and concurrency
 
+The later [dynamic access and family management phase](dynamic-access-and-family-management.md) replaces the fixed role model below and adds the Gateway-hosted `/portal.html` administration interface. The remaining sections describe the original API behaviour and its compatibility contracts.
+
 This change adds backend behavior only. Existing frontend screens remain compatible, but they do not yet expose account management, audit history, server search or conditional updates.
 
 ## Scope and roles

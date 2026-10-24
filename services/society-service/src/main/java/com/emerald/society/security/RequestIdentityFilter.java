@@ -74,7 +74,10 @@ public class RequestIdentityFilter extends OncePerRequestFilter {
     }
 
     private void setIdentity(SessionIdentityResponse identity, String authority) {
-        setIdentity(identity, authority, identity);
+        SecurityContext context=contexts.createEmptyContext();
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(identity,null,
+                identity.roles().stream().map(role->new SimpleGrantedAuthority("ROLE_"+role)).toList()));
+        contexts.setContext(context);
     }
 
     private void setIdentity(String principal, String authority) {

@@ -44,6 +44,7 @@ import java.util.regex.Pattern;
 
 @Service
 public class MemberService {
+    @Autowired private com.emerald.member.auth.AccessRegistry registry;
     @Autowired private com.emerald.member.audit.AuditTrail audit;
     @Autowired private com.emerald.member.security.MemberAccess access;
     @Autowired private com.emerald.member.api.DirectoryQueries queries;
@@ -91,12 +92,12 @@ public class MemberService {
     }
 
     @Transactional
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('MEMBER_CREATE','SOCIETY')")
     public MemberResponse create(CreateMemberRequest request) {
         return createNewMember(request);
     }
 
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('MEMBER_CREATE','SOCIETY')")
     public MemberCreationResult createIdempotent(CreateMemberRequest request, String idempotencyKey, UUID actorId) {
         if (idempotencyKey == null || !SAFE_IDEMPOTENCY_KEY.matcher(idempotencyKey).matches())
             throw new InvalidIdempotencyKeyException();
@@ -187,9 +188,9 @@ public class MemberService {
         return new com.emerald.member.api.CursorPage<>(result.items().stream().map(MemberService::toResponse).toList(),result.nextCursor(),result.hasNext());
     }
     @Transactional
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('MEMBER_UPDATE','SOCIETY')")
     public MemberResponse update(UUID id, UpdateMemberRequest request) { return update(id,request,null); }
-    @Transactional @PreAuthorize("@memberAccess.manage()")
+    @Transactional @PreAuthorize("@memberAccess.has('MEMBER_UPDATE','SOCIETY')")
     public MemberResponse update(UUID id, UpdateMemberRequest request,String ifMatch) {
         MemberEntity member = find(id);
         if(versions!=null) versions.check(ifMatch,"member",id,member.getVersion());
@@ -202,20 +203,22 @@ public class MemberService {
         catch (DataIntegrityViolationException ex) { throw new DuplicateMobileNumberException(); }
     }
     @Transactional
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('MEMBER_DEACTIVATE','SOCIETY')")
     public MemberResponse deactivate(UUID id) { return deactivate(id,null); }
-    @Transactional @PreAuthorize("@memberAccess.manage()")
+    @Transactional @PreAuthorize("@memberAccess.has('MEMBER_DEACTIVATE','SOCIETY')")
     public MemberResponse deactivate(UUID id,String ifMatch) {
+        if(registry!=null)registry.lock();
         MemberEntity member = find(id);
         if(versions!=null) versions.check(ifMatch,"member",id,member.getVersion());
         var before=toResponse(member);
         boolean changed=member.deactivate(Instant.now());
         var result=toResponse(members.saveAndFlush(member));
+        if(registry!=null && Boolean.TRUE.equals(registry.database().queryForObject("SELECT EXISTS(SELECT 1 FROM admin_users a JOIN account_roles ar ON ar.account_id=a.id WHERE a.member_id=? AND ar.role_code IN ('ADMIN','SOCIETY_ADMIN'))",Boolean.class,id))) registry.requireAdministrator();
         if(changed)audit("DEACTIVATE",id,before,result);
         return result;
     }
     @Transactional(readOnly = true)
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY')")
     public void requireActive(UUID id) {
         MemberEntity member = find(id);
         if (member.getStatus() != MemberStatus.ACTIVE) throw new InactiveMemberException();

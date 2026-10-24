@@ -20,7 +20,7 @@ public class AdminUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("Invalid credentials"));
         return User.withUsername(account.getUsername())
                 .password(account.getPasswordHash())
-                .roles(account.getRole())
+                .authorities("ROLE_" + account.getRole())
                 .disabled(!account.isEnabled())
                 .build();
     }

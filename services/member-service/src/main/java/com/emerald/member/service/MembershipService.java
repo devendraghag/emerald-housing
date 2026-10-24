@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 @Service
 public class MembershipService {
+    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.auth.AccessRegistry registry;
     private final MemberService members;
     private final SocietyClient societyClient;
     private final MembershipWriter writer;
@@ -23,8 +24,10 @@ public class MembershipService {
         this.members=members; this.societyClient=societyClient; this.writer=writer;
         this.membershipLock=membershipLock;
     }
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY')")
+    @org.springframework.transaction.annotation.Transactional
     public MembershipResponse assign(UUID memberId, CreateMembershipRequest request) {
+        if(registry!=null)registry.lock();
         members.requireActive(memberId);
         var flat = societyClient.getFlat(request.flatId());
         if (!"ACTIVE".equals(flat.status())) throw new FlatNotEligibleException();
@@ -42,8 +45,10 @@ public class MembershipService {
     public PageResponse<MembershipResponse> pageByFlat(UUID id, int page, int size, String sortBy, String direction) {
         return writer.pageByFlat(id, page, size, sortBy, direction);
     }
-    @PreAuthorize("@memberAccess.manage()")
+    @PreAuthorize("@memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")
+    @org.springframework.transaction.annotation.Transactional
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
+        if(registry!=null)registry.lock();
         return membershipLock.withMemberLock(memberId, () -> writer.end(memberId, membershipId, request));
     }
 }

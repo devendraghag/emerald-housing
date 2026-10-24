@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class AdminAccountProvisioner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(AdminAccountProvisioner.class);
+    @org.springframework.beans.factory.annotation.Autowired private AccessRegistry registry;
     private final AdminAccountRepository accounts;
     private final PasswordEncoder passwordEncoder;
     private final String username;
@@ -42,6 +43,9 @@ public class AdminAccountProvisioner implements ApplicationRunner {
         }
         int inserted = accounts.insertIfMissing(UUID.randomUUID(), username,
                 passwordEncoder.encode(password), Instant.now());
+        if (registry != null) {
+            registry.database().update("INSERT INTO account_roles(account_id,role_code) SELECT id,role FROM admin_users WHERE username=? ON CONFLICT DO NOTHING",username);
+        }
         if (inserted == 1) log.info("Initial ADMIN account was provisioned");
         else log.info("Initial ADMIN username already exists; its password was not changed");
     }

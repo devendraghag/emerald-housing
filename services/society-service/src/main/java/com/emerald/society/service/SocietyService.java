@@ -14,7 +14,7 @@ public class SocietyService {
         this.societyRepository = societyRepository;
         this.floorRepository = floorRepository;
     }
-    @PreAuthorize("@societyAccess.read()")
+    @PreAuthorize("@societyAccess.has('SOCIETY_VIEW','SOCIETY')")
     public SocietyResponse getSociety() {
         var society = societyRepository.findBySocietyCode("EMERALD")
                 .orElseThrow(() -> new IllegalStateException("Configured society is missing"));

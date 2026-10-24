@@ -30,4 +30,22 @@ class GatewayRoutesTest {
                 .extracting(route -> route.getUri().toString())
                 .containsExactly("http://society-service:8080");
     }
+
+    @Test
+    void accessFamilyAndOwnerRequestsRouteToMemberService() {
+        var routes=routeLocator.getRoutes().collectList().block(Duration.ofSeconds(5));
+        var member=routes.stream().filter(route->route.getId().equals("member-api")).findFirst().orElseThrow();
+        for(String path:java.util.List.of("/api/v1/access/roles","/api/v1/families","/api/v1/owners","/api/v1/accounts/me")) {
+            var exchange=org.springframework.mock.web.server.MockServerWebExchange.from(org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(path));
+            assertThat(reactor.core.publisher.Mono.from(member.getPredicate().apply(exchange)).block()).as(path).isTrue();
+        }
+    }
+    @Autowired org.springframework.context.ApplicationContext applicationContext;
+    @Test
+    void portalAssetsAreAvailableWithoutSigningIn() {
+        var client=org.springframework.test.web.reactive.server.WebTestClient.bindToApplicationContext(applicationContext).build();
+        client.get().uri("/portal.html").exchange().expectStatus().isOk().expectBody(String.class).value(body->assertThat(body).contains("Society portal","portal.js"));
+        client.get().uri("/portal.js").exchange().expectStatus().isOk();
+        client.get().uri("/portal.css").exchange().expectStatus().isOk();
+    }
 }

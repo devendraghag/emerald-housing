@@ -48,7 +48,7 @@ public class GatewaySessionValidationClient {
                     return incoming.bodyTo(SessionIdentityResponse.class);
                 });
         if (identity == null || identity.adminId() == null || identity.username() == null || identity.role() == null
-                || !java.util.Set.of("ADMIN","SOCIETY_ADMIN","COMMITTEE","RESIDENT").contains(identity.role())) return Optional.empty();
+                || identity.roles().isEmpty() || !"EMERALD".equals(identity.societyCode())) return Optional.empty();
         return Optional.of(identity);
     }
 

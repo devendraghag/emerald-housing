@@ -62,12 +62,12 @@ public class AdminAuthenticationManager implements ReactiveAuthenticationManager
                 })
                 .switchIfEmpty(Mono.error(new AuthServiceUnavailableException()))
                 .<Authentication>map(identity -> {
-                    if (identity.adminId() == null || identity.username() == null || identity.role() == null || !"EMERALD".equals(identity.societyCode()) || !java.util.Set.of("ADMIN","SOCIETY_ADMIN","COMMITTEE","RESIDENT").contains(identity.role())) {
+                    if (identity.adminId() == null || identity.username() == null || identity.role() == null || !"EMERALD".equals(identity.societyCode()) || identity.roles().isEmpty()) {
                         throw new AuthServiceUnavailableException();
                     }
-                    AdminIdentity principal = new AdminIdentity(identity.adminId(), identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds());
+                    AdminIdentity principal = new AdminIdentity(identity.adminId(), identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds(),identity.roles(),identity.permissions());
                     return UsernamePasswordAuthenticationToken.authenticated(principal, null,
-                            List.of(new SimpleGrantedAuthority("ROLE_"+identity.role())));
+                            identity.roles().stream().map(role->new SimpleGrantedAuthority("ROLE_"+role)).toList());
                 })
                 .onErrorMap(error -> error instanceof BadCredentialsException || error instanceof AuthServiceUnavailableException
                         ? error : error instanceof WebClientRequestException

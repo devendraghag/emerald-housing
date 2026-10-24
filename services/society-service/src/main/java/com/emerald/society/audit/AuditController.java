@@ -7,6 +7,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class AuditController {
  private final AuditTrail audit;
  public AuditController(AuditTrail audit) { this.audit=audit; }
- @GetMapping @PreAuthorize("@societyAccess.manage()")
+ @GetMapping @PreAuthorize("@societyAccess.has('AUDIT_VIEW','SOCIETY')")
  public Object list(@RequestParam(required=false) String entityType,@RequestParam(required=false) UUID entityId,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") long before) { return audit.list(entityType,entityId,limit,before); }
 }

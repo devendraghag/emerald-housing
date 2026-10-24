@@ -117,7 +117,7 @@ public class FlatService {
         return new com.emerald.society.api.CursorPage<>(result.items().stream().map(flat->response(flat,flat.getFloor().getFloorNumber())).toList(),result.nextCursor(),result.hasNext());
     }
     @Transactional
-    @PreAuthorize("@societyAccess.manage()")
+    @PreAuthorize("@societyAccess.has('FLAT_CREATE','SOCIETY')")
     public FlatResponse create(CreateFlatRequest request) {
         var floor = floors.findByFloorNumber(request.floorNumber())
                 .orElseThrow(() -> new FloorEntityNotFoundException(request.floorNumber()));
@@ -131,9 +131,9 @@ public class FlatService {
         var result=response(flat, floor.getFloorNumber());audit("CREATE",flat.getId(),null,result);return result;
     }
     @Transactional
-    @PreAuthorize("@societyAccess.manage()")
+    @PreAuthorize("@societyAccess.has('FLAT_UPDATE','SOCIETY')")
     public FlatResponse update(UUID id, UpdateFlatRequest request) { return update(id,request,null); }
-    @Transactional @PreAuthorize("@societyAccess.manage()")
+    @Transactional @PreAuthorize("@societyAccess.has('FLAT_UPDATE','SOCIETY')")
     public FlatResponse update(UUID id, UpdateFlatRequest request,String ifMatch) {
         var flat = flats.findById(id).orElseThrow(() -> new FlatNotFoundException(id));
         requireSociety(flat);
@@ -150,9 +150,9 @@ public class FlatService {
         var result=response(updated, floor.getFloorNumber());audit("UPDATE",id,before,result);return result;
     }
     @Transactional
-    @PreAuthorize("@societyAccess.manage()")
+    @PreAuthorize("@societyAccess.has('FLAT_DEACTIVATE','SOCIETY')")
     public FlatResponse deactivate(UUID id) { return deactivate(id,null); }
-    @Transactional @PreAuthorize("@societyAccess.manage()")
+    @Transactional @PreAuthorize("@societyAccess.has('FLAT_DEACTIVATE','SOCIETY')")
     public FlatResponse deactivate(UUID id,String ifMatch) {
         var flat = flats.findById(id).orElseThrow(() -> new FlatNotFoundException(id));
         requireSociety(flat);

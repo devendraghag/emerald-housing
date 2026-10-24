@@ -1,0 +1,48 @@
+{
+  "verifiedAt": "2026-10-24T08:53:56.429Z",
+  "context": "docker-desktop",
+  "namespace": "emerald-housing",
+  "nodes": [
+    {
+      "name": "desktop-control-plane",
+      "kubernetesVersion": "v1.36.1",
+      "runtime": "containerd://2.3.1",
+      "ready": true
+    }
+  ],
+  "workloads": [
+    {
+      "name": "society-service",
+      "desired": 1,
+      "ready": 1,
+      "image": "emerald/society-service:option-b-20261024135904"
+    },
+    {
+      "name": "member-service",
+      "desired": 1,
+      "ready": 1,
+      "image": "emerald/member-service:option-b-20261024135904"
+    },
+    {
+      "name": "api-gateway",
+      "desired": 1,
+      "ready": 1,
+      "image": "emerald/api-gateway:option-b-20261024135904"
+    },
+    {
+      "name": "redis",
+      "desired": 1,
+      "ready": 1,
+      "image": "redis:7.4-alpine"
+    },
+    {
+      "name": "redis-cache",
+      "desired": 1,
+      "ready": 1,
+      "image": "redis:7.4-alpine"
+    }
+  ],
+  "gatewayReadiness": "UP",
+  "portalStatus": 200,
+  "baseUrl": "http://localhost:8080"
+}

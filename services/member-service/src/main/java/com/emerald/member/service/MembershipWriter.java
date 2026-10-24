@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MembershipWriter {
+    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.auth.AccessRegistry registry;
     @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.audit.AuditTrail audit;
     @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
     private final FlatMembershipRepository memberships;
@@ -33,6 +34,7 @@ public class MembershipWriter {
     public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) { this.memberships=memberships; this.members=members; }
     @Transactional
     public MembershipResponse persist(UUID memberId, CreateMembershipRequest request) {
+        if(registry!=null)registry.lock();
         var member = members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
         if (member.getStatus() != MemberStatus.ACTIVE) throw new InactiveMemberException();
         String relationship = request.relationshipType().name();
@@ -71,6 +73,7 @@ public class MembershipWriter {
     }
     @Transactional
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
+        if(registry!=null)registry.lock();
         members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
         FlatMembershipEntity membership = memberships.findByIdAndMemberId(membershipId, memberId)
                 .orElseThrow(() -> new MembershipNotFoundException(membershipId));

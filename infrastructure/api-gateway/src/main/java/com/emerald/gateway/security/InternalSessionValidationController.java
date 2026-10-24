@@ -41,7 +41,7 @@ public class InternalSessionValidationController {
             Authentication authentication=context.getAuthentication();
             if(authentication==null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AdminIdentity principal)) return Mono.empty();
             return accounts.current(principal.adminId()).<ResponseEntity<?>>map(identity -> ResponseEntity.ok(
-                new SessionValidationResponse(identity.adminId(),identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds())));
+                new SessionValidationResponse(identity.adminId(),identity.username(),identity.role(),identity.societyCode(),identity.memberId(),identity.flatIds(),identity.roles(),identity.permissions())));
         }).defaultIfEmpty(ResponseEntity.status(401).body((Object)error(exchange,HttpStatus.UNAUTHORIZED,"SESSION_INVALID","The session is not valid")))
           .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.Unauthorized.class,
                 failure -> Mono.just(ResponseEntity.status(401).body(error(exchange,HttpStatus.UNAUTHORIZED,"SESSION_INVALID","Account is unavailable"))))

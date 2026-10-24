@@ -1,0 +1,31 @@
+{
+  "scope": "Gateway-only smoke; see the full verification summary for business-endpoint health",
+  "requests": [
+    {
+      "name": "01 Gateway readiness and initialise run",
+      "status": 200
+    },
+    {
+      "name": "CSRF Admin",
+      "status": 200
+    },
+    {
+      "name": "Reset previous runner session",
+      "status": 200
+    },
+    {
+      "name": "CSRF Admin",
+      "status": 200
+    },
+    {
+      "name": "Anonymous member API denied",
+      "status": 401
+    }
+  ],
+  "assertions": {
+    "total": 6,
+    "pending": 0,
+    "failed": 0
+  },
+  "failures": []
+}

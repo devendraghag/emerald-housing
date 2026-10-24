@@ -47,10 +47,11 @@ class FeaturesPersistenceTest {
  @Autowired com.emerald.member.audit.AuditTrail audit;
  private final UUID actor=UUID.randomUUID();
  private void login(String role,UUID member,Set<UUID> flats) {
-  var identity=new SessionIdentityResponse(actor,"test-admin",role,"EMERALD",member,flats);
+  var grants=new HashSet<>(jdbc.queryForList("select permission_code || ':' || scope from role_permissions where role_code=?",String.class,role));
+  var identity=new SessionIdentityResponse(actor,"test-admin",role,"EMERALD",member,flats,Set.of(role),grants);
   SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(identity,null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));
  }
- @BeforeEach void setup() { login("ADMIN",null,Set.of()); jdbc.update("delete from flat_memberships");jdbc.update("delete from idempotency_records");jdbc.update("delete from admin_users");jdbc.update("delete from members");jdbc.update("delete from audit_events"); }
+ @BeforeEach void setup() { login("ADMIN",null,Set.of());jdbc.update("delete from family_members");jdbc.update("delete from flat_memberships");jdbc.update("delete from idempotency_records");jdbc.update("delete from admin_users");jdbc.update("delete from members");jdbc.update("delete from audit_events");jdbc.update("insert into admin_users(id,username,password_hash,role,enabled,created_at,updated_at) values (?,'test-admin','test-only','ADMIN',true,current_timestamp,current_timestamp)",actor);jdbc.update("insert into account_roles values (?,'ADMIN')",actor); }
  @AfterEach void clear(){SecurityContextHolder.clearContext();}
  private com.emerald.member.dto.MemberResponse create(String suffix) { return service.create(new com.emerald.member.dto.CreateMemberRequest("Asha "+suffix,"9"+String.format("%09d",Math.abs(suffix.hashCode())),null)); }
  private UUID id(com.emerald.member.dto.MemberResponse response) { return response.memberId(); }

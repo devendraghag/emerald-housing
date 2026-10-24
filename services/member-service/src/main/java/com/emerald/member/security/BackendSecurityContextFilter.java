@@ -40,7 +40,7 @@ public class BackendSecurityContextFilter extends OncePerRequestFilter {
             validator.validate(request).ifPresent(identity -> {
                 SecurityContext context = contexts.createEmptyContext();
                 context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(identity,
-                        null, List.of(new SimpleGrantedAuthority("ROLE_" + identity.role()))));
+                        null, identity.roles().stream().map(role->new SimpleGrantedAuthority("ROLE_"+role)).toList()));
                 contexts.setContext(context);
             });
             chain.doFilter(request, response);
