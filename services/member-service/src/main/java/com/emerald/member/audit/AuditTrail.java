@@ -8,12 +8,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.json.JsonMapper;
 @Service
 public class AuditTrail {
  private final JdbcTemplate jdbc; private final JsonMapper json;
  public AuditTrail(JdbcTemplate jdbc,JsonMapper json) { this.jdbc=jdbc; this.json=json; }
+ @Transactional(propagation=Propagation.MANDATORY)
  public void record(String action,String type,UUID id,Object before,Object after) {
   if(!TransactionSynchronizationManager.isActualTransactionActive()) throw new IllegalStateException("Audit writes require the business transaction");
   var auth=SecurityContextHolder.getContext().getAuthentication();

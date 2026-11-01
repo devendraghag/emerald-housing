@@ -1,6 +1,8 @@
 spring:
   application:
     name: member-service
+  transaction:
+    default-timeout: ${TRANSACTION_DEFAULT_TIMEOUT:30s}
   data:
     redis:
       host: ${REDIS_HOST:localhost}

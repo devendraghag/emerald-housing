@@ -1,6 +1,8 @@
 spring:
   application:
     name: society-service
+  transaction:
+    default-timeout: ${TRANSACTION_DEFAULT_TIMEOUT:30s}
   jpa:
     hibernate:
       ddl-auto: validate

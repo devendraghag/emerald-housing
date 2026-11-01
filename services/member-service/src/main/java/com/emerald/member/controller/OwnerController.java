@@ -9,6 +9,8 @@ import java.time.LocalDate;
 import java.util.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController @RequestMapping("/api/v1/owners")
@@ -16,7 +18,7 @@ public class OwnerController {
  private final MemberService members;private final MembershipService memberships;private final AccountController accounts;private final AccessRegistry registry;
  public OwnerController(MemberService members,MembershipService memberships,AccountController accounts,AccessRegistry registry){this.members=members;this.memberships=memberships;this.accounts=accounts;this.registry=registry;}
  @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
- @GetMapping @Transactional
+ @GetMapping @Transactional(readOnly=true,propagation=Propagation.SUPPORTS)
  public Object list(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="100") int size,
         @RequestParam(required=false) UUID flatId,@RequestParam(required=false) UUID memberId,
         @RequestParam(defaultValue="ALL") String status,@RequestParam(required=false) String search){
@@ -37,7 +39,7 @@ public class OwnerController {
   return registry.database().queryForList(sql,args.toArray());
  }
  public record Register(@NotNull @Valid CreateMemberRequest person,@NotNull UUID flatId,@NotNull @PastOrPresent LocalDate startDate,@NotBlank String username,@NotBlank String password){}
- @PostMapping @ResponseStatus(org.springframework.http.HttpStatus.CREATED) @Transactional
+ @PostMapping @ResponseStatus(org.springframework.http.HttpStatus.CREATED) @Transactional(timeout=15,rollbackFor=Exception.class)
  @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY') and @memberAccess.has('MEMBER_CREATE','SOCIETY') and @memberAccess.has('USER_CREATE','SOCIETY') and @memberAccess.has('USER_ASSIGN_ROLE','SOCIETY')")
  public Object register(@Valid @RequestBody Register r){
   registry.lock();var person=members.create(r.person());var ownership=memberships.assign(person.memberId(),new CreateMembershipRequest(r.flatId(),RelationshipType.OWNER,r.startDate()));
@@ -45,7 +47,7 @@ public class OwnerController {
   return Map.of("person",person,"ownership",ownership,"account",account);
  }
  public record Transfer(@NotNull UUID previousMembershipId,@NotNull UUID previousMemberId,@NotNull UUID newOwnerMemberId,@NotNull UUID flatId,@NotNull @PastOrPresent LocalDate date){}
- @PostMapping("/transfer") @Transactional
+ @PostMapping("/transfer") @Transactional(timeout=15,isolation=Isolation.SERIALIZABLE,rollbackFor=Exception.class)
  @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY') and @memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")
  public Object transfer(@Valid @RequestBody Transfer r){
   registry.lock();var rows=registry.database().queryForList("SELECT id,start_date FROM flat_memberships WHERE id=? AND member_id=? AND flat_id=? AND relationship_type='OWNER' AND end_date IS NULL",r.previousMembershipId(),r.previousMemberId(),r.flatId());
