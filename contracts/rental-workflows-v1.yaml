@@ -22,7 +22,7 @@ paths:
       description: Requires RENT_MANAGE in SOCIETY or OWN_FLATS scope.
       parameters: [{ $ref: '#/components/parameters/csrf' }]
       requestBody: { $ref: '#/components/requestBodies/operation' }
-      responses: { '201': { description: Created with DUE status }, '403': { description: Permission or flat scope denied } }
+      responses: { '201': { description: Created with DUE status }, '403': { description: Permission or flat scope denied }, '409': { description: A rent period already exists for this flat } }
   /maintenance:
     get:
       summary: List maintenance requests
@@ -52,18 +52,19 @@ paths:
       responses: { '200': { description: Up to 200 newest records } }
     post:
       summary: Publish an availability slot or book a viewing
-      description: VIEWING_MANAGE creates AVAILABLE slots; VIEWING_BOOK creates a BOOKED record.
+      description: Requires VIEWING_MANAGE. Creates an AVAILABLE slot; tenants book an existing slot through the booking endpoint.
       parameters: [{ $ref: '#/components/parameters/csrf' }]
       requestBody: { $ref: '#/components/requestBodies/operation' }
-      responses: { '201': { description: Slot or booking created } }
+      responses: { '201': { description: Availability slot created }, '403': { description: Permission denied } }
   /{resource}/{id}:
     patch:
-      summary: Update workflow status or details
+      summary: Update a status, payment reference, or maintenance assignment
       description: >-
         Requires the resource's manage permission and assigned flat scope. A tenant
         with LEASE_VIEW may respond only to an offered renewal or initiated move-out.
-        Supply the current version to prevent lost updates. Invalid transitions return 409;
-        stale versions return 412.
+        Supply the current version to prevent lost updates. Managers can add a rent payment
+        reference or maintenance assignee. Only tenants can respond to an offered renewal or
+        move-out request. Invalid transitions return 409; stale versions return 412.
       parameters:
         - in: path
           name: resource
@@ -80,9 +81,12 @@ paths:
           application/json:
             schema:
               type: object
+              required: [version]
               properties:
                 status: { type: string }
                 version: { type: integer, minimum: 0 }
+                reference: { type: string, description: Payment reference, only for rent records }
+                assignedTo: { type: string, description: Staff person or team, only for maintenance records }
       responses: { '200': { description: Updated record }, '403': { description: Permission denied }, '409': { description: Invalid transition }, '412': { description: Stale version } }
   /viewings/{id}/book:
     post:
@@ -130,5 +134,7 @@ components:
               priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
               leaseEndDate: { type: string, format: date }
               action: { type: string, enum: [RENEWAL, MOVE_OUT] }
+              rentAmount: { type: number, exclusiveMinimum: 0 }
+              securityDeposit: { type: number, minimum: 0 }
               notes: { type: string }
-              slot: { type: string, format: date-time }
+              slot: { type: string, format: date-time, description: ISO 8601 timestamp with timezone }

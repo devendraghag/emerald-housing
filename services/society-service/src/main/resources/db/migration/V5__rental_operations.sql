@@ -12,3 +12,6 @@ CREATE TABLE rental_operations (
 );
 CREATE INDEX ix_rental_operations_flat_type ON rental_operations(flat_id, operation_type, created_at DESC);
 CREATE INDEX ix_rental_operations_member ON rental_operations(member_id, operation_type, created_at DESC);
+CREATE UNIQUE INDEX uq_rental_payment_flat_period ON rental_operations(flat_id, (details->>'period')) WHERE operation_type='PAYMENT';
+CREATE UNIQUE INDEX uq_rental_viewing_flat_slot ON rental_operations(flat_id, (details->>'slot')) WHERE operation_type='VIEWING' AND status IN ('AVAILABLE','BOOKED');
+CREATE UNIQUE INDEX uq_rental_active_lease_flat_end ON rental_operations(flat_id, (details->>'leaseEndDate')) WHERE operation_type='LEASE' AND status<>'COMPLETED';

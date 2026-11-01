@@ -6,6 +6,7 @@ INSERT INTO access_permissions(code, description) VALUES
 INSERT INTO access_roles(code,description,system_role) VALUES ('PROPERTY_MANAGER','Property manager',TRUE);
 INSERT INTO role_permissions SELECT r.code,p.code,'SOCIETY' FROM access_roles r CROSS JOIN access_permissions p
  WHERE r.code IN ('ADMIN','SOCIETY_ADMIN','PROPERTY_MANAGER') AND p.code IN ('RENT_VIEW','RENT_MANAGE','MAINTENANCE_VIEW','MAINTENANCE_CREATE','MAINTENANCE_MANAGE','LEASE_VIEW','LEASE_MANAGE','VIEWING_VIEW','VIEWING_BOOK','VIEWING_MANAGE');
+INSERT INTO role_permissions VALUES ('PROPERTY_MANAGER','AUDIT_VIEW','SOCIETY');
 INSERT INTO role_permissions SELECT r.code,p.code,'OWN_FLATS' FROM access_roles r CROSS JOIN access_permissions p
  WHERE r.code IN ('FLAT_OWNER') AND p.code IN ('RENT_VIEW','RENT_MANAGE','MAINTENANCE_VIEW','MAINTENANCE_MANAGE','LEASE_VIEW','LEASE_MANAGE','VIEWING_VIEW','VIEWING_MANAGE');
 INSERT INTO role_permissions SELECT r.code,p.code,'OWN_FLATS' FROM access_roles r CROSS JOIN access_permissions p
