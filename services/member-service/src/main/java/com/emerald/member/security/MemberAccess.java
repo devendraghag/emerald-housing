@@ -11,6 +11,7 @@ public class MemberAccess {
  public boolean manage() { return has("MEMBER_CREATE","SOCIETY"); }
  public boolean staff() { return has("MEMBER_VIEW","SOCIETY"); }
  public boolean member(UUID id) { var a=identity();return read() && (staff() || id.equals(a.memberId())); }
+ public boolean update(UUID id) { var a=identity();return a!=null && (has("MEMBER_UPDATE","SOCIETY") || has("MEMBER_UPDATE","SELF") && id.equals(a.memberId())); }
  public boolean flat(UUID id) { var a=identity();return read() && (staff() || a.flatIds().contains(id)); }
  public boolean resident() { return read() && !staff(); }
  public UUID ownMember() { var a=identity();return a==null?null:a.memberId(); }

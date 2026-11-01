@@ -3,14 +3,15 @@ const {JSDOM}=require(require('node:path').join(require('node:os').tmpdir(),'eme
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),base=path.join(root,'infrastructure/api-gateway/src/main/resources/static');
 const html=fs.readFileSync(path.join(base,'portal.html'),'utf8'),source=fs.readFileSync(path.join(base,'portal.js'),'utf8');
-const codes=[...new Set([...fs.readFileSync(path.join(root,'services/member-service/src/main/resources/db/migration/V6__dynamic_access_and_families.sql'),'utf8').matchAll(/\('([A-Z_]+)','[^']+'\)/g)].map(m=>m[1]))];
+const codes=[...new Set([...fs.readFileSync(path.join(root,'services/member-service/src/main/resources/db/migration/V6__dynamic_access_and_families.sql'),'utf8').matchAll(/\('([A-Z_]+)','[^']+'\)/g)].map(m=>m[1]).concat(['RENT_VIEW','RENT_MANAGE','MAINTENANCE_VIEW','MAINTENANCE_CREATE','MAINTENANCE_MANAGE','LEASE_VIEW','LEASE_MANAGE','VIEWING_VIEW','VIEWING_BOOK','VIEWING_MANAGE']))];
 const ids={admin:'11111111-1111-4111-8111-111111111111',ownerAccount:'66666666-6666-4666-8666-666666666666',person:'22222222-2222-4222-8222-222222222222',flat:'33333333-3333-4333-8333-333333333333',ownership:'44444444-4444-4444-8444-444444444444',family:'55555555-5555-4555-8555-555555555555'};
 const flush=async()=>{for(let i=0;i<10;i++)await new Promise(setImmediate);};
 async function boot(role='ADMIN'){
  const dom=new JSDOM(html,{url:'http://portal.test/portal.html',runScripts:'outside-only'}),w=dom.window,writes=[];
- w.HTMLElement.prototype.scrollIntoView=function(){};w.confirm=()=>true;
- const ownerGrants=['MEMBER_VIEW:SELF','FLAT_VIEW:OWN_FLATS','SOCIETY_VIEW:SOCIETY',...['VIEW','ADD','UPDATE','DEACTIVATE'].map(p=>'FAMILY_'+p+':OWN_FLATS')];
- const account={accountId:role==='ADMIN'?ids.admin:ids.ownerAccount,username:role==='ADMIN'?'administrator':'owner',roles:[role],role,societyCode:'EMERALD',memberId:role==='ADMIN'?null:ids.person,enabled:true,version:0};
+ w.HTMLElement.prototype.scrollIntoView=function(){};w.confirm=()=>true;w.prompt=(_message,defaultValue)=>defaultValue||'Facilities team';
+ const ownerGrants=['MEMBER_VIEW:SELF','FLAT_VIEW:OWN_FLATS','SOCIETY_VIEW:SOCIETY','RENT_VIEW:OWN_FLATS','RENT_MANAGE:OWN_FLATS','MAINTENANCE_VIEW:OWN_FLATS','MAINTENANCE_MANAGE:OWN_FLATS','LEASE_VIEW:OWN_FLATS','LEASE_MANAGE:OWN_FLATS','VIEWING_VIEW:OWN_FLATS','VIEWING_MANAGE:OWN_FLATS',...['VIEW','ADD','UPDATE','DEACTIVATE'].map(p=>'FAMILY_'+p+':OWN_FLATS')];
+ const tenantGrants=['MEMBER_VIEW:SELF','FLAT_VIEW:OWN_FLATS','SOCIETY_VIEW:SOCIETY','RENT_VIEW:OWN_FLATS','MAINTENANCE_VIEW:OWN_FLATS','MAINTENANCE_CREATE:OWN_FLATS','LEASE_VIEW:OWN_FLATS','VIEWING_VIEW:OWN_FLATS','VIEWING_BOOK:OWN_FLATS'];
+  const account={accountId:role==='ADMIN'?ids.admin:ids.ownerAccount,username:role==='ADMIN'?'administrator':role==='TENANT'?'tenant':'owner',roles:[role],role,societyCode:'EMERALD',memberId:role==='ADMIN'?null:ids.person,enabled:true,version:0};
  const person={memberId:ids.person,fullName:'Asha Shah',mobileNumber:'9876543210',email:null,status:'ACTIVE',version:0};
  const flats=[{flatId:ids.flat,flatNumber:'A-101',floorNumber:1,status:'ACTIVE'}];
  const owners=[{id:ids.ownership,member_id:ids.person,flat_id:ids.flat,full_name:'Asha Shah',start_date:'2026-01-01',end_date:null}];
@@ -21,11 +22,15 @@ async function boot(role='ADMIN'){
   if(method!=='GET'){writes.push({path:u.pathname,method,body,headers:options.headers});if(u.pathname==='/api/v1/access/roles')roles.push({...body,system_role:false});return {ok:true,json:async()=>body||{}};}
   const fixture={
    '/api/v1/auth/csrf':{token:'fixture-csrf',headerName:'X-XSRF-TOKEN'},
-   '/api/v1/accounts/me':{account,permissions:role==='ADMIN'?codes.map(p=>p+':SOCIETY'):ownerGrants,flatIds:[ids.flat]},
+   '/api/v1/accounts/me':{account,permissions:role==='ADMIN'?codes.map(p=>p+':SOCIETY'):role==='TENANT'?tenantGrants:ownerGrants,flatIds:[ids.flat]},
    '/api/v1/accounts':[account,{...account,accountId:ids.ownerAccount,username:'owner',roles:['FLAT_OWNER'],role:'FLAT_OWNER',memberId:ids.person}],
    '/api/v1/access/roles':roles,'/api/v1/access/permissions':codes.map(code=>({code,description:code})),
    '/api/v1/owners':owners,'/api/v1/families':families,'/api/v1/flats/page':{content:flats},'/api/v1/members/page':{content:[person]},
-   ['/api/v1/members/'+ids.person]:person,'/api/v1/members/audit':[]
+   '/api/v1/rental/payments':[{id:'payment-1',flatId:ids.flat,memberId:'',status:'OVERDUE',details:{period:'2026-11',amount:1250,dueDate:'2026-11-01'},version:0}],
+   '/api/v1/rental/maintenance':[{id:'maintenance-1',flatId:ids.flat,memberId:ids.person,status:'OPEN',details:{summary:'Leaking tap',description:'Kitchen tap',priority:'HIGH'},version:0}],
+   '/api/v1/rental/leases':[{id:'lease-1',flatId:ids.flat,memberId:'',status:'RENEWAL_OFFERED',details:{action:'RENEWAL',leaseEndDate:'2026-12-31'},version:0}],
+   '/api/v1/rental/viewings':[{id:'viewing-1',flatId:ids.flat,memberId:'',status:'AVAILABLE',details:{slot:'2026-11-15T10:00:00Z'},version:0}],
+   ['/api/v1/members/'+ids.person]:person,'/api/v1/members/audit':[],'/api/v1/society/audit':[]
   };
   assert.ok(u.pathname in fixture,'Unmocked request: '+u.pathname);return {ok:true,json:async()=>fixture[u.pathname]};
  };
@@ -54,4 +59,14 @@ async function ownerScreensAndForms(){
   await t.click('Sign out');assert.equal(t.doc.querySelector('#workspace').hidden,true);assert.equal(t.doc.querySelector('#login').hidden,false);
  }finally{t.dom.window.close();}
 }
-(async()=>{await adminScreensAndForms();await ownerScreensAndForms();process.stdout.write('Portal DOM tests passed: admin screens, scoped owner screens, role/user/owner/family submissions, CSRF, and sign-out.\n');})().catch(e=>{console.error(e);process.exitCode=1;});
+async function tenantRentalScreens(){
+ const t=await boot('TENANT');try{
+  const tabs=[...t.doc.querySelectorAll('nav button')].map(b=>b.textContent);assert.ok(tabs.includes('Rent'));assert.ok(tabs.includes('Maintenance'));assert.ok(tabs.includes('Lease & move-out'));assert.ok(tabs.includes('Availability & viewings'));
+  await t.click('Maintenance');let f=t.section('Create request').querySelector('form');f.elements.flatId.value=ids.flat;f.elements.summary.value='Broken heater';f.elements.description.value='The heater does not start';await t.submit(f);
+  assert.equal(t.writes.at(-1).path,'/api/v1/rental/maintenance');assert.equal(t.writes.at(-1).body.flatId,ids.flat);assert.equal(t.writes.at(-1).body.summary,'Broken heater');
+  assert.equal([...t.section('Maintenance requests').querySelectorAll('button')].some(b=>b.textContent==='Update status'),false);
+  await t.click('Availability & viewings');await t.click('Book this slot',t.section('Availability and viewings'));assert.equal(t.writes.at(-1).path,'/api/v1/rental/viewings/viewing-1/book');assert.equal(t.writes.at(-1).method,'POST');
+  await t.click('Lease & move-out');await t.click('Respond',t.section('Lease renewals and move-outs'));assert.equal(t.writes.at(-1).path,'/api/v1/rental/leases/lease-1');assert.equal(t.writes.at(-1).body.status,'RENEWAL_ACCEPTED');
+ }finally{t.dom.window.close();}
+}
+(async()=>{await adminScreensAndForms();await ownerScreensAndForms();await tenantRentalScreens();process.stdout.write('Portal DOM tests passed: admin and owner screens, tenant rental requests/bookings/lease responses, account and family submissions, CSRF, and sign-out.\n');})().catch(e=>{console.error(e);process.exitCode=1;});

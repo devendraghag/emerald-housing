@@ -188,9 +188,9 @@ public class MemberService {
         return new com.emerald.member.api.CursorPage<>(result.items().stream().map(MemberService::toResponse).toList(),result.nextCursor(),result.hasNext());
     }
     @Transactional
-    @PreAuthorize("@memberAccess.has('MEMBER_UPDATE','SOCIETY')")
+    @PreAuthorize("@memberAccess.update(#p0)")
     public MemberResponse update(UUID id, UpdateMemberRequest request) { return update(id,request,null); }
-    @Transactional @PreAuthorize("@memberAccess.has('MEMBER_UPDATE','SOCIETY')")
+    @Transactional @PreAuthorize("@memberAccess.update(#p0)")
     public MemberResponse update(UUID id, UpdateMemberRequest request,String ifMatch) {
         MemberEntity member = find(id);
         if(versions!=null) versions.check(ifMatch,"member",id,member.getVersion());
