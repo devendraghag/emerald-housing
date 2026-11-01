@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s), state={me:null,csrf:null,tab:'',userPage:0,familyPage:0,ownerPage:0,ownerFilters:{},memberPage:0,memberSearch:'',flatPage:0,flatFilters:{},auditBefore:0};
+const $=s=>document.querySelector(s), state={me:null,csrf:null,tab:'',userPage:0,userFilters:{},familyPage:0,ownerPage:0,ownerFilters:{},memberPage:0,memberSearch:'',flatPage:0,flatFilters:{},auditBefore:0};
 function node(tag,text=null,props={}){const e=document.createElement(tag);if(text!==null)e.textContent=text;Object.assign(e,props);return e;}
 function notice(message,error=false){$('#notice').textContent=message;$('#notice').dataset.error=String(error);}
 async function api(path,method='GET',body,extraHeaders={}){
@@ -85,7 +85,10 @@ async function flats(){
 }
 async function profile(){if(!(can('MEMBER_VIEW')||can('MEMBER_VIEW','SELF')))throw Error('Your role does not grant profile access.');const person=await api('/api/v1/members/'+state.me.account.memberId),c=card('My registered details');table(c,[['Name',r=>r.fullName],['Mobile',r=>r.mobileNumber],['Email',r=>r.email],['Status',r=>r.status]],[person]);if(can('MEMBER_UPDATE')||can('MEMBER_UPDATE','SELF'))memberEditForm(card('Edit my profile'),person,async()=>{await show('profile');notice('Profile updated.');});else c.append(node('p','Contact your society administrator to update your registered details.'));if(can('FLAT_VIEW')||can('FLAT_VIEW','OWN_FLATS')){const flats=await api('/api/v1/flats/page?size=100');table(card('My permitted flats'),[['Flat',r=>r.flatNumber],['Floor',r=>r.floorNumber],['Status',r=>r.status]],flats.content);}}
 async function users(){
- const c=card('Users'),rows=await api(`/api/v1/accounts?page=${state.userPage}&size=20`);let available=[];if(can('ROLE_VIEW'))available=await api('/api/v1/access/roles');
+ const filters=state.userFilters||{},params=new URLSearchParams({page:String(state.userPage),size:'20'});if(filters.search)params.set('search',filters.search);if(filters.role)params.set('role',filters.role);if((filters.enabled??'')!=='')params.set('enabled',filters.enabled);
+ const rows=await api('/api/v1/accounts?'+params.toString()),c=card('Users');let available=[];if(can('ROLE_VIEW'))available=await api('/api/v1/access/roles');
+ const filter=form(c,[['search','Search username','search',filters.search||'',false]],async(v)=>{state.userFilters={...state.userFilters,search:v.search.trim(),role:roleFilter.value,enabled:enabledFilter.value};state.userPage=0;await show('users');},'Filter accounts');
+ const roleFilter=select(filter,'role','Role',[['','All roles'],...available.map(r=>[r.code,r.code])],false,[filters.role||'']);const enabledFilter=select(filter,'enabled','Account status',[['','All statuses'],['true','Enabled'],['false','Disabled']],false,[filters.enabled??'']);
  const editor=card('Account details');let editing=null;
  const f=form(editor,[['username','Username'],['password','Initial password (14–72 UTF-8 bytes)','password'],['memberId','Linked person ID','text','',false]],async(v)=>{
   const assigned=[...roleSelect.selectedOptions].map(o=>o.value);if(!assigned.length)throw Error('Select at least one role.');
@@ -96,10 +99,14 @@ async function users(){
  const roleSelect=select(f,'roles','Roles (Ctrl/Cmd to select multiple)',available.filter(r=>r.enabled).map(r=>[r.code,r.code]),true);
  const enabled=select(f,'enabled','Account status',[['true','Enabled'],['false','Disabled']]);
  table(c,[['Username',r=>r.username],['Roles',r=>r.roles.join(', ')],['Status',r=>r.enabled?'Enabled':'Disabled'],['Person ID',r=>r.memberId]],rows,(r,td)=>{
-  if(can('USER_UPDATE')&&can('USER_ASSIGN_ROLE')&&r.accountId!==state.me.account.accountId)td.append(button('Edit',()=>{editing=r;f.hidden=false;f.elements.username.value=r.username;f.elements.username.disabled=true;f.elements.password.required=false;f.elements.password.closest('label').hidden=true;selectValue(f,'memberId',r.memberId);for(const o of roleSelect.options)o.selected=r.roles.includes(o.value);enabled.value=String(r.enabled);editor.scrollIntoView({behavior:'smooth'});}));
+  if(can('USER_UPDATE')&&can('USER_ASSIGN_ROLE')&&can('ROLE_VIEW')&&r.accountId!==state.me.account.accountId){td.append(button('Edit',()=>{editing=r;f.hidden=false;f.elements.username.value=r.username;f.elements.username.disabled=true;f.elements.password.required=false;f.elements.password.closest('label').hidden=true;selectValue(f,'memberId',r.memberId);for(const o of roleSelect.options)o.selected=r.roles.includes(o.value);enabled.value=String(r.enabled);editor.scrollIntoView({behavior:'smooth'});}));
+   td.append(button(r.enabled?'Deactivate':'Reactivate',async()=>{if(r.enabled&&!confirm(`Deactivate ${r.username}? They will lose portal access.`))return;await api(`/api/v1/accounts/${r.accountId}/permissions`,'PUT',{roles:r.roles,societyCode:r.societyCode,memberId:r.memberId,enabled:!r.enabled,version:r.version});await show('users');notice(r.enabled?'Account deactivated.':'Account reactivated.');}));
+  }
+  if(can('USER_RESET_PASSWORD'))td.append(button('Reset password',()=>{const reset=card(`Reset password for ${r.username}`),p=form(reset,[['password','New password','password'],['confirmPassword','Confirm password','password']],async(v)=>{if(v.password!==v.confirmPassword)throw Error('Passwords do not match.');await api(`/api/v1/accounts/${r.accountId}/password`,'PUT',{password:v.password,version:r.version});await show('users');notice('Password reset.');},'Reset password');p.elements.password.minLength=14;p.elements.password.maxLength=72;p.elements.confirmPassword.minLength=14;p.elements.confirmPassword.maxLength=72;reset.scrollIntoView({behavior:'smooth'});}));
  });pager(c,state.userPage,rows.length===20,p=>{state.userPage=p;return show('users');});
- if(!(can('USER_CREATE')&&can('USER_ASSIGN_ROLE'))){f.hidden=true;editor.append(node('p','Your permissions allow viewing accounts.'));}
- if(can('USER_CREATE')&&can('USER_ASSIGN_ROLE'))editor.append(button('New account',()=>show('users')));
+ if(!(can('USER_CREATE')&&can('USER_ASSIGN_ROLE')&&can('ROLE_VIEW'))){f.hidden=true;editor.append(node('p','Your permissions allow viewing accounts.'))}
+ if(can('USER_CREATE')&&can('USER_ASSIGN_ROLE')&&can('ROLE_VIEW'))editor.append(button('New account',()=>show('users')));
+ f.elements.username.maxLength=120;f.elements.username.pattern='[A-Za-z0-9][A-Za-z0-9._@+-]{0,119}';f.elements.password.minLength=14;f.elements.password.maxLength=72;
  if(can('MEMBER_VIEW'))lookup(f,'memberId','Linked person','/api/v1/members/page',personLabel);
  if(can('MEMBER_CREATE'))form(card('Register a person for a family or user account'),[['fullName','Full name'],['mobileNumber','Mobile number'],['email','Email','email','',false]],async(v)=>{await api('/api/v1/members','POST',{...v,email:v.email||null});await show('users');notice('Person registered. Select them when linking a family record or user account.');});
 }
@@ -140,11 +147,13 @@ async function family(){
   if(editing)await api(`/api/v1/families/${editing.id}`,'PUT',{version:editing.version,details});else await api('/api/v1/families','POST',{ownerMembershipId:owner.value,details});
   await show('family');notice('Family details saved.');
  });const owner=select(f,'ownerMembershipId','Owner / flat',ownerships.filter(o=>!o.end_date).map(o=>[o.id,`${o.full_name} · ${names.get(o.flat_id)||o.flat_id}`]));
+ f.elements.fullName.maxLength=160;f.elements.relationship.maxLength=40;f.elements.mobileNumber.maxLength=20;f.elements.mobileNumber.pattern='^\\+?[0-9][0-9 ()-]{5,19}$';f.elements.email.maxLength=254;
  f.elements.linkedMemberId.closest('label').hidden=!can('USER_UPDATE');
  if(can('USER_UPDATE')&&can('MEMBER_VIEW'))lookup(f,'linkedMemberId','Linked person (optional)','/api/v1/members/page',personLabel);
- table(c,[['Name',r=>r.full_name],['Relationship',r=>r.relationship],['Mobile',r=>r.mobile_number],['Email',r=>r.email],['Flat',r=>names.get(r.flat_id)||r.flat_id],['Status',r=>r.active?'Active':'Inactive']],rows,(r,td)=>{
+ table(c,[['Name',r=>r.full_name],['Relationship',r=>r.relationship],['Mobile',r=>r.mobile_number],['Email',r=>r.email],['Flat',r=>names.get(r.flat_id)||r.flat_id],['Status',r=>r.active?'Active':'Removed']],rows,(r,td)=>{
   if(r.active&&(can('FAMILY_UPDATE')||can('FAMILY_UPDATE','OWN_FLATS')))td.append(button('Edit',()=>{editing=r;for(const [name,key] of [['fullName','full_name'],['relationship','relationship'],['mobileNumber','mobile_number'],['email','email'],['linkedMemberId','linked_member_id']])selectValue(f,name,r[key]);owner.value=r.owner_membership_id;owner.disabled=true;editor.scrollIntoView({behavior:'smooth'});}));
-  if(r.active&&(can('FAMILY_DEACTIVATE')||can('FAMILY_DEACTIVATE','OWN_FLATS')))td.append(button('Deactivate',async()=>{if(!confirm('Deactivate this family record?'))return;await api(`/api/v1/families/${r.id}/deactivate`,'PATCH',{version:r.version});await show('family');notice('Family record deactivated.');}));
+  if(r.active&&(can('FAMILY_DEACTIVATE')||can('FAMILY_DEACTIVATE','OWN_FLATS')))td.append(button('Remove',async()=>{if(!confirm('Remove this family record? It will remain in history.'))return;await api(`/api/v1/families/${r.id}/deactivate`,'PATCH',{version:r.version});await show('family');notice('Family record removed and retained in history.');}));
+  if(!r.active&&(can('FAMILY_REACTIVATE')||can('FAMILY_REACTIVATE','OWN_FLATS')))td.append(button('Restore',async()=>{await api(`/api/v1/families/${r.id}/reactivate`,'PATCH',{version:r.version});await show('family');notice('Family record restored.');}));
  });pager(c,state.familyPage,rows.length===20,p=>{state.familyPage=p;return show('family');});
  editor.append(node('p','Family records do not create login accounts. Owners can manage records only while their registered ownership is active.'));editor.append(button('New family member',()=>show('family')));
  if(!(can('FAMILY_ADD')||can('FAMILY_ADD','OWN_FLATS')||can('FAMILY_UPDATE')||can('FAMILY_UPDATE','OWN_FLATS')))editor.hidden=true;

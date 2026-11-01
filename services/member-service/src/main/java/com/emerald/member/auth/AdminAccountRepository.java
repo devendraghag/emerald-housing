@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface AdminAccountRepository extends JpaRepository<AdminAccountEntity, UUID> {
     Optional<AdminAccountEntity> findByUsername(String username);
+    Optional<AdminAccountEntity> findByUsernameIgnoreCase(String username);
+    boolean existsByUsernameIgnoreCase(String username);
 
     @Modifying
     @Query(value = """

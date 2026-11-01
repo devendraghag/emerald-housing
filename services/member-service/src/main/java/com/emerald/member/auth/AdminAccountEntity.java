@@ -39,6 +39,7 @@ public class AdminAccountEntity {
         this.enabled=true;this.createdAt=Instant.now();this.updatedAt=this.createdAt;
     }
     public void permissions(String role,String societyCode,UUID memberId,boolean enabled) { this.role=role;this.societyCode=societyCode;this.memberId=memberId;this.enabled=enabled;this.updatedAt=Instant.now(); }
+    public void resetPassword(String passwordHash) { this.passwordHash=passwordHash;this.updatedAt=Instant.now(); }
     public long getVersion() { return version; }
     public String getSocietyCode() { return societyCode; }
     public UUID getMemberId() { return memberId; }

@@ -11,10 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 @RestController @RequestMapping("/api/v1/access")
 public class AccessController {
- private final AccessRegistry registry;private final AuditTrail audit;
- public AccessController(AccessRegistry registry,AuditTrail audit){this.registry=registry;this.audit=audit;}
+ private final AccessRegistry registry;private final AuditTrail audit;private final com.emerald.member.security.MemberAccess access;
+ public AccessController(AccessRegistry registry,AuditTrail audit,com.emerald.member.security.MemberAccess access){this.registry=registry;this.audit=audit;this.access=access;}
  public record Grant(@NotBlank String permission,@Pattern(regexp="SOCIETY|OWN_FLATS|SELF") @NotNull String scope){}
- public record Role(@Pattern(regexp="[A-Z][A-Z0-9_]{1,31}") @NotNull String code,@NotBlank @Size(max=200) String description,boolean enabled,@NotNull Long version,@NotNull @Size(max=100) List<@Valid Grant> grants){}
+ public record Role(@Pattern(regexp="[A-Z][A-Z0-9_]{1,31}") @NotNull String code,@NotBlank @Size(max=200) String description,boolean enabled,@NotNull Long version,@NotNull @Size(min=1,max=100) List<@Valid Grant> grants){}
  public record Permission(@Pattern(regexp="[A-Z][A-Z0-9_]{1,63}") @NotNull String code,@NotBlank @Size(max=200) String description){}
  @GetMapping("/roles") @PreAuthorize("@memberAccess.has('ROLE_VIEW','SOCIETY')") @Transactional(readOnly=true)
  public Object roles(){return registry.database().queryForList("SELECT * FROM access_roles ORDER BY code").stream().map(row->{row.put("grants",registry.database().queryForList("SELECT permission_code AS permission,scope FROM role_permissions WHERE role_code=? ORDER BY permission_code,scope",row.get("code")));return row;}).toList();}
@@ -44,8 +44,20 @@ public class AccessController {
   else{
    if(rows.isEmpty())throw new ApiFailure(404,"ROLE_NOT_FOUND","Role not found");
    if(Boolean.TRUE.equals(rows.getFirst().get("system_role")))throw new ApiFailure(409,"PROTECTED_ROLE","Built-in administrator roles are protected; create a custom role");
+   if(!r.enabled()){
+    Integer stranded=db.queryForObject("SELECT count(*) FROM admin_users a JOIN account_roles ar ON ar.account_id=a.id WHERE a.enabled AND ar.role_code=? AND NOT EXISTS(SELECT 1 FROM account_roles other JOIN access_roles active_role ON active_role.code=other.role_code WHERE other.account_id=a.id AND other.role_code<>? AND active_role.enabled)",Integer.class,r.code(),r.code());
+    if(stranded!=null&&stranded>0)throw new ApiFailure(409,"ROLE_IN_USE","Cannot disable this role while accounts depend on it as their only enabled role");
+   }
    if(db.update("UPDATE access_roles SET description=?,enabled=?,version=version+1 WHERE code=? AND version=?",r.description(),r.enabled(),r.code(),r.version())!=1)throw new ApiFailure(409,"VERSION_CONFLICT","Role changed; reload it");
   }
+  for(var g:r.grants()){
+   if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM access_permissions WHERE code=?)",Boolean.class,g.permission())))throw new ApiFailure(400,"UNKNOWN_PERMISSION","Unknown permission");
+   boolean scoped=g.permission().startsWith("FAMILY_")||g.permission().equals("MEMBER_VIEW")||g.permission().equals("MEMBER_UPDATE")||g.permission().equals("FLAT_VIEW");
+   if(!"SOCIETY".equals(g.scope())&&!scoped)throw new ApiFailure(400,"UNSUPPORTED_SCOPE","This permission requires SOCIETY scope");
+   if(g.permission().equals("MEMBER_VIEW")&&"OWN_FLATS".equals(g.scope())||g.permission().equals("MEMBER_UPDATE")&&"OWN_FLATS".equals(g.scope())||g.permission().equals("FLAT_VIEW")&&"SELF".equals(g.scope()))throw new ApiFailure(400,"UNSUPPORTED_SCOPE","Unsupported directory scope");
+   if(g.permission().startsWith("FAMILY_")&&!g.permission().equals("FAMILY_VIEW")&&"SELF".equals(g.scope()))throw new ApiFailure(400,"UNSUPPORTED_SCOPE","Family mutations require SOCIETY or OWN_FLATS scope");
+  }
+  registry.ensureDelegable(r.grants().stream().map(g->g.permission()+":"+g.scope()).collect(java.util.stream.Collectors.toSet()),access.identity().adminId());
   db.update("DELETE FROM role_permissions WHERE role_code=?",r.code());
   for(var g:r.grants()){
    if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM access_permissions WHERE code=?)",Boolean.class,g.permission())))throw new ApiFailure(400,"UNKNOWN_PERMISSION","Unknown permission");

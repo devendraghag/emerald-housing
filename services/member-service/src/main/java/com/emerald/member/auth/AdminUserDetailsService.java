@@ -16,7 +16,7 @@ public class AdminUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AdminAccountEntity account = accounts.findByUsername(username)
+        AdminAccountEntity account = accounts.findByUsernameIgnoreCase(username.trim())
                 .orElseThrow(() -> new UsernameNotFoundException("Invalid credentials"));
         return User.withUsername(account.getUsername())
                 .password(account.getPasswordHash())

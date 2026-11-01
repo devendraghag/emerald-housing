@@ -25,6 +25,17 @@ public class AccessRegistry {
         for (String role: roles) if (!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM access_roles WHERE code=? AND enabled)",Boolean.class,role)))
             throw new ApiFailure(400,"INVALID_ROLE","Unknown or disabled role: " + role);
     }
+    public Set<String> grantsForRoles(Set<String> roles) {
+        if(roles==null||roles.isEmpty())return Set.of();
+        String placeholders=String.join(",",Collections.nCopies(roles.size(),"?"));
+        return new TreeSet<>(db.queryForList("SELECT DISTINCT rp.permission_code || ':' || rp.scope FROM role_permissions rp JOIN access_roles r ON r.code=rp.role_code WHERE r.enabled AND rp.role_code IN ("+placeholders+")",String.class,roles.toArray()));
+    }
+    public void ensureDelegable(Set<String> proposed,UUID actorId) {
+        Set<String> actor=grants(actorId);
+        for(String grant:proposed){int split=grant.lastIndexOf(':');String permission=grant.substring(0,split),scope=grant.substring(split+1);
+            if(!actor.contains(grant)&&!actor.contains(permission+":SOCIETY"))throw new ApiFailure(403,"ROLE_ASSIGNMENT_ESCALATION","You cannot assign permissions you do not hold: "+grant);
+        }
+    }
     public boolean requiresPerson(Set<String> roles) {
         return roles.stream().anyMatch(role->Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM role_permissions WHERE role_code=? AND scope IN ('SELF','OWN_FLATS'))",Boolean.class,role)));
     }
