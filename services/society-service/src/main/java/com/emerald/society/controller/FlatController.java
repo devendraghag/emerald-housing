@@ -67,4 +67,7 @@ public class FlatController {
     @PatchMapping("/{flatId}/deactivate") public ResponseEntity<FlatResponse> deactivate(@PathVariable UUID flatId,@org.springframework.web.bind.annotation.RequestHeader(value="If-Match",required=false) String ifMatch) {
         var body=flatService.deactivate(flatId,ifMatch);return ResponseEntity.ok().eTag(com.emerald.society.api.VersionPreconditions.tag("flat",flatId,body.version())).body(body);
     }
+    @PatchMapping("/{flatId}/activate") public ResponseEntity<FlatResponse> activate(@PathVariable UUID flatId,@org.springframework.web.bind.annotation.RequestHeader(value="If-Match",required=false) String ifMatch) {
+        var body=flatService.activate(flatId,ifMatch);return ResponseEntity.ok().eTag(com.emerald.society.api.VersionPreconditions.tag("flat",flatId,body.version())).body(body);
+    }
 }

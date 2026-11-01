@@ -9,6 +9,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import java.util.UUID;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "floors")
@@ -21,9 +22,11 @@ public class FloorEntity {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false) private Instant updatedAt;
     protected FloorEntity() { }
+    public FloorEntity(UUID id, SocietyEntity society, int floorNumber) { this.id=id;this.society=society;this.floorNumber=floorNumber; }
     public UUID getId() { return id; }
     public UUID getSocietyId() { return society.getId(); }
     public int getFloorNumber() { return floorNumber; }
+    public void changeFloorNumber(int floorNumber) { this.floorNumber=floorNumber; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

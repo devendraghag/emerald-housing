@@ -11,5 +11,6 @@ public interface FloorRepository extends JpaRepository<FloorEntity, UUID> {
     List<FloorEntity> findAllByOrderByFloorNumberAsc();
     @org.springframework.data.jpa.repository.Query("select f from FloorEntity f where f.society.societyCode = 'EMERALD' and f.floorNumber = :floorNumber")
     Optional<FloorEntity> findByFloorNumber(int floorNumber);
+    boolean existsBySocietySocietyCodeAndFloorNumber(String societyCode, int floorNumber);
     long countBySocietySocietyCode(String societyCode);
 }

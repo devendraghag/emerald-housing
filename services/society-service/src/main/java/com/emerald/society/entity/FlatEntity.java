@@ -56,4 +56,10 @@ public class FlatEntity {
         updatedAt = now;
         return true;
     }
+    public boolean activate(Instant now) {
+        if ("ACTIVE".equals(status)) return false;
+        status = "ACTIVE";
+        updatedAt = now;
+        return true;
+    }
 }

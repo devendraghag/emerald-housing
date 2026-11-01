@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleConflict(DataIntegrityViolationException exception, HttpServletRequest request) {
-        return error(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "A flat with this number already exists", request);
+        return error(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "The requested value conflicts with an existing record", request);
     }
 
     @ExceptionHandler(CacheFallbackOverloadedException.class)

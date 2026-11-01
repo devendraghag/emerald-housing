@@ -22,6 +22,7 @@ import java.util.Set;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -164,6 +165,18 @@ public class FlatService {
         FlatEntity updated = flats.saveAndFlush(flat);
         events.publishEvent(new FlatReferenceChangedEvent(id, previousFloorNumber, previousFloorNumber));
         var result=responseWithFloor(updated);if(changed)audit("DEACTIVATE",id,before,result);return result;
+    }
+    @Transactional
+    @PreAuthorize("@societyAccess.has('FLAT_ACTIVATE','SOCIETY')")
+    @CacheEvict(cacheNames={SocietyCacheConfiguration.FLAT_BY_ID,SocietyCacheConfiguration.ALL_FLATS,SocietyCacheConfiguration.FLATS_BY_FLOOR},allEntries=true)
+    public FlatResponse activate(UUID id,String ifMatch) {
+        var flat=flats.findById(id).orElseThrow(()->new FlatNotFoundException(id));
+        requireSociety(flat);
+        if(versions!=null)versions.check(ifMatch,"flat",id,flat.getVersion());
+        var before=responseWithFloor(flat);
+        boolean changed=flat.activate(Instant.now());
+        var updated=flats.saveAndFlush(flat);
+        var result=responseWithFloor(updated);if(changed)audit("ACTIVATE",id,before,result);return result;
     }
     private FlatResponse loadFlat(UUID id) {
         return cacheMetrics.recordDatabaseLoad("flat-by-id", () -> {

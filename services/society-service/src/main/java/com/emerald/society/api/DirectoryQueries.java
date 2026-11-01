@@ -22,7 +22,7 @@ public class DirectoryQueries {
   var result=new ArrayList<Predicate>();
   result.add(cb.equal(root.get("society").get("societyCode"),"EMERALD"));
   if(access.resident()) result.add(access.ownFlats().isEmpty()?cb.disjunction():root.get("id").in(access.ownFlats()));
-  if(floor!=null) { if(floor<1||floor>18)throw new ApiFailure(400,"INVALID_FLOOR","Floor must be between 1 and 18");result.add(cb.equal(root.get("floor").get("floorNumber"),floor)); }
+  if(floor!=null) { if(floor<1||floor>99)throw new ApiFailure(400,"INVALID_FLOOR","Floor must be between 1 and 99");result.add(cb.equal(root.get("floor").get("floorNumber"),floor)); }
   if(!status.isEmpty())result.add(cb.equal(root.get("status").as(String.class),status));
   if(!search.isEmpty()) {
    String pattern="%"+search.replace("!","!!").replace("%","!%").replace("_","!_")+"%";

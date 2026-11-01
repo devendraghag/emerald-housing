@@ -49,9 +49,9 @@ public class AccessController {
   db.update("DELETE FROM role_permissions WHERE role_code=?",r.code());
   for(var g:r.grants()){
    if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM access_permissions WHERE code=?)",Boolean.class,g.permission())))throw new ApiFailure(400,"UNKNOWN_PERMISSION","Unknown permission");
-   boolean scoped=g.permission().startsWith("FAMILY_")||g.permission().equals("MEMBER_VIEW")||g.permission().equals("FLAT_VIEW");
+   boolean scoped=g.permission().startsWith("FAMILY_")||g.permission().equals("MEMBER_VIEW")||g.permission().equals("MEMBER_UPDATE")||g.permission().equals("FLAT_VIEW");
    if(!"SOCIETY".equals(g.scope())&&!scoped)throw new ApiFailure(400,"UNSUPPORTED_SCOPE","This permission requires SOCIETY scope");
-   if(g.permission().equals("MEMBER_VIEW")&&"OWN_FLATS".equals(g.scope())||g.permission().equals("FLAT_VIEW")&&"SELF".equals(g.scope()))throw new ApiFailure(400,"UNSUPPORTED_SCOPE","Unsupported directory scope");
+   if(g.permission().equals("MEMBER_VIEW")&&"OWN_FLATS".equals(g.scope())||g.permission().equals("MEMBER_UPDATE")&&"OWN_FLATS".equals(g.scope())||g.permission().equals("FLAT_VIEW")&&"SELF".equals(g.scope()))throw new ApiFailure(400,"UNSUPPORTED_SCOPE","Unsupported directory scope");
    if(g.permission().startsWith("FAMILY_")&&!g.permission().equals("FAMILY_VIEW")&&"SELF".equals(g.scope()))throw new ApiFailure(400,"UNSUPPORTED_SCOPE","Family mutations require SOCIETY or OWN_FLATS scope");
    db.update("INSERT INTO role_permissions VALUES (?,?,?) ON CONFLICT DO NOTHING",r.code(),g.permission(),g.scope());
   }

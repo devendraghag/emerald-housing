@@ -17,12 +17,24 @@ public class OwnerController {
  public OwnerController(MemberService members,MembershipService memberships,AccountController accounts,AccessRegistry registry){this.members=members;this.memberships=memberships;this.accounts=accounts;this.registry=registry;}
  @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
  @GetMapping @Transactional
- public Object list(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="100") int size){
+ public Object list(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="100") int size,
+        @RequestParam(required=false) UUID flatId,@RequestParam(required=false) UUID memberId,
+        @RequestParam(defaultValue="ALL") String status,@RequestParam(required=false) String search){
   if(page<0||size<1||size>100||(long)page*size>Integer.MAX_VALUE)throw new com.emerald.member.api.ApiFailure(400,"INVALID_PAGE","Use page >= 0 and size 1-100");
   if(!access.has("MEMBER_VIEW","SOCIETY")&&!access.has("MEMBER_VIEW","SELF"))throw new org.springframework.security.access.AccessDeniedException("No owner directory access");
+  String normalized=status.trim().toUpperCase(Locale.ROOT);
+  if(!Set.of("ALL","CURRENT","HISTORY").contains(normalized))throw new com.emerald.member.api.ApiFailure(400,"INVALID_STATUS","Status must be ALL, CURRENT, or HISTORY");
+  String term=search==null?"":search.trim();if(term.length()>120)throw new com.emerald.member.api.ApiFailure(400,"INVALID_SEARCH","Search must be at most 120 characters");
   String sql="SELECT fm.*,m.full_name FROM flat_memberships fm JOIN members m ON m.id=fm.member_id WHERE fm.relationship_type='OWNER'";
-  if(access.has("MEMBER_VIEW","SOCIETY"))return registry.database().queryForList(sql+" ORDER BY m.full_name,fm.id LIMIT ? OFFSET ?",size,(long)page*size);
-  return registry.database().queryForList(sql+" AND fm.member_id=? AND fm.end_date IS NULL AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE) AND m.status='ACTIVE' ORDER BY fm.id LIMIT ? OFFSET ?",access.ownMember(),size,(long)page*size);
+  List<Object> args=new ArrayList<>();
+  if(normalized.equals("CURRENT"))sql+=" AND fm.end_date IS NULL";
+  if(normalized.equals("HISTORY"))sql+=" AND fm.end_date IS NOT NULL";
+  if(flatId!=null){sql+=" AND fm.flat_id=?";args.add(flatId);}
+  if(memberId!=null){sql+=" AND fm.member_id=?";args.add(memberId);}
+  if(!term.isEmpty()){sql+=" AND (m.full_name ILIKE ? ESCAPE '!' OR m.mobile_number ILIKE ? ESCAPE '!')";String pattern="%"+term.replace("!","!!").replace("%","!%").replace("_","!_")+"%";args.add(pattern);args.add(pattern);}
+  if(!access.has("MEMBER_VIEW","SOCIETY")){sql+=" AND fm.member_id=? AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE)";args.add(access.ownMember());}
+  sql+=" ORDER BY fm.start_date DESC,fm.created_at DESC,fm.id DESC LIMIT ? OFFSET ?";args.add(size);args.add((long)page*size);
+  return registry.database().queryForList(sql,args.toArray());
  }
  public record Register(@NotNull @Valid CreateMemberRequest person,@NotNull UUID flatId,@NotNull @PastOrPresent LocalDate startDate,@NotBlank String username,@NotBlank String password){}
  @PostMapping @ResponseStatus(org.springframework.http.HttpStatus.CREATED) @Transactional
@@ -32,13 +44,15 @@ public class OwnerController {
   var account=accounts.create(new AccountController.Create(r.username(),r.password(),"FLAT_OWNER","EMERALD",person.memberId(),Set.of("FLAT_OWNER")));
   return Map.of("person",person,"ownership",ownership,"account",account);
  }
- public record Transfer(@NotNull UUID previousMembershipId,@NotNull UUID previousMemberId,@NotNull UUID newOwnerMemberId,@NotNull UUID flatId,@NotNull LocalDate date){}
+ public record Transfer(@NotNull UUID previousMembershipId,@NotNull UUID previousMemberId,@NotNull UUID newOwnerMemberId,@NotNull UUID flatId,@NotNull @PastOrPresent LocalDate date){}
  @PostMapping("/transfer") @Transactional
  @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY') and @memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")
  public Object transfer(@Valid @RequestBody Transfer r){
-  registry.lock();var rows=registry.database().queryForList("SELECT id FROM flat_memberships WHERE id=? AND member_id=? AND flat_id=? AND relationship_type='OWNER' AND end_date IS NULL",r.previousMembershipId(),r.previousMemberId(),r.flatId());
+  registry.lock();var rows=registry.database().queryForList("SELECT id,start_date FROM flat_memberships WHERE id=? AND member_id=? AND flat_id=? AND relationship_type='OWNER' AND end_date IS NULL",r.previousMembershipId(),r.previousMemberId(),r.flatId());
   if(rows.isEmpty())throw new com.emerald.member.api.ApiFailure(409,"INVALID_OWNERSHIP","Select the open owner membership for this flat");
   if(r.previousMemberId().equals(r.newOwnerMemberId())||r.date().isAfter(LocalDate.now(java.time.ZoneOffset.UTC)))throw new com.emerald.member.api.ApiFailure(400,"INVALID_TRANSFER","Choose a different owner and a transfer date no later than today");
+  if(r.date().isBefore(java.time.LocalDate.parse(rows.getFirst().get("start_date").toString())))throw new com.emerald.member.api.ApiFailure(400,"INVALID_TRANSFER","Transfer date cannot be before the current ownership started");
+  members.requireActive(r.newOwnerMemberId());
   memberships.end(r.previousMemberId(),r.previousMembershipId(),new EndMembershipRequest(r.date()));
   return memberships.assign(r.newOwnerMemberId(),new CreateMembershipRequest(r.flatId(),RelationshipType.OWNER,r.date()));
  }
