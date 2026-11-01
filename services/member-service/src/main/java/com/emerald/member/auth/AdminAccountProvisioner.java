@@ -26,7 +26,7 @@ public class AdminAccountProvisioner implements ApplicationRunner {
             @Value("${emerald.security.provisioning.password:}") String password) {
         this.accounts = accounts;
         this.passwordEncoder = passwordEncoder;
-        this.username = username == null ? "" : username.trim();
+        this.username = username == null ? "" : username.trim().toLowerCase(java.util.Locale.ROOT);
         this.password = password == null ? "" : password;
     }
 
@@ -40,6 +40,11 @@ public class AdminAccountProvisioner implements ApplicationRunner {
         if (username.isBlank() || password.length() < 14
                 || password.getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new IllegalStateException("Initial ADMIN provisioning requires a username and a password of 14 to 72 UTF-8 bytes");
+        }
+        if(registry!=null)registry.lock();
+        if(accounts.existsByUsernameIgnoreCase(username)){
+            log.info("Initial ADMIN username already exists; its password was not changed");
+            return;
         }
         int inserted = accounts.insertIfMissing(UUID.randomUUID(), username,
                 passwordEncoder.encode(password), Instant.now());

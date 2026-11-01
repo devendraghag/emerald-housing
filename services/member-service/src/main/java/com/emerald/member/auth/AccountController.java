@@ -28,6 +28,7 @@ public class AccountController {
  }
  public record View(UUID accountId,String username,String role,String societyCode,UUID memberId,boolean enabled,long version,Set<String> roles) { }
  public record PasswordReset(@NotBlank String password,@NotNull Long version) { }
+ public record PasswordChange(@NotBlank String currentPassword,@NotBlank String password,@NotNull Long version) { }
  private View view(AdminAccountEntity a) {
   if(!"EMERALD".equals(a.getSocietyCode())) throw new org.springframework.security.access.AccessDeniedException("Wrong society");
   return new View(a.getId(),a.getUsername(),a.getRole(),a.getSocietyCode(),a.getMemberId(),a.isEnabled(),a.getVersion(),registry.assignedRoles(a.getId()));
@@ -80,5 +81,12 @@ public class AccountController {
  public View resetPassword(@PathVariable UUID id,@Valid @RequestBody PasswordReset request){
   registry.lock();var account=find(id);if(account.getVersion()!=request.version())throw new ApiFailure(409,"VERSION_CONFLICT","Account changed; reload it");
   var before=view(account);passwordLength(request.password());account.resetPassword(passwords.encode(request.password()));accounts.saveAndFlush(account);var result=view(account);audit.record("RESET_ACCOUNT_PASSWORD","ACCOUNT",id,before,result);return result;
+ }
+ @PutMapping("/me/password") @Transactional
+ public View changeOwnPassword(@Valid @RequestBody PasswordChange request){
+  registry.lock();var actor=access.identity();var account=find(actor.adminId());
+  if(account.getVersion()!=request.version())throw new ApiFailure(409,"VERSION_CONFLICT","Account changed; reload it");
+  if(!passwords.matches(request.currentPassword(),account.getPasswordHash()))throw new ApiFailure(400,"INVALID_CURRENT_PASSWORD","Current password is incorrect");
+  passwordLength(request.password());var before=view(account);account.resetPassword(passwords.encode(request.password()));accounts.saveAndFlush(account);var result=view(account);audit.record("CHANGE_OWN_PASSWORD","ACCOUNT",account.getId(),before,result);return result;
  }
 }
