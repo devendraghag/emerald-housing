@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: Emerald Housing Rental Workflows
+  version: 1.0.0
+  description: >-
+    Flat-scoped rent tracking, maintenance, lease transitions, and viewing
+    availability. Every operation requires an authenticated Emerald session.
+    Cookie-authenticated writes also require the gateway CSRF header/token.
+servers:
+  - url: /api/v1/rental
+security:
+  - sessionCookie: []
+paths:
+  /payments:
+    get:
+      summary: List rent payment records
+      description: Requires RENT_VIEW in SOCIETY or OWN_FLATS scope; OWN_FLATS is limited to assigned flats.
+      parameters: [{ $ref: '#/components/parameters/flatId' }]
+      responses: { '200': { description: Up to 200 newest records } }
+    post:
+      summary: Record rent due or payment status
+      description: Requires RENT_MANAGE in SOCIETY or OWN_FLATS scope.
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { $ref: '#/components/requestBodies/operation' }
+      responses: { '201': { description: Created with DUE status }, '403': { description: Permission or flat scope denied } }
+  /maintenance:
+    get:
+      summary: List maintenance requests
+      parameters: [{ $ref: '#/components/parameters/flatId' }]
+      responses: { '200': { description: Up to 200 newest requests } }
+    post:
+      summary: Submit a maintenance request
+      description: Requires MAINTENANCE_CREATE and access to the selected flat.
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { $ref: '#/components/requestBodies/operation' }
+      responses: { '201': { description: Created with OPEN status } }
+  /leases:
+    get:
+      summary: List lease and renewal workflows
+      parameters: [{ $ref: '#/components/parameters/flatId' }]
+      responses: { '200': { description: Up to 200 newest records } }
+    post:
+      summary: Start a lease workflow
+      description: Requires LEASE_MANAGE and access to the selected flat.
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { $ref: '#/components/requestBodies/operation' }
+      responses: { '201': { description: Created with DRAFT status } }
+  /viewings:
+    get:
+      summary: List available and booked viewing slots
+      parameters: [{ $ref: '#/components/parameters/flatId' }]
+      responses: { '200': { description: Up to 200 newest records } }
+    post:
+      summary: Publish an availability slot or book a viewing
+      description: VIEWING_MANAGE creates AVAILABLE slots; VIEWING_BOOK creates a BOOKED record.
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { $ref: '#/components/requestBodies/operation' }
+      responses: { '201': { description: Slot or booking created } }
+  /{resource}/{id}:
+    patch:
+      summary: Update workflow status or details
+      description: >-
+        Requires the resource's manage permission and assigned flat scope. A tenant
+        with LEASE_VIEW may respond only to an offered renewal or initiated move-out.
+        Supply the current version to prevent lost updates. Invalid transitions return 409;
+        stale versions return 412.
+      parameters:
+        - in: path
+          name: resource
+          required: true
+          schema: { enum: [payments, maintenance, leases, viewings] }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/csrf' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string }
+                version: { type: integer, minimum: 0 }
+      responses: { '200': { description: Updated record }, '403': { description: Permission denied }, '409': { description: Invalid transition }, '412': { description: Stale version } }
+  /viewings/{id}/book:
+    post:
+      summary: Book an available viewing slot
+      description: Requires VIEWING_BOOK for the slot's flat. The slot can only be booked once.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/csrf' }
+      responses: { '200': { description: Slot booked }, '409': { description: Slot is no longer available } }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: SESSION }
+  parameters:
+    csrf:
+      in: header
+      name: X-XSRF-TOKEN
+      required: true
+      schema: { type: string }
+      description: Value returned by /api/v1/auth/csrf for this session.
+    flatId:
+      in: query
+      name: flatId
+      required: false
+      schema: { type: string, format: uuid }
+      description: Optional filter; OWN_FLATS actors only see assigned flats.
+  requestBodies:
+    operation:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [flatId]
+            properties:
+              flatId: { type: string, format: uuid }
+              period: { type: string, description: Payment period, example: 2026-11 }
+              amount: { type: number, exclusiveMinimum: 0 }
+              dueDate: { type: string, format: date }
+              reference: { type: string }
+              summary: { type: string }
+              description: { type: string }
+              priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
+              leaseEndDate: { type: string, format: date }
+              action: { type: string, enum: [RENEWAL, MOVE_OUT] }
+              notes: { type: string }
+              slot: { type: string, format: date-time }
