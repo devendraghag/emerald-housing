@@ -15,9 +15,10 @@ import org.springframework.security.access.AccessDeniedException;
 public class FamilyController {
  private final AccessRegistry registry;private final MemberAccess access;private final AuditTrail audit;
  public FamilyController(AccessRegistry registry,MemberAccess access,AuditTrail audit){this.registry=registry;this.access=access;this.audit=audit;}
- public record Details(@NotBlank @Size(max=160) String fullName,@NotBlank @Size(max=40) String relationship,
-        @Size(max=20) @Pattern(regexp="^[+]?[0-9][0-9 ()-]{5,19}$",message="must be a valid phone number") String mobileNumber,
-        @Email @Size(max=254) String email,UUID linkedMemberId){
+ public record Details(@NotBlank(message="Enter the family member's full name") @Size(max=160,message="Full name must be 160 characters or fewer") String fullName,
+        @NotBlank(message="Choose or enter the relationship to the owner") @Size(max=40,message="Relationship must be 40 characters or fewer") String relationship,
+        @Size(max=20,message="Phone number must be 20 characters or fewer") @Pattern(regexp="^[+]?[0-9][0-9 ()-]{5,19}$",message="Enter a valid phone number") String mobileNumber,
+        @Email(message="Enter a valid email address") @Size(max=254,message="Email must be 254 characters or fewer") String email,UUID linkedMemberId){
   public Details { fullName=clean(fullName);relationship=clean(relationship);mobileNumber=optional(mobileNumber);email=optional(email);if(email!=null)email=email.toLowerCase(Locale.ROOT); }
  }
  public record Create(@NotNull UUID ownerMembershipId,@NotNull @Valid Details details){}

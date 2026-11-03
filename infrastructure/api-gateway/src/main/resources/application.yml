@@ -36,7 +36,7 @@ spring:
               uri: ${SOCIETY_SERVICE_URL:http://localhost:8081}
               order: 0
               predicates:
-                - Path=/api/v1/society,/api/v1/society/**,/api/v1/floors,/api/v1/floors/**,/api/v1/flats,/api/v1/flats/**
+                - Path=/api/v1/society,/api/v1/society/**,/api/v1/floors,/api/v1/floors/**,/api/v1/flats,/api/v1/flats/**,/api/v1/rental/**
               filters:
                 - name: RequestRateLimiter
                   args:

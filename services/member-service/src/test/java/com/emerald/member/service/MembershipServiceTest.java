@@ -2,6 +2,8 @@ package com.emerald.member.service;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 import com.emerald.member.client.SocietyClient;
@@ -83,6 +85,25 @@ class MembershipServiceTest {
         when(society.getFlat(flatId)).thenThrow(new SocietyDependencyException(503,
                 "SOCIETY_SERVICE_UNAVAILABLE", "Society Service is unavailable", null));
         assertThrows(SocietyDependencyException.class, () -> service.assign(memberId, request));
+        verifyNoInteractions(writer);
+    }
+
+    @Test void duplicateMembershipNeverPersistsAgain() {
+        UUID memberId = UUID.randomUUID(), flatId = UUID.randomUUID();
+        var request = new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.now());
+        when(society.getFlat(flatId)).thenReturn(new SocietyFlatResponse(flatId, "A-1", UUID.randomUUID(), 1, "ACTIVE"));
+        when(membershipLock.<MembershipResponse>withMemberLock(eq(memberId), any()))
+                .thenAnswer(invocation -> { throw new com.emerald.member.exception.DuplicateMembershipException(); });
+        assertThrows(com.emerald.member.exception.DuplicateMembershipException.class, () -> service.assign(memberId, request));
+        verifyNoInteractions(writer);
+    }
+
+    @Test void invalidRelationshipDateIsRejectedBeforePersistence() {
+        try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            assertFalse(validator.validate(new CreateMembershipRequest(UUID.randomUUID(), null, LocalDate.now())).isEmpty());
+            assertTrue(validator.validate(new CreateMembershipRequest(UUID.randomUUID(), RelationshipType.RESIDENT, LocalDate.now())).isEmpty());
+        }
         verifyNoInteractions(writer);
     }
 }

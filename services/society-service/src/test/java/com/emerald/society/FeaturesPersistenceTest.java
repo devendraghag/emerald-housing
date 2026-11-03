@@ -105,8 +105,8 @@ class FeaturesPersistenceTest {
   rental.update("leases",(UUID)lease.get("id"),Map.of("status","RENEWAL_ACCEPTED","version",1));
   assertThrows(org.springframework.security.access.AccessDeniedException.class,()->rental.update("leases",(UUID)lease.get("id"),Map.of("status","RENEWED","version",2)));
   rental.update("leases",(UUID)moveOut.get("id"),Map.of("status","MOVE_OUT_CONFIRMED","version",1));
-  assertEquals("BOOKED",rental.bookViewing((UUID)viewing.get("id")).get("status"));
-  assertEquals(409,assertThrows(ResponseStatusException.class,()->rental.bookViewing((UUID)viewing.get("id"))).getStatusCode().value());
+  assertEquals("BOOKED",rental.bookViewing((UUID)viewing.get("id"),Map.of("version",0)).get("status"));
+  assertEquals(409,assertThrows(ResponseStatusException.class,()->rental.bookViewing((UUID)viewing.get("id"),Map.of("version",0))).getStatusCode().value());
   rentalLogin("PROPERTY_MANAGER",null,Set.of(),managerGrants);
   rental.update("payments",(UUID)payment.get("id"),Map.of("status","PAID","reference","bank-123","version",0));
   assertEquals("bank-123",rental.list("payments",flat).getFirst().get("details") instanceof Map<?,?> details?details.get("reference"):null);

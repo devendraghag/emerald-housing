@@ -120,8 +120,9 @@ public class FlatService {
     @Transactional
     @PreAuthorize("@societyAccess.has('FLAT_CREATE','SOCIETY')")
     public FlatResponse create(CreateFlatRequest request) {
-        var floor = floors.findByFloorNumber(request.floorNumber())
-                .orElseThrow(() -> new FloorEntityNotFoundException(request.floorNumber()));
+        int floorNumber = resolveFloorNumber(request.floorNumber(), request.flatNumber());
+        var floor = floors.findByFloorNumber(floorNumber)
+                .orElseThrow(() -> new FloorEntityNotFoundException(floorNumber));
         var society = societies.findBySocietyCode("EMERALD").orElseThrow();
         Instant now = Instant.now();
         var entity = new FlatEntity(UUID.randomUUID(), society.getId(), floor.getId(),
@@ -142,8 +143,9 @@ public class FlatService {
         var before=responseWithFloor(flat);
         int previousFloorNumber = floors.findById(flat.getFloorId())
                 .orElseThrow(() -> new IllegalStateException("Flat floor is missing")).getFloorNumber();
-        var floor = floors.findByFloorNumber(request.floorNumber())
-                .orElseThrow(() -> new FloorEntityNotFoundException(request.floorNumber()));
+        int floorNumber = resolveFloorNumber(request.floorNumber(), request.flatNumber());
+        var floor = floors.findByFloorNumber(floorNumber)
+                .orElseThrow(() -> new FloorEntityNotFoundException(floorNumber));
         flat.update(floor.getId(), request.flatNumber().trim(), Instant.now());
         flat.setFloorReference(floor);
         FlatEntity updated = flats.saveAndFlush(flat);
@@ -190,6 +192,68 @@ public class FlatService {
     private FlatResponse responseWithFloor(FlatEntity flat) {
         var floor = floors.findById(flat.getFloorId()).orElseThrow();
         return response(flat, floor.getFloorNumber());
+    }
+    private int resolveFloorNumber(Integer requestedFloor, String flatNumber) {
+        Integer seriesFloor = seriesFloorNumber(flatNumber);
+        if (seriesFloor == null) {
+            if (requestedFloor == null) {
+                throw new com.emerald.society.api.ApiFailure(400, "FLOOR_REQUIRED",
+                        "Enter a floor number when the flat number does not use a numeric floor series.");
+            }
+            return requestedFloor;
+        }
+        if (requestedFloor != null && !requestedFloor.equals(seriesFloor)) {
+            String expectedFloor = ordinal(seriesFloor);
+            String selectedFloor = ordinal(requestedFloor);
+            throw new com.emerald.society.api.ApiFailure(400, "FLAT_FLOOR_MISMATCH",
+                    "Flat number " + flatNumber.trim() + " belongs on the " + expectedFloor
+                            + " floor, but the request selected the " + selectedFloor + " floor.");
+        }
+        return seriesFloor;
+    }
+
+    private static Integer seriesFloorNumber(String flatNumber) {
+        String number = flatNumber == null ? "" : flatNumber.trim();
+        if (!number.matches("[0-9]+")) return null;
+
+        int floorNumber;
+        if (number.length() == 3 && number.charAt(0) >= '1' && number.charAt(0) <= '9') {
+            floorNumber = number.charAt(0) - '0';
+        } else if (number.length() == 4 && number.charAt(0) == '1'
+                && number.charAt(1) >= '0' && number.charAt(1) <= '8') {
+            floorNumber = Integer.parseInt(number.substring(0, 2));
+        } else {
+            throw invalidNumericFlatNumber(number, null);
+        }
+
+        int unitNumber = Integer.parseInt(number.substring(number.length() - 2));
+        if (unitNumber < 1 || unitNumber > 6) {
+            throw invalidNumericFlatNumber(number, floorNumber);
+        }
+        return floorNumber;
+    }
+
+    private static com.emerald.society.api.ApiFailure invalidNumericFlatNumber(String flatNumber, Integer floorNumber) {
+        if (floorNumber == null) {
+            return new com.emerald.society.api.ApiFailure(400, "INVALID_FLAT_NUMBER",
+                    "Use 101-106 through 901-906 for floors 1-9, or 1001-1006 through 1801-1806 for floors 10-18.");
+        }
+        int first = floorNumber * 100 + 1;
+        int last = floorNumber * 100 + 6;
+        return new com.emerald.society.api.ApiFailure(400, "INVALID_FLAT_NUMBER",
+                "Flat number " + flatNumber + " is outside the allowed range for the " + ordinal(floorNumber)
+                        + " floor. Use " + first + "-" + last + ".");
+    }
+
+    private static String ordinal(int number) {
+        int lastTwo = number % 100;
+        String suffix = lastTwo >= 11 && lastTwo <= 13 ? "th" : switch (number % 10) {
+            case 1 -> "st";
+            case 2 -> "nd";
+            case 3 -> "rd";
+            default -> "th";
+        };
+        return number + suffix;
     }
     private static FlatResponse response(FlatEntity flat, int floorNumber) {
         return new FlatResponse(flat.getId(), flat.getFlatNumber(), flat.getFloorId(), floorNumber, flat.getStatus(), flat.getVersion());

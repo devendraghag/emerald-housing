@@ -58,7 +58,7 @@ public class GatewaySecurityConfiguration {
                                 "/api/v1/auth/login", "/internal/auth/session").permitAll()
                         .pathMatchers("/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/**").authenticated()
-                        .pathMatchers("/portal.html", "/portal.js", "/portal.css").permitAll()
+                        .pathMatchers("/portal.html", "/portal.js", "/portal.css", "/rental", "/rental/", "/functional-test-cases.html").permitAll()
                         .anyExchange().denyAll())
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((exchange, error) -> errors.write(exchange, HttpStatus.UNAUTHORIZED,

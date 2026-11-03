@@ -1,6 +1,6 @@
 package com.emerald.member.api;
 import static org.junit.jupiter.api.Assertions.*;
-import java.time.Instant;import java.util.UUID;
+import java.time.Instant;import java.util.UUID;import java.util.Base64;
 import org.junit.jupiter.api.Test;
 class HttpAndCursorTest {
  @Test void conditionalReadsAndWritesUseStrongEntityVersions() {
@@ -22,10 +22,22 @@ class HttpAndCursorTest {
   assertThrows(ApiFailure.class,()->CursorCodec.decode("bad-token",scope));
   assertThrows(ApiFailure.class,()->CursorCodec.decode("x".repeat(513),scope));
  }
+ @Test void cursorHandlesAbsentAndMalformedPayloadShapes() {
+  var scope=CursorCodec.scope("all");
+  assertNull(CursorCodec.decode(null,scope));
+  assertThrows(ApiFailure.class,()->CursorCodec.decode("   ",scope));
+  assertThrows(ApiFailure.class,()->CursorCodec.decode(Base64.getUrlEncoder().encodeToString("only-two|parts".getBytes()),scope));
+  assertThrows(ApiFailure.class,()->CursorCodec.decode(Base64.getUrlEncoder().encodeToString(("not-an-instant|"+UUID.randomUUID()+"|"+scope).getBytes()),scope));
+  assertThrows(ApiFailure.class,()->CursorCodec.decode(Base64.getUrlEncoder().encodeToString(("2026-01-01T00:00:00Z|bad-uuid|"+scope).getBytes()),scope));
+ }
  @Test void filtersAreNormalizedAndValidated() {
   assertEquals("asha",DirectoryQueries.search("  ASHA  "));
   assertEquals("ACTIVE",DirectoryQueries.status(" active "));
   assertThrows(ApiFailure.class,()->DirectoryQueries.status("DELETED"));
+  assertThrows(ApiFailure.class,()->DirectoryQueries.search("a".repeat(121)));
+  assertEquals("",DirectoryQueries.search(null));
+  assertEquals("",DirectoryQueries.status(null));
+  assertEquals("INACTIVE",DirectoryQueries.status(" inactive "));
   assertThrows(ApiFailure.class,()->DirectoryQueries.search("a".repeat(121)));
  }
 }

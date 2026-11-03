@@ -40,11 +40,22 @@ class GatewayRoutesTest {
             assertThat(reactor.core.publisher.Mono.from(member.getPredicate().apply(exchange)).block()).as(path).isTrue();
         }
     }
+
+    @Test
+    void rentalRequestsRouteToSocietyService() {
+        var routes=routeLocator.getRoutes().collectList().block(Duration.ofSeconds(5));
+        var society=routes.stream().filter(route->route.getId().equals("society-api")).findFirst().orElseThrow();
+        for(String path:java.util.List.of("/api/v1/rental/payments","/api/v1/rental/maintenance")) {
+            var exchange=org.springframework.mock.web.server.MockServerWebExchange.from(org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(path));
+            assertThat(reactor.core.publisher.Mono.from(society.getPredicate().apply(exchange)).block()).as(path).isTrue();
+        }
+    }
     @Autowired org.springframework.context.ApplicationContext applicationContext;
     @Test
     void portalAssetsAreAvailableWithoutSigningIn() {
         var client=org.springframework.test.web.reactive.server.WebTestClient.bindToApplicationContext(applicationContext).build();
         client.get().uri("/portal.html").exchange().expectStatus().isOk().expectBody(String.class).value(body->assertThat(body).contains("Society portal","portal.js"));
+        client.get().uri("/rental").exchange().expectStatus().isOk().expectBody(String.class).value(body->assertThat(body).contains("Society portal","portal.js"));
         client.get().uri("/portal.js").exchange().expectStatus().isOk();
         client.get().uri("/portal.css").exchange().expectStatus().isOk();
     }

@@ -29,7 +29,7 @@ public class OwnerController {
   String term=search==null?"":search.trim();if(term.length()>120)throw new com.emerald.member.api.ApiFailure(400,"INVALID_SEARCH","Search must be at most 120 characters");
   String sql="SELECT fm.*,m.full_name FROM flat_memberships fm JOIN members m ON m.id=fm.member_id WHERE fm.relationship_type='OWNER'";
   List<Object> args=new ArrayList<>();
-  if(normalized.equals("CURRENT"))sql+=" AND fm.end_date IS NULL";
+  if(normalized.equals("CURRENT"))sql+=" AND fm.end_date IS NULL AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE) AND m.status='ACTIVE'";
   if(normalized.equals("HISTORY"))sql+=" AND fm.end_date IS NOT NULL";
   if(flatId!=null){sql+=" AND fm.flat_id=?";args.add(flatId);}
   if(memberId!=null){sql+=" AND fm.member_id=?";args.add(memberId);}
