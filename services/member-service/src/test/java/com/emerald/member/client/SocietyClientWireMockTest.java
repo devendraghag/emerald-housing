@@ -45,6 +45,19 @@ class SocietyClientWireMockTest {
         wireMock.verify(getRequestedFor(urlEqualTo("/api/v1/flats/" + flatId)).withHeader("X-Correlation-ID", matching("[A-Za-z0-9._-]{1,64}")));
     }
 
+    @Test void deserializesMinimalNoticeFlatDirectory() {
+        UUID flatId = UUID.randomUUID();
+        wireMock.stubFor(get(urlEqualTo("/api/v1/internal/notices/flat-options"))
+                .willReturn(okJson("[{\"flatId\":\"" + flatId + "\",\"flatNumber\":\"A-1\",\"status\":\"ACTIVE\"}]")));
+
+        var options = client.noticeFlatOptions();
+
+        assertEquals(1, options.size());
+        assertEquals(flatId, options.getFirst().flatId());
+        assertEquals("A-1", options.getFirst().flatNumber());
+        assertEquals("ACTIVE", options.getFirst().status());
+    }
+
     @Test void mapsMissingFlatToNotFound() {
         UUID id = UUID.randomUUID(); wireMock.stubFor(get(anyUrl()).willReturn(notFound()));
         assertThrows(FlatNotFoundException.class, () -> client.getFlat(id));

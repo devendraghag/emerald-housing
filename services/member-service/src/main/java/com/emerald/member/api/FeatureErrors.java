@@ -16,6 +16,12 @@ public class FeatureErrors {
   boolean conditional = request.getHeader("If-Match") != null;
   return response(conditional ? 412 : 409, conditional ? "PRECONDITION_FAILED" : "VERSION_CONFLICT", "The record changed. Reload it before retrying.",request);
  }
+ @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+ public ResponseEntity<?> status(org.springframework.web.server.ResponseStatusException error, HttpServletRequest request) {
+  int status=error.getStatusCode().value();
+  String message=error.getReason()==null?error.getStatusCode().toString():error.getReason();
+  return response(status,"REQUEST_REJECTED",message,request);
+ }
  @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
  public ResponseEntity<?> denied(Exception error, HttpServletRequest request) { return response(403,"FORBIDDEN","You cannot access this operation or record",request); }
  private ResponseEntity<?> response(int status,String code,String message,HttpServletRequest request) {

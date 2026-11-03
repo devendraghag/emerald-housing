@@ -1,6 +1,22 @@
 spring:
   application:
     name: member-service
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:member-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: record
   transaction:
     default-timeout: ${TRANSACTION_DEFAULT_TIMEOUT:30s}
   data:
@@ -35,6 +51,10 @@ logging:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [correlationId=%X{correlationId:-}] [traceId=%X{traceId:-},spanId=%X{spanId:-}] %logger{36} - %msg%n%ex"
 
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: ${MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED:false}
   endpoints:
     web:
       exposure:

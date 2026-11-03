@@ -2,6 +2,7 @@ package com.emerald.member.client;
 
 import com.emerald.member.config.CorrelationIdFilter;
 import com.emerald.member.dto.SocietyFlatResponse;
+import com.emerald.member.dto.SocietyNoticeFlatOption;
 import com.emerald.member.exception.FlatNotFoundException;
 import com.emerald.member.exception.SocietyDependencyException;
 import io.github.resilience4j.bulkhead.Bulkhead;
@@ -15,6 +16,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.UUID;
+import java.util.List;
 import java.util.function.Supplier;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +74,35 @@ public class SocietyClient {
         } catch (BulkheadFullException ex) {
             throw new SocietyDependencyException(503, "SOCIETY_CAPACITY_EXCEEDED",
                     "Society Service validation capacity is temporarily full", ex);
+        }
+    }
+
+    /** Internal, minimal directory for notice audiences; it exposes flat IDs/numbers only. */
+    public List<SocietyNoticeFlatOption> noticeFlatOptions() {
+        try {
+            String correlationId=MDC.get("correlationId");
+            String responseBody=client.get().uri("/api/v1/internal/notices/flat-options")
+                    .header("X-Member-Service-Token",internalToken)
+                    .header(CorrelationIdFilter.HEADER,correlationId==null?UUID.randomUUID().toString():correlationId)
+                    .retrieve().body(String.class);
+            SocietyNoticeFlatOption[] result=jsonMapper.readValue(responseBody,SocietyNoticeFlatOption[].class);
+            if(result==null) throw new SocietyDependencyException(502,"SOCIETY_INVALID_RESPONSE",
+                    "Society Service returned an invalid flat directory",null);
+            return List.of(result);
+        } catch(RestClientResponseException ex) {
+            throw new SocietyDependencyException(502,"SOCIETY_SERVICE_ERROR",
+                    "Society Service could not provide flat choices",ex);
+        } catch(ResourceAccessException ex) {
+            if(hasTimeout(ex)) throw new SocietyDependencyException(504,"SOCIETY_SERVICE_TIMEOUT",
+                    "Society Service timed out",ex,true);
+            throw new SocietyDependencyException(503,"SOCIETY_SERVICE_UNAVAILABLE",
+                    "Society Service is unavailable",ex,true);
+        } catch(JacksonException ex) {
+            throw new SocietyDependencyException(502,"SOCIETY_INVALID_RESPONSE",
+                    "Society Service returned an invalid flat directory",ex);
+        } catch(RestClientException | NullPointerException ex) {
+            throw new SocietyDependencyException(502,"SOCIETY_INVALID_RESPONSE",
+                    "Society Service returned an invalid flat directory",ex);
         }
     }
 

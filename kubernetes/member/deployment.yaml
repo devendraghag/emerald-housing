@@ -35,7 +35,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: member-service
-          image: emerald/member-service:family-form-redesign
+          image: emerald/member-service:option-b-20261103-flat-notice-fix3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

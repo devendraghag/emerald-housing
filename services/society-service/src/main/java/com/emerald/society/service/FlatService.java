@@ -81,6 +81,14 @@ public class FlatService {
         return cacheMetrics.recordDatabaseLoad("all-flats", () -> flats.findAllResponsesByFlatNumberAsc().stream().filter(this::visible).toList());
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SERVICE_MEMBER_FLAT_READ')")
+    public List<com.emerald.society.dto.NoticeFlatOption> noticeTargetOptions() {
+        return flats.findAllResponsesByFlatNumberAsc().stream()
+                .filter(flat -> "ACTIVE".equals(flat.status()))
+                .map(flat -> new com.emerald.society.dto.NoticeFlatOption(flat.flatId(),flat.flatNumber(),flat.status()))
+                .toList();
+    }
+    @Transactional(readOnly = true)
     @PreAuthorize("@societyAccess.read()")
     @Cacheable(cacheNames = SocietyCacheConfiguration.FLATS_BY_FLOOR, key = "#p0.toString()", condition = "@societyAccess.staff()", sync = true)
     public List<FlatResponse> listByFloorNumber(int floorNumber) {

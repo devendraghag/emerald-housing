@@ -45,7 +45,7 @@ public class RequestIdentityFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String suppliedMemberToken = request.getHeader(MEMBER_TOKEN_HEADER);
         if (suppliedMemberToken != null) {
-            if (!isFlatLookup(request) || memberToken.length < 32 || !MessageDigest.isEqual(memberToken,
+            if (!(isFlatLookup(request) || isNoticeFlatDirectory(request)) || memberToken.length < 32 || !MessageDigest.isEqual(memberToken,
                     suppliedMemberToken.getBytes(StandardCharsets.UTF_8))) {
                 errors.write(request, response, HttpStatus.FORBIDDEN, "INTERNAL_CALL_FORBIDDEN",
                         "This internal operation is not permitted");
@@ -71,6 +71,11 @@ public class RequestIdentityFilter extends OncePerRequestFilter {
     private static boolean isFlatLookup(HttpServletRequest request) {
         return "GET".equals(request.getMethod())
                 && request.getRequestURI().matches("/api/v1/flats/[0-9a-fA-F-]{36}");
+    }
+
+    private static boolean isNoticeFlatDirectory(HttpServletRequest request) {
+        return "GET".equals(request.getMethod())
+                && "/api/v1/internal/notices/flat-options".equals(request.getRequestURI());
     }
 
     private void setIdentity(SessionIdentityResponse identity, String authority) {

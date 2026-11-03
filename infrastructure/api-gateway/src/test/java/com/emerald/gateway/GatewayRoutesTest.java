@@ -35,7 +35,7 @@ class GatewayRoutesTest {
     void accessFamilyAndOwnerRequestsRouteToMemberService() {
         var routes=routeLocator.getRoutes().collectList().block(Duration.ofSeconds(5));
         var member=routes.stream().filter(route->route.getId().equals("member-api")).findFirst().orElseThrow();
-        for(String path:java.util.List.of("/api/v1/access/roles","/api/v1/families","/api/v1/owners","/api/v1/accounts/me")) {
+        for(String path:java.util.List.of("/api/v1/access/roles","/api/v1/families","/api/v1/owners","/api/v1/accounts/me","/api/v1/notices/board","/api/v1/notices/flat-options")) {
             var exchange=org.springframework.mock.web.server.MockServerWebExchange.from(org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(path));
             assertThat(reactor.core.publisher.Mono.from(member.getPredicate().apply(exchange)).block()).as(path).isTrue();
         }

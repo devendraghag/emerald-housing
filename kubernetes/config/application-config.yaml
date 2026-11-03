@@ -4,6 +4,7 @@ metadata:
   name: emerald-app-config
   namespace: emerald-housing
 data:
+  MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
   TRACING_OTLP_ENABLED: "false"
   TRACING_SAMPLING_PROBABILITY: "0.1"
   SOCIETY_HTTP_MAX_CONNECTIONS: "500"
@@ -36,6 +37,8 @@ data:
   SESSION_COOKIE_SECURE: "false"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: "host.docker.internal:9092"
+  LOST_FOUND_PHOTO_DIRECTORY: "/tmp/lost-found"
   SOCIETY_CACHE_REDIS_HOST: "redis-cache"
   SOCIETY_CACHE_REDIS_PORT: "6379"
   SOCIETY_CACHE_REDIS_CONNECT_TIMEOUT: "500ms"
