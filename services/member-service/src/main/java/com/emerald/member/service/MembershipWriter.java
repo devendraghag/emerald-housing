@@ -21,6 +21,7 @@ import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class MembershipWriter {
     private final MemberRepository members;
     public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) { this.memberships=memberships; this.members=members; }
     @Transactional
+    @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY')")
     public MembershipResponse persist(UUID memberId, CreateMembershipRequest request) {
         if(registry!=null)registry.lock();
         var member = members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
@@ -48,15 +50,18 @@ public class MembershipWriter {
         } catch (DataIntegrityViolationException ex) { throw new DuplicateMembershipException(); }
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.member(#p0)")
     public List<MembershipResponse> byMember(UUID memberId) {
         if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
         return memberships.findAllByMemberIdOrderByStartDateDesc(memberId).stream().map(MembershipWriter::response).toList();
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.flat(#p0)")
     public List<MembershipResponse> byFlat(UUID flatId) {
         return memberships.findAllByFlatIdOrderByStartDateDesc(flatId).stream().filter(row->access==null || !access.resident() || row.getMemberId().equals(access.ownMember())).map(MembershipWriter::response).toList();
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.member(#p0)")
     public PageResponse<MembershipResponse> pageByMember(UUID memberId, int page, int size, String sortBy, String direction) {
         if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
@@ -65,6 +70,7 @@ public class MembershipWriter {
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
     }
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.flat(#p0)")
     public PageResponse<MembershipResponse> pageByFlat(UUID flatId, int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
                 Set.of("startDate", "endDate", "createdAt", "updatedAt", "relationshipType"));
@@ -72,6 +78,7 @@ public class MembershipWriter {
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
     }
     @Transactional
+    @PreAuthorize("@memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
         if(registry!=null)registry.lock();
         members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));

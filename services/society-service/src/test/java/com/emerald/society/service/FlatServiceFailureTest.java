@@ -26,11 +26,12 @@ class FlatServiceFailureTest {
         try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertFalse(validator.validate(new CreateFlatRequest(0, "101")).isEmpty());
-            assertFalse(validator.validate(new CreateFlatRequest(19, "101")).isEmpty());
+            assertFalse(validator.validate(new CreateFlatRequest(100, "101")).isEmpty());
             assertFalse(validator.validate(new CreateFlatRequest(1, " ")).isEmpty());
             assertFalse(validator.validate(new UpdateFlatRequest(1, "a".repeat(41))).isEmpty());
             assertTrue(validator.validate(new CreateFlatRequest(1, "101")).isEmpty());
             assertTrue(validator.validate(new UpdateFlatRequest(18, "1801")).isEmpty());
+            assertTrue(validator.validate(new CreateFlatRequest(99, "9901")).isEmpty());
         }
     }
 

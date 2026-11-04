@@ -1,6 +1,7 @@
 package com.emerald.society.controller;
 
 import com.emerald.society.dto.FloorResponse;
+import com.emerald.society.dto.PageResponse;
 import com.emerald.society.service.FloorService;
 import com.emerald.society.dto.FloorRequest;
 import jakarta.validation.Valid;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +31,15 @@ public class FloorController {
     @GetMapping
     public List<FloorResponse> getFloors() {
         return floorService.getFloors();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<FloorResponse> getFloorsPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "floorNumber") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
+        return floorService.getFloorsPage(page, size, sortBy, direction);
     }
 
     @GetMapping("/{floorNumber}")

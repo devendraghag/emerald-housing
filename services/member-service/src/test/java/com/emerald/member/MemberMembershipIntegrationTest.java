@@ -11,6 +11,7 @@ import com.emerald.member.dto.RelationshipType;
 import com.emerald.member.dto.SocietyFlatResponse;
 import com.emerald.member.exception.FlatNotFoundException;
 import com.emerald.member.exception.DuplicateMembershipException;
+import com.emerald.member.exception.SocietyDependencyException;
 import com.emerald.member.service.MemberService;
 import com.emerald.member.service.MembershipService;
 import java.time.LocalDate;
@@ -61,6 +62,18 @@ class MemberMembershipIntegrationTest {
         when(society.getFlat(missingFlat)).thenThrow(new FlatNotFoundException(missingFlat));
         assertThrows(FlatNotFoundException.class, () -> assignments.assign(member.memberId(), badRequest));
         assertEquals(1, assignments.byMember(member.memberId()).size());
+    }
+
+    @Test void dependencyFailureNeverPersistsAnUnvalidatedMembership() {
+        var member = members.create(new CreateMemberRequest("Dependency Failure User", "9876543211", null));
+        UUID flatId = UUID.randomUUID();
+        when(society.getFlat(flatId)).thenThrow(new SocietyDependencyException(504,
+                "SOCIETY_SERVICE_TIMEOUT", "Society Service timed out", null, true));
+
+        assertThrows(SocietyDependencyException.class, () -> assignments.assign(member.memberId(),
+                new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.now())));
+
+        assertTrue(assignments.byMember(member.memberId()).isEmpty());
     }
 
     @Test void membershipCanBePagedAndEndedWithoutLosingItsHistory() {

@@ -1,16 +1,21 @@
 package com.emerald.society.service;
 
 import com.emerald.society.dto.FloorResponse;
+import com.emerald.society.dto.PageResponse;
 import com.emerald.society.exception.FloorNotFoundException;
 import com.emerald.society.repository.FloorRepository;
 import com.emerald.society.repository.SocietyRepository;
+import com.emerald.society.config.PageRequests;
 import com.emerald.society.config.SocietyCacheConfiguration;
 import com.emerald.society.config.SocietyCacheMetrics;
 import java.util.List;
+import java.util.Set;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +43,14 @@ public class FloorService {
     public List<FloorResponse> getFloors() {
         return cacheMetrics.recordDatabaseLoad("floors", () -> floorRepository.findAllByOrderByFloorNumberAsc().stream()
                 .map(floor -> new FloorResponse(floor.getFloorNumber())).toList());
+    }
+    @PreAuthorize("@societyAccess.has('SOCIETY_VIEW','SOCIETY')")
+    @Transactional(readOnly = true)
+    public PageResponse<FloorResponse> getFloorsPage(int page, int size, String sortBy, String direction) {
+        Pageable pageable = PageRequests.of(page, size, sortBy, direction, Set.of("floorNumber"));
+        Page<com.emerald.society.entity.FloorEntity> result = floorRepository
+                .findAllBySocietySocietyCode("EMERALD", pageable);
+        return PageResponse.from(result, floor -> new FloorResponse(floor.getFloorNumber()), sortBy, direction);
     }
     @PreAuthorize("@societyAccess.has('SOCIETY_VIEW','SOCIETY')")
     @Transactional(readOnly = true)

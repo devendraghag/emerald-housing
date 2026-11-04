@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,12 +30,14 @@ public class CommunityNoticeService {
     }
 
     @Transactional(readOnly=true)
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_CREATE','SOCIETY')")
     public List<FlatOption> flatOptions() {
         return society.noticeFlatOptions().stream().filter(f->"ACTIVE".equals(f.status()))
                 .map(f->new FlatOption(f.flatId(),f.flatNumber())).toList();
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_CREATE','SOCIETY')")
     public Notice create(CreateNotice request, UUID actor, boolean administrator, Set<UUID> actorFlatIds) {
         String title=request.title().trim();
         String message=request.message().trim();
@@ -51,6 +54,7 @@ public class CommunityNoticeService {
     }
 
     @Transactional(readOnly=true)
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_BOARD','SOCIETY')")
     public List<Notice> board(Set<UUID> flatIds, boolean administrator) {
         if(administrator) return db.query("SELECT * FROM community_notices WHERE status='PUBLISHED' ORDER BY created_at DESC",this::notice);
         if(flatIds==null||flatIds.isEmpty())
@@ -67,12 +71,14 @@ public class CommunityNoticeService {
     }
 
     @Transactional(readOnly=true)
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_ADMIN','SOCIETY')")
     public List<ReviewNotice> reviewQueue() {
         return db.query("SELECT * FROM community_notices WHERE status IN ('SUBMITTED','UNDER_REVIEW') ORDER BY created_at",
                 (rs,n)->review(rs));
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_ADMIN','SOCIETY')")
     public ReviewNotice changeAudience(UUID id, AudienceChange request) {
         var current=get(id);
         if(!Set.of("SUBMITTED","UNDER_REVIEW").contains(current.status()))
@@ -86,6 +92,7 @@ public class CommunityNoticeService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_ADMIN','SOCIETY')")
     public Notice changeStatus(UUID id, String requestedStatus, UUID actor) {
         String next=requestedStatus==null?"":requestedStatus.trim().toUpperCase();
         if(!Set.of("UNDER_REVIEW","PUBLISHED","REJECTED","CLOSED","EXPIRED").contains(next))
@@ -105,6 +112,7 @@ public class CommunityNoticeService {
     }
 
     @Transactional(readOnly=true)
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_BOARD','SOCIETY')")
     public List<Map<String,Object>> notifications(UUID recipient, Set<UUID> flatIds, boolean administrator) {
         if(administrator) return db.queryForList("SELECT event_id,notice_id,event_type,created_at,read_at FROM community_notice_notifications WHERE recipient_id=? ORDER BY created_at DESC LIMIT 100",recipient);
         if(flatIds==null||flatIds.isEmpty())
@@ -123,6 +131,7 @@ public class CommunityNoticeService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('COMMUNITY_NOTICE_BOARD','SOCIETY')")
     public void markNotificationRead(UUID eventId, UUID recipient, Set<UUID> flatIds, boolean administrator) {
         int updated;
         if(administrator) updated=db.update("UPDATE community_notice_notifications SET read_at=COALESCE(read_at,now()) WHERE event_id=? AND recipient_id=?",eventId,recipient);

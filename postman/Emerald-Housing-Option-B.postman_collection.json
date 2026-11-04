@@ -304,6 +304,27 @@
           ]
         },
         {
+          "name": "Paged floor directory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalBaseUrl}}/api/v1/floors/page?page=0&size=20&sortBy=floorNumber&direction=asc",
+            "description": "Reads one bounded, sorted page of society floors."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "pm.test('paged floor response is bounded and ordered',()=>{const body=pm.response.json();pm.expect(body.content).to.be.an('array').with.lengthOf.at.most(20);pm.expect(body.page).to.eql(0);pm.expect(body.size).to.eql(20);pm.expect(body.sortBy).to.eql('floorNumber');pm.expect(body.direction).to.eql('asc');const values=body.content.map(f=>f.floorNumber);pm.expect(values).to.eql([...values].sort((a,b)=>a-b));});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Floor 1",
           "request": {
             "method": "GET",

@@ -11,7 +11,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import jakarta.validation.ConstraintViolationException;
 import com.emerald.society.config.CacheFallbackOverloadedException;
 
 import java.time.Instant;
@@ -62,12 +64,35 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException exception, HttpServletRequest request) {
         Map<String, String> details = new TreeMap<>();
         for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
-            details.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+            String field = fieldError.getField().isBlank() ? "request" : fieldError.getField();
+            details.putIfAbsent(field, fieldError.getDefaultMessage());
         }
-        ApiError body = new ApiError(Instant.now(), HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(), "VALIDATION_FAILED",
-                "One or more request fields are invalid", request.getRequestURI(), details);
-        return ResponseEntity.badRequest().body(body);
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
+                "One or more request fields are invalid", details, request);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(
+            ConstraintViolationException exception, HttpServletRequest request) {
+        Map<String, String> details = new TreeMap<>();
+        exception.getConstraintViolations().forEach(violation ->
+                details.putIfAbsent(violation.getPropertyPath().toString(), violation.getMessage()));
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
+                "One or more request values are invalid", details, request);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleMethodValidation(
+            HandlerMethodValidationException exception, HttpServletRequest request) {
+        Map<String, String> details = new TreeMap<>();
+        exception.getParameterValidationResults().forEach(result -> {
+            String parameter = result.getMethodParameter().getParameterName();
+            String key = parameter == null || parameter.isBlank() ? "request" : parameter;
+            result.getResolvableErrors().forEach(error ->
+                    details.putIfAbsent(key, error.getDefaultMessage()));
+        });
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
+                "One or more request values are invalid", details, request);
     }
 
     @ExceptionHandler(Exception.class)
@@ -85,8 +110,13 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiError> error(HttpStatus status, String code, String message,
                                            HttpServletRequest request) {
+        return error(status, code, message, Map.of(), request);
+    }
+
+    private ResponseEntity<ApiError> error(HttpStatus status, String code, String message,
+                                           Map<String, String> details, HttpServletRequest request) {
         ApiError body = new ApiError(Instant.now(), status.value(), status.getReasonPhrase(),
-                code, message, request.getRequestURI(), Map.of());
+                code, message, request.getRequestURI(), details);
         return ResponseEntity.status(status).body(body);
     }
 }

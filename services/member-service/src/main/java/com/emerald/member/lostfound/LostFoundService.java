@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ public class LostFoundService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_REPORT','SOCIETY')")
     public Notice create(CreateReport r, UUID actor, Set<UUID> flatIds, boolean administrator) {
         UUID flatId = r.flatId();
         if (flatId == null) {
@@ -49,6 +51,7 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_BOARD','SOCIETY')")
     public List<Notice> board(Set<UUID> flatIds, boolean administrator) {
         if (administrator)
             return db.query("SELECT * FROM lost_found_reports WHERE status IN ('PUBLISHED','CLAIM_RECEIVED') ORDER BY created_at DESC", this::notice);
@@ -58,11 +61,13 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public List<AdminReport> adminReports() {
         return db.query("SELECT * FROM lost_found_reports ORDER BY created_at DESC", (rs, n) -> new AdminReport(notice(rs, n), rs.getObject("reporter_id", UUID.class), rs.getString("contact_preference"), rs.getString("contact_other")));
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public Notice assignFlat(UUID id, UUID flatId, UUID actor) {
         Notice current = get(id);
         db.update("UPDATE lost_found_reports SET flat_id=?,updated_at=now() WHERE id=?", flatId, id);
@@ -72,11 +77,13 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public AdminReport adminReport(UUID id) {
         return db.query("SELECT * FROM lost_found_reports WHERE id=?", rs -> rs.next() ? new AdminReport(notice(rs, 0), rs.getObject("reporter_id", UUID.class), rs.getString("contact_preference"), rs.getString("contact_other")) : null, id);
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public Notice changeStatus(UUID id, String status, UUID actor) {
         String next = status.toUpperCase();
         if (!List.of("UNDER_REVIEW", "PUBLISHED", "RESOLVED", "REJECTED", "EXPIRED", "CLOSED_UNCLAIMED").contains(next))
@@ -97,6 +104,7 @@ public class LostFoundService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_REPORT','SOCIETY')")
     public AdminClaim claim(UUID id, String details, UUID actor, Set<UUID> flatIds) {
         var report = get(id);
         requireFlatAccess(report.flatId(), flatIds, false);
@@ -120,11 +128,13 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public List<AdminClaim> claims(UUID reportId) {
         return db.query("SELECT * FROM lost_found_claims WHERE report_id=? ORDER BY created_at DESC", (rs, n) -> new AdminClaim(rs.getObject("id", UUID.class), reportId, rs.getObject("claimant_id", UUID.class), rs.getString("identifying_details"), rs.getString("status"), rs.getTimestamp("created_at").toInstant()), reportId);
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public AdminClaim decideClaim(UUID reportId, UUID claimId, String decision) {
         String status = decision.toUpperCase();
         if (!List.of("ACCEPTED", "REJECTED").contains(status)) throw bad("Claim status must be ACCEPTED or REJECTED");
@@ -135,6 +145,7 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_BOARD','SOCIETY')")
     public List<java.util.Map<String, Object>> notifications(UUID recipient, Set<UUID> flatIds, boolean administrator) {
         if (administrator)
             return db.queryForList("SELECT event_id,report_id,event_type,created_at,read_at FROM in_app_notifications WHERE recipient_id=? ORDER BY created_at DESC LIMIT 100", recipient);
@@ -144,6 +155,7 @@ public class LostFoundService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_BOARD','SOCIETY')")
     public void markNotificationRead(UUID eventId, UUID recipient, Set<UUID> flatIds, boolean administrator) {
         int updated;
         if (administrator) {
@@ -158,6 +170,7 @@ public class LostFoundService {
     }
 
     @Transactional
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_REPORT','SOCIETY') or @memberAccess.has('LOST_FOUND_ADMIN','SOCIETY')")
     public Notice savePhoto(UUID id, org.springframework.web.multipart.MultipartFile file, UUID actor, Set<UUID> flatIds, boolean administrator) {
         var report = db.query("SELECT reporter_id,flat_id FROM lost_found_reports WHERE id=?", rs -> rs.next() ? new Object[]{rs.getObject(1, UUID.class),rs.getObject(2, UUID.class)} : null, id);
         if (report == null) throwNotFound();
@@ -171,6 +184,7 @@ public class LostFoundService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.has('LOST_FOUND_BOARD','SOCIETY')")
     public org.springframework.core.io.Resource photo(UUID id, Set<UUID> flatIds, boolean administrator) {
         var row = db.query("SELECT photo_key,status,flat_id FROM lost_found_reports WHERE id=?", rs -> rs.next() ? new Object[]{rs.getString(1),rs.getString(2),rs.getObject(3,UUID.class)} : null, id);
         if (row == null) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Photo not found");

@@ -39,6 +39,27 @@ class FeaturesPersistenceTest {
   assertEquals("Asha Original",service.get(first.member().memberId()).fullName());
   assertEquals(1,jdbc.queryForObject("select count(*) from members",Integer.class));
  }
+ @Test void concurrentIdenticalIdempotencyKeysCreateOneMemberAndReplayTheCommittedResult() throws Exception {
+  var request=new com.emerald.member.dto.CreateMemberRequest("Concurrent Replay","9876543294",null);
+  var ready=new java.util.concurrent.CountDownLatch(2);
+  var start=new java.util.concurrent.CountDownLatch(1);
+  var workers=java.util.concurrent.Executors.newFixedThreadPool(2);
+  java.util.concurrent.Callable<com.emerald.member.dto.MemberCreationResult> call=()->{
+   login("ADMIN",null,Set.of());ready.countDown();
+   try { if(!start.await(5,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("start latch timed out");
+    return service.createIdempotent(request,"concurrent-replay",actor);
+   } finally { SecurityContextHolder.clearContext(); }
+  };
+  try {
+   var first=workers.submit(call);var second=workers.submit(call);
+   assertTrue(ready.await(5,java.util.concurrent.TimeUnit.SECONDS));start.countDown();
+   var a=first.get(20,java.util.concurrent.TimeUnit.SECONDS);var b=second.get(20,java.util.concurrent.TimeUnit.SECONDS);
+   assertEquals(a.member().memberId(),b.member().memberId());
+   assertNotEquals(a.replayed(),b.replayed());
+   assertEquals(1,jdbc.queryForObject("select count(*) from members where mobile_number=?",Integer.class,"9876543294"));
+   assertEquals(1,jdbc.queryForObject("select count(*) from idempotency_records where idempotency_key=?",Integer.class,"concurrent-replay"));
+  } finally { start.countDown();workers.shutdownNow(); }
+ }
  @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:16-alpine");
  @DynamicPropertySource static void database(DynamicPropertyRegistry p) { p.add("app.datasource.writer.jdbc-url",POSTGRES::getJdbcUrl);p.add("app.datasource.writer.username",POSTGRES::getUsername);p.add("app.datasource.writer.password",POSTGRES::getPassword); }
  @Autowired MemberService service; @Autowired JdbcTemplate jdbc; @Autowired PlatformTransactionManager manager;

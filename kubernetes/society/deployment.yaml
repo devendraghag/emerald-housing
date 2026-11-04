@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: society-service
 spec:
+  replicas: 2
   revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate

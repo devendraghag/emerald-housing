@@ -10,7 +10,7 @@ if(!username||!password){
  username=Buffer.from(secret.data['admin-username'],'base64').toString();password=Buffer.from(secret.data['admin-password'],'base64').toString();
 }
 function set(key,value){const existing=environment.values.find(v=>v.key===key);if(existing)existing.value=value;else environment.values.push({key,value,enabled:true});}
-set('adminUsername',username);set('adminPassword',password);set('externalBaseUrl',process.env.EMERALD_GATEWAY_URL||'http://localhost:8080');set('gatewayBaseUrl',process.env.EMERALD_GATEWAY_URL||'http://localhost:8080');set('runManualRequests','false');
+set('adminUsername',username);set('adminPassword',password);set('externalBaseUrl',process.env.EMERALD_GATEWAY_URL||'http://localhost:8080');set('gatewayBaseUrl',process.env.EMERALD_GATEWAY_URL||'http://localhost:8080');set('memberBaseUrl',process.env.EMERALD_MEMBER_URL||'http://localhost:8082');set('societyBaseUrl',process.env.EMERALD_SOCIETY_URL||'http://localhost:8081');set('runManualRequests','false');
 if(process.argv.includes('--export-environment')){
  environment.name='Emerald Housing - Option B Localhost (private)';environment._postman_exported_at=new Date().toISOString();
  const privateFile=path.join(os.tmpdir(),'Emerald-Housing-Option-B-Private.postman_environment.json');

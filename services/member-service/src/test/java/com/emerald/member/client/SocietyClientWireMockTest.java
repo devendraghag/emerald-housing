@@ -58,6 +58,34 @@ class SocietyClientWireMockTest {
         assertEquals("ACTIVE", options.getFirst().status());
     }
 
+    @Test void retriesTransientNoticeDirectoryFailureAndThenSucceeds() {
+        UUID flatId = UUID.randomUUID();
+        wireMock.stubFor(get(urlEqualTo("/api/v1/internal/notices/flat-options"))
+                .inScenario("notice-directory-retry")
+                .whenScenarioStateIs("Started")
+                .willReturn(serviceUnavailable())
+                .willSetStateTo("recovered"));
+        wireMock.stubFor(get(urlEqualTo("/api/v1/internal/notices/flat-options"))
+                .inScenario("notice-directory-retry")
+                .whenScenarioStateIs("recovered")
+                .willReturn(okJson("[{\"flatId\":\"" + flatId
+                        + "\",\"flatNumber\":\"A-1\",\"status\":\"ACTIVE\"}]")));
+
+        var options = client.noticeFlatOptions();
+
+        assertEquals(flatId, options.getFirst().flatId());
+        wireMock.verify(2, getRequestedFor(urlEqualTo("/api/v1/internal/notices/flat-options")));
+    }
+
+    @Test void doesNotRetryPermanentNoticeDirectoryClientError() {
+        wireMock.stubFor(get(urlEqualTo("/api/v1/internal/notices/flat-options")).willReturn(badRequest()));
+
+        SocietyDependencyException error = assertThrows(SocietyDependencyException.class, client::noticeFlatOptions);
+
+        assertEquals(502, error.getStatus());
+        wireMock.verify(1, getRequestedFor(urlEqualTo("/api/v1/internal/notices/flat-options")));
+    }
+
     @Test void mapsMissingFlatToNotFound() {
         UUID id = UUID.randomUUID(); wireMock.stubFor(get(anyUrl()).willReturn(notFound()));
         assertThrows(FlatNotFoundException.class, () -> client.getFlat(id));

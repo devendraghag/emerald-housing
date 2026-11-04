@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: emerald
+      POSTGRES_PASSWORD: e2e-database-password
+      POSTGRES_DB: postgres
+    volumes:
+      - ./tests/e2e/init-databases.sql:/docker-entrypoint-initdb.d/01-create-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emerald -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--requirepass", "e2e-test-only-redis-password"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "e2e-test-only-redis-password", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  kafka:
+    image: apache/kafka:4.0.0
+    hostname: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  society-service:
+    build:
+      context: ./services/society-service
+    environment: &app-environment
+      SERVER_PORT: 8080
+      SOCIETY_DB_URL: jdbc:postgresql://postgres:5432/society_db
+      SOCIETY_DB_USERNAME: emerald
+      SOCIETY_DB_PASSWORD: e2e-database-password
+      REDIS_HOST: redis
+      REDIS_PASSWORD: e2e-test-only-redis-password
+      TRACING_OTLP_ENABLED: "false"
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
+      SESSION_VALIDATION_TOKEN: e2e-session-validation-token-change-me-2026
+      GATEWAY_AUTHENTICATION_TOKEN: e2e-gateway-authentication-token-change-me-2026
+      MEMBER_TO_SOCIETY_TOKEN: e2e-member-to-society-token-change-me-2026
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  member-service:
+    build:
+      context: ./services/member-service
+    environment:
+      <<: *app-environment
+      MEMBER_DB_URL: jdbc:postgresql://postgres:5432/member_db
+      MEMBER_DB_USERNAME: emerald
+      MEMBER_DB_PASSWORD: e2e-database-password
+      SOCIETY_SERVICE_BASE_URL: http://society-service:8080
+      SOCIETY_SERVICE_CONNECT_TIMEOUT: 2s
+      SOCIETY_SERVICE_READ_TIMEOUT: 3s
+      GATEWAY_SESSION_VALIDATION_URL: http://api-gateway:8080/internal/auth/session
+      MEMBER_TO_SOCIETY_TOKEN: e2e-member-to-society-token-change-me-2026
+      ADMIN_PROVISIONING_USERNAME: e2e-admin
+      ADMIN_PROVISIONING_PASSWORD: E2e-Admin-Local-Only-2026!
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      society-service:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: ./infrastructure/api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PASSWORD: e2e-test-only-redis-password
+      MEMBER_SERVICE_URL: http://member-service:8080
+      SOCIETY_SERVICE_URL: http://society-service:8080
+      MEMBER_CREDENTIAL_URL: http://member-service:8080/internal/auth/credentials
+      SESSION_VALIDATION_TOKEN: e2e-session-validation-token-change-me-2026
+      GATEWAY_AUTHENTICATION_TOKEN: e2e-gateway-authentication-token-change-me-2026
+      SESSION_COOKIE_SECURE: "false"
+      TRACING_OTLP_ENABLED: "false"
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+      member-service:
+        condition: service_started
+      society-service:
+        condition: service_started
+
+  e2e-test:
+    build:
+      context: .
+      dockerfile: tests/e2e/Dockerfile
+    environment:
+      EMERALD_GATEWAY_URL: http://api-gateway:8080
+      EMERALD_MEMBER_URL: http://member-service:8080
+      EMERALD_SOCIETY_URL: http://society-service:8080
+      EMERALD_ADMIN_USERNAME: e2e-admin
+      EMERALD_ADMIN_PASSWORD: E2e-Admin-Local-Only-2026!
+    depends_on:
+      api-gateway:
+        condition: service_started
+      member-service:
+        condition: service_started
+      society-service:
+        condition: service_started

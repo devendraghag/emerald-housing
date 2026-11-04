@@ -9,12 +9,15 @@ import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.List;
 import java.util.function.Supplier;
@@ -58,27 +61,28 @@ public class SocietyClient {
     /** Keeps existing focused client construction possible without changing the test sources. */
     public SocietyClient(RestClient societyRestClient, JsonMapper jsonMapper) {
         this(societyRestClient, jsonMapper, "", CircuitBreaker.ofDefaults("societyFlatLookup-test"),
-                Retry.ofDefaults("societyFlatLookup-test"), Bulkhead.ofDefaults("societyFlatLookup-test"),
+                Retry.of("societyFlatLookup-test", retryConfig()), Bulkhead.ofDefaults("societyFlatLookup-test"),
                 new SimpleMeterRegistry());
     }
 
+    private static RetryConfig retryConfig() {
+        return RetryConfig.custom().maxAttempts(3)
+                .intervalFunction(IntervalFunction.of(Duration.ofMillis(1)))
+                .retryOnException(error -> error instanceof SocietyDependencyException dependency
+                        && dependency.isRetryable())
+                .build();
+    }
+
     public SocietyFlatResponse getFlat(UUID flatId) {
-        Supplier<SocietyFlatResponse> singleAttempt = CircuitBreaker.decorateSupplier(circuitBreaker,
-                Bulkhead.decorateSupplier(bulkhead, () -> getFlatOnce(flatId)));
-        try {
-            // Retry is outermost: each physical GET obtains a fresh circuit-breaker and bulkhead permit.
-            return Retry.decorateSupplier(retry, singleAttempt).get();
-        } catch (CallNotPermittedException ex) {
-            throw new SocietyDependencyException(503, "SOCIETY_CIRCUIT_OPEN",
-                    "Society Service is temporarily unavailable", ex);
-        } catch (BulkheadFullException ex) {
-            throw new SocietyDependencyException(503, "SOCIETY_CAPACITY_EXCEEDED",
-                    "Society Service validation capacity is temporarily full", ex);
-        }
+        return executeResilient(() -> getFlatOnce(flatId));
     }
 
     /** Internal, minimal directory for notice audiences; it exposes flat IDs/numbers only. */
     public List<SocietyNoticeFlatOption> noticeFlatOptions() {
+        return executeResilient(this::noticeFlatOptionsOnce);
+    }
+
+    private List<SocietyNoticeFlatOption> noticeFlatOptionsOnce() {
         try {
             String correlationId=MDC.get("correlationId");
             String responseBody=client.get().uri("/api/v1/internal/notices/flat-options")
@@ -90,8 +94,10 @@ public class SocietyClient {
                     "Society Service returned an invalid flat directory",null);
             return List.of(result);
         } catch(RestClientResponseException ex) {
+            int status = ex.getStatusCode().value();
+            boolean transientStatus = status == 502 || status == 503 || status == 504;
             throw new SocietyDependencyException(502,"SOCIETY_SERVICE_ERROR",
-                    "Society Service could not provide flat choices",ex);
+                    "Society Service could not provide flat choices",ex, transientStatus);
         } catch(ResourceAccessException ex) {
             if(hasTimeout(ex)) throw new SocietyDependencyException(504,"SOCIETY_SERVICE_TIMEOUT",
                     "Society Service timed out",ex,true);
@@ -103,6 +109,21 @@ public class SocietyClient {
         } catch(RestClientException | NullPointerException ex) {
             throw new SocietyDependencyException(502,"SOCIETY_INVALID_RESPONSE",
                     "Society Service returned an invalid flat directory",ex);
+        }
+    }
+
+    private <T> T executeResilient(Supplier<T> operation) {
+        Supplier<T> singleAttempt = CircuitBreaker.decorateSupplier(circuitBreaker,
+                Bulkhead.decorateSupplier(bulkhead, operation));
+        try {
+            // Retry is outermost so each HTTP attempt gets a fresh breaker and bulkhead permit.
+            return Retry.decorateSupplier(retry, singleAttempt).get();
+        } catch (CallNotPermittedException ex) {
+            throw new SocietyDependencyException(503, "SOCIETY_CIRCUIT_OPEN",
+                    "Society Service is temporarily unavailable", ex);
+        } catch (BulkheadFullException ex) {
+            throw new SocietyDependencyException(503, "SOCIETY_CAPACITY_EXCEEDED",
+                    "Society Service validation capacity is temporarily full", ex);
         }
     }
 
