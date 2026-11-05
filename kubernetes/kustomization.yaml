@@ -7,6 +7,8 @@ resources:
   - society/service.yaml
   - member/deployment.yaml
   - member/service.yaml
+  - ai/deployment.yaml
+  - ai/service.yaml
   - gateway/config.yaml
   - gateway/deployment.yaml
   - gateway/service.yaml

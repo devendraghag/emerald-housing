@@ -90,6 +90,7 @@ class FeaturesPersistenceTest {
   rental.create("viewings",Map.of("flatId",flat,"slot",duplicateSlot));
   assertEquals(409,assertThrows(ResponseStatusException.class,()->rental.create("viewings",Map.of("flatId",flat,"slot",duplicateSlot))).getStatusCode().value());
   var work=rental.create("maintenance",Map.of("flatId",flat,"summary","Leaking tap","description","Kitchen tap is leaking","priority","HIGH"));
+  var unrelatedWork=rental.create("maintenance",Map.of("flatId",otherFlat,"summary","Other flat","description","Other flat request"));
   var lease=rental.create("leases",Map.of("flatId",flat,"leaseEndDate","2099-01-31","action","RENEWAL","rentAmount",1250,"securityDeposit",2500));
   var moveOut=rental.create("leases",Map.of("flatId",flat,"leaseEndDate","2099-02-28","action","MOVE_OUT","rentAmount",1250,"securityDeposit",2500));
   var viewing=rental.create("viewings",Map.of("flatId",flat,"slot",java.time.OffsetDateTime.now().plusDays(4).withNano(0).toString()));
@@ -102,6 +103,8 @@ class FeaturesPersistenceTest {
   assertThrows(org.springframework.security.access.AccessDeniedException.class,()->rental.create("viewings",Map.of("flatId",flat,"slot",java.time.OffsetDateTime.now().plusDays(4).withNano(0).toString())));
   var tenantWork=rental.create("maintenance",Map.of("flatId",flat,"summary","Noisy fan","description","Bathroom fan is noisy"));
   assertEquals(tenant,tenantWork.get("memberId"));
+  assertEquals(Map.of("requestId",tenantWork.get("id"),"status","OPEN"),rental.maintenanceStatus((UUID)tenantWork.get("id")));
+  assertThrows(org.springframework.security.access.AccessDeniedException.class,()->rental.maintenanceStatus((UUID)unrelatedWork.get("id")));
   rental.update("leases",(UUID)lease.get("id"),Map.of("status","RENEWAL_ACCEPTED","version",1));
   assertThrows(org.springframework.security.access.AccessDeniedException.class,()->rental.update("leases",(UUID)lease.get("id"),Map.of("status","RENEWED","version",2)));
   rental.update("leases",(UUID)moveOut.get("id"),Map.of("status","MOVE_OUT_CONFIRMED","version",1));
@@ -116,6 +119,6 @@ class FeaturesPersistenceTest {
   rental.update("maintenance",(UUID)work.get("id"),Map.of("status","RESOLVED","version",2));
   rental.update("maintenance",(UUID)work.get("id"),Map.of("status","CLOSED","version",3));
   rental.update("viewings",(UUID)viewing.get("id"),Map.of("status","CANCELLED","version",1));
-  assertEquals(18,jdbc.queryForObject("select count(*) from audit_events where entity_type='RENTAL_OPERATION'",Integer.class));
+  assertEquals(19,jdbc.queryForObject("select count(*) from audit_events where entity_type='RENTAL_OPERATION'",Integer.class));
  }
 }

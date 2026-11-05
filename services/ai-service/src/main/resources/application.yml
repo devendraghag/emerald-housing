@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: ai-service
+  ai:
+    model:
+      chat: ${AI_CHAT_PROVIDER:openai}
+      embedding: ${AI_EMBEDDING_PROVIDER:openai}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+server:
+  port: ${AI_SERVER_PORT:8083}
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+emerald:
+  security:
+    gateway-session-validation-url: ${GATEWAY_SESSION_VALIDATION_URL:http://localhost:8080/internal/auth/session}
+    session-cookie-name: ${SESSION_COOKIE_NAME:SESSION}
+    session-validation-token: ${SESSION_VALIDATION_TOKEN:}
+    validation-connect-timeout: ${SESSION_VALIDATION_CONNECT_TIMEOUT:2s}
+    validation-read-timeout: ${SESSION_VALIDATION_READ_TIMEOUT:3s}
+society:
+  service:
+    base-url: ${SOCIETY_SERVICE_BASE_URL:http://localhost:8081}
+    connect-timeout: ${SOCIETY_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${SOCIETY_SERVICE_READ_TIMEOUT:3s}
+assistant:
+  retrieval:
+    top-k: ${ASSISTANT_RETRIEVAL_TOP_K:3}
+    similarity-threshold: ${ASSISTANT_RETRIEVAL_SIMILARITY_THRESHOLD:0.30}

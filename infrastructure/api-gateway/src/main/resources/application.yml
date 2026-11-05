@@ -44,6 +44,18 @@ spring:
                     redis-rate-limiter.replenishRate: ${GATEWAY_SOCIETY_RATE_REPLENISH:20}
                     redis-rate-limiter.burstCapacity: ${GATEWAY_SOCIETY_RATE_BURST:40}
                     redis-rate-limiter.requestedTokens: 1
+            - id: ai-api
+              uri: ${AI_SERVICE_URL:http://localhost:8083}
+              order: 1
+              predicates:
+                - Path=/api/v1/assistant/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@authenticatedAdminKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${GATEWAY_AI_RATE_REPLENISH:5}
+                    redis-rate-limiter.burstCapacity: ${GATEWAY_AI_RATE_BURST:10}
+                    redis-rate-limiter.requestedTokens: 1
 
 emerald:
   security:

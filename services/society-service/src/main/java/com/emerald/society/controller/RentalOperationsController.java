@@ -148,6 +148,13 @@ public class RentalOperationsController {
     @GetMapping("/maintenance/{id}/progress")
     public List<Map<String,Object>> maintenanceProgress(@PathVariable UUID id){var current=maintenance(id,false);requirePermission("MAINTENANCE_VIEW",(UUID)current[0]);return db.query("SELECT id,note,status,assigned_to,created_by,created_at FROM maintenance_progress_updates WHERE maintenance_id=? ORDER BY created_at,id",(rs,n)->Map.of("id",rs.getObject("id",UUID.class),"note",rs.getString("note"),"status",rs.getString("status"),"assignedTo",Objects.toString(rs.getString("assigned_to"),""),"createdBy",rs.getObject("created_by",UUID.class),"createdAt",rs.getTimestamp("created_at").toInstant()),id);}
 
+    @GetMapping("/maintenance/{id}")
+    public Map<String,Object> maintenanceStatus(@PathVariable UUID id) {
+        var current = maintenance(id, false);
+        requirePermission("MAINTENANCE_VIEW", (UUID) current[0]);
+        return Map.of("requestId", id, "status", current[1]);
+    }
+
     @PostMapping("/maintenance/{id}/progress") @ResponseStatus(HttpStatus.CREATED) @Transactional
     public Map<String,Object> addMaintenanceProgress(@PathVariable UUID id,@NotEmpty @RequestBody Map<String,Object> body){if(body.keySet().stream().anyMatch(k->!Set.of("note","version").contains(k)))throw bad("Only note and version are accepted");String note=requiredText(body.get("note"),2000);var current=maintenance(id,true);UUID flat=(UUID)current[0];requirePermission("MAINTENANCE_MANAGE",flat);if(Set.of("RESOLVED","CLOSED").contains(current[1]))throw new ResponseStatusException(HttpStatus.CONFLICT,"Progress cannot be added after resolution");long version=((Number)current[3]).longValue();if(integer(body.get("version"),0,Integer.MAX_VALUE)!=version)throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,"Supply the current request version");if(db.update("UPDATE rental_operations SET updated_at=CURRENT_TIMESTAMP,version=version+1 WHERE id=? AND version=?",id,version)==0)throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,"Request version is stale");Map<?,?> details=readDetails((String)current[2]);UUID updateId=UUID.randomUUID();addMaintenanceProgress(updateId,id,note,(String)current[1],Objects.toString(details.get("assignedTo"),null),access.identity().adminId());Map<String,Object> result=Map.of("id",updateId,"maintenanceId",id,"note",note,"status",current[1],"version",version+1);audit.record("ADD_MAINTENANCE_PROGRESS","MAINTENANCE_PROGRESS",updateId,null,result);return result;}
 

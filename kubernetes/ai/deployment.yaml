@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+  namespace: emerald-housing
+  labels:
+    app.kubernetes.io/name: ai-service
+spec:
+  # The sample FAQ index and chat memory are in-process; use one replica until persistent stores are configured.
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+        app.kubernetes.io/name: ai-service
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ai-service
+          image: emerald/ai-service:step4-audit
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: AI_CHAT_PROVIDER
+              value: openai
+            - name: AI_EMBEDDING_PROVIDER
+              value: openai
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-ai-credentials
+                  key: openai-api-key
+            - name: GATEWAY_SESSION_VALIDATION_URL
+              value: http://api-gateway:8080/internal/auth/session
+            - name: SOCIETY_SERVICE_BASE_URL
+              value: http://society-service:8080
+            - name: SESSION_VALIDATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: emerald-security-credentials
+                  key: session-validation-token
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -9,6 +9,7 @@ $cluster = 'emerald-housing'
 $images = @(
     @{ Name = "emerald/society-service:$ServiceTag"; Context = 'services\society-service' },
     @{ Name = "emerald/member-service:$ServiceTag"; Context = 'services\member-service' }
+    @{ Name = "emerald/ai-service:$ServiceTag"; Context = 'services\ai-service' }
 )
 if ($IncludeGateway) {
     $images += @{ Name = "emerald/api-gateway:$GatewayTag"; Context = 'infrastructure\api-gateway' }

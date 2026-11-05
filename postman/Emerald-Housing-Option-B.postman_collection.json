@@ -4846,6 +4846,49 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Housing FAQ Assistant (manual)",
+      "description": "Requires an authenticated gateway session and the current csrfToken. Conversation IDs are isolated per signed-in account.",
+      "item": [
+        {
+          "name": "Ask a housing FAQ",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-XSRF-TOKEN", "value": "{{csrfToken}}" }
+            ],
+            "url": "{{externalBaseUrl}}/api/v1/assistant/questions",
+            "description": "Start a conversation. Save conversationId from the response and use it in the follow-up request.",
+            "body": { "mode": "raw", "raw": "{\n  \"question\": \"How do I report a lost item?\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===200){const body=pm.response.json();pm.expect(body.conversationId).to.be.a('string');pm.expect(body.answer).to.be.a('string');pm.expect(body.sources).to.be.an('array');pm.environment.set('assistantConversationId',body.conversationId);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ask a follow-up question",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-XSRF-TOKEN", "value": "{{csrfToken}}" }
+            ],
+            "url": "{{externalBaseUrl}}/api/v1/assistant/questions",
+            "description": "Uses conversation history from the first request.",
+            "body": { "mode": "raw", "raw": "{\n  \"conversationId\": \"{{assistantConversationId}}\",\n  \"question\": \"What if I found it?\"\n}" }
+          }
+        }
+      ]
     }
   ]
 }

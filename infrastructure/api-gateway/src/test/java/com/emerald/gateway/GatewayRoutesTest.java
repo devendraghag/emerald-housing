@@ -10,7 +10,8 @@ import org.springframework.cloud.gateway.route.RouteLocator;
 
 @SpringBootTest(properties = {
         "MEMBER_SERVICE_URL=http://member-service:8080",
-        "SOCIETY_SERVICE_URL=http://society-service:8080"
+        "SOCIETY_SERVICE_URL=http://society-service:8080",
+        "AI_SERVICE_URL=http://ai-service:8080"
 })
 class GatewayRoutesTest {
     @Autowired
@@ -22,7 +23,7 @@ class GatewayRoutesTest {
 
         assertThat(routes).isNotNull();
         assertThat(routes).extracting("id")
-                .contains("member-api", "society-api");
+                .contains("member-api", "society-api", "ai-api");
         assertThat(routes).filteredOn(route -> route.getId().equals("member-api"))
                 .extracting(route -> route.getUri().toString())
                 .containsExactly("http://member-service:8080");
@@ -39,6 +40,16 @@ class GatewayRoutesTest {
             var exchange=org.springframework.mock.web.server.MockServerWebExchange.from(org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(path));
             assertThat(reactor.core.publisher.Mono.from(member.getPredicate().apply(exchange)).block()).as(path).isTrue();
         }
+    }
+
+    @Test
+    void assistantRequestsRouteToAiService() {
+        var routes = routeLocator.getRoutes().collectList().block(Duration.ofSeconds(5));
+        var assistant = routes.stream().filter(route -> route.getId().equals("ai-api")).findFirst().orElseThrow();
+        assertThat(assistant.getUri().toString()).isEqualTo("http://ai-service:8080");
+        var exchange = org.springframework.mock.web.server.MockServerWebExchange.from(
+                org.springframework.mock.http.server.reactive.MockServerHttpRequest.post("/api/v1/assistant/questions"));
+        assertThat(reactor.core.publisher.Mono.from(assistant.getPredicate().apply(exchange)).block()).isTrue();
     }
 
     @Test

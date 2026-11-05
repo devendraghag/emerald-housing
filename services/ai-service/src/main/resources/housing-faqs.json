@@ -1,0 +1,27 @@
+[
+  {
+    "id": "PORTAL-LOST-FOUND-01",
+    "title": "Report a lost or found item",
+    "content": "Residents can create a lost or found report in the Emerald Housing portal. The lost and found board displays reports available to the signed-in resident. Use the report form to describe the item and submit it for the society's lost and found workflow."
+  },
+  {
+    "id": "PORTAL-LOST-FOUND-02",
+    "title": "Respond to a lost and found report",
+    "content": "A resident can submit a claim against a published lost and found report through the portal. Authorised society staff review submitted claims through the society's workflow."
+  },
+  {
+    "id": "PORTAL-NOTICES-01",
+    "title": "View community notices",
+    "content": "Residents can view the community notice board in the Emerald Housing portal. Notices are shown according to their audience and publication status."
+  },
+  {
+    "id": "PORTAL-MAINTENANCE-01",
+    "title": "Maintenance request tracking",
+    "content": "Residents can create maintenance requests for their own flats and check the current status and progress of a request in the Emerald Housing portal. Request information is available only to accounts with permission for the request's flat."
+  },
+  {
+    "id": "PORTAL-RENTAL-01",
+    "title": "Rental workflow features",
+    "content": "The Emerald Housing portal provides rental workflow features, including viewing bookings, rental payment schedules, and receipts. Availability depends on the resident's access and the relevant rental record."
+  }
+]

@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: Emerald Housing FAQ Assistant API
+  version: 1.0.0
+  description: Answers resident questions using approved housing passages and returns source IDs. Conversation history is scoped to the authenticated account.
+servers:
+  - url: https://emerald.local
+paths:
+  /api/v1/rental/maintenance/{id}:
+    get:
+      operationId: getResidentMaintenanceRequestStatus
+      summary: Get the status of one maintenance request
+      description: Used by the assistant's status tool. The society service checks MAINTENANCE_VIEW for the request's flat; the signed-in resident can only access requests on flats they are authorized to view.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request ID and current status.
+          content:
+            application/json:
+              example:
+                requestId: a6f18210-5b48-4fa9-9478-3aa3507fcae7
+                status: IN_PROGRESS
+        '401':
+          description: Session is missing or expired.
+        '403':
+          description: The resident is not authorized to view this request.
+        '404':
+          description: No maintenance request has this ID.
+  /api/v1/assistant/questions:
+    post:
+      operationId: askHousingFaqAssistant
+      summary: Ask a housing question
+      description: Requires an authenticated gateway session and the portal's XSRF cookie/header for POST requests. Omit conversationId to start a conversation; reuse the returned ID for follow-up questions.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+            examples:
+              firstQuestion:
+                value:
+                  question: How do I report a lost item?
+              followUp:
+                value:
+                  conversationId: a6f18210-5b48-4fa9-9478-3aa3507fcae7
+                  question: What if I found it?
+      responses:
+        '200':
+          description: Answer and passages used as sources; an unknown answer has an empty sources list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+              example:
+                conversationId: a6f18210-5b48-4fa9-9478-3aa3507fcae7
+                answer: You can create a lost and found report in the Emerald Housing portal.
+                sources:
+                  - id: PORTAL-LOST-FOUND-01
+                    title: Report a lost or found item
+        '400':
+          description: Invalid request; the question must contain 1–2,000 characters.
+        '401':
+          description: Session is missing or expired.
+        '403':
+          description: CSRF token is missing or invalid.
+        '429':
+          description: Gateway rate limit exceeded.
+        '503':
+          description: Session validation or AI provider is unavailable.
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: SESSION
+  schemas:
+    AskRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        conversationId:
+          type: string
+          maxLength: 100
+    AskResponse:
+      type: object
+      required: [conversationId, answer, sources]
+      properties:
+        conversationId:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            required: [id, title]
+            properties:
+              id:
+                type: string
+              title:
+                type: string

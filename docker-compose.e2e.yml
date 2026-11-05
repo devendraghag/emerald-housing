@@ -92,6 +92,22 @@ services:
       society-service:
         condition: service_started
 
+  ai-service:
+    profiles: ["ai"]
+    build:
+      context: ./services/ai-service
+    environment:
+      <<: *app-environment
+      SERVER_PORT: 8080
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-openai}
+      AI_EMBEDDING_PROVIDER: ${AI_EMBEDDING_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GATEWAY_SESSION_VALIDATION_URL: http://api-gateway:8080/internal/auth/session
+      SOCIETY_SERVICE_BASE_URL: http://society-service:8080
+    depends_on:
+      api-gateway:
+        condition: service_started
+
   api-gateway:
     build:
       context: ./infrastructure/api-gateway
@@ -103,6 +119,7 @@ services:
       REDIS_PASSWORD: e2e-test-only-redis-password
       MEMBER_SERVICE_URL: http://member-service:8080
       SOCIETY_SERVICE_URL: http://society-service:8080
+      AI_SERVICE_URL: http://ai-service:8080
       MEMBER_CREDENTIAL_URL: http://member-service:8080/internal/auth/credentials
       SESSION_VALIDATION_TOKEN: e2e-session-validation-token-change-me-2026
       GATEWAY_AUTHENTICATION_TOKEN: e2e-gateway-authentication-token-change-me-2026

@@ -1,2 +1,0 @@
-CREATE DATABASE society_db;
-CREATE DATABASE member_db;
