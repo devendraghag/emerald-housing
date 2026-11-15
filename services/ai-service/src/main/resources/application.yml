@@ -1,51 +1,87 @@
+# Main Spring Boot settings. These values are read at startup and can be overridden by environment variables.
 spring:
   application:
+    # Logical service name used in Spring's application context, logs, and service diagnostics.
     name: ai-service
   ai:
     model:
+      # Selects which Spring AI provider auto-configuration supplies the chat model.
+      # The environment variable can change the provider; if it is not set, use OpenAI.
       chat: ${AI_CHAT_PROVIDER:openai}
+      # Selects the provider used to turn FAQ text and questions into embeddings for semantic search.
+      # This can be chosen independently from the chat provider.
       embedding: ${AI_EMBEDDING_PROVIDER:openai}
     openai:
+      # Secret credential used by Spring AI's OpenAI chat and embedding clients.
+      # Keep this blank in source control and provide OPENAI_API_KEY from the process environment or a Kubernetes Secret.
+      # The app may start without it, but actual OpenAI embedding/chat requests need a valid key and available credits.
       api-key: ${OPENAI_API_KEY:}
       chat:
+        # Default OpenAI model for generating assistant replies. Override with OPENAI_CHAT_MODEL when needed.
         model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
       embedding:
         options:
+          # Default OpenAI model for creating vectors from FAQ entries and resident questions.
+          # Both stored FAQ vectors and query vectors must use a compatible embedding model.
           model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
 server:
+  # Local default port. Docker/Kubernetes set SERVER_PORT=8080 inside the container to override it.
+  # Spring's environment property takes precedence over this configured default.
   port: ${AI_SERVER_PORT:8083}
+  # On shutdown, stop accepting new work and allow active requests a chance to finish cleanly.
   shutdown: graceful
 management:
   endpoints:
     web:
       exposure:
+        # HTTP Actuator endpoints made available for operations and monitoring.
+        # Health is used by Kubernetes probes; metrics/prometheus expose application metrics.
         include: health,info,metrics,prometheus
   endpoint:
     health:
+      # Do not return internal component details in health responses.
       show-details: never
       probes:
+        # Expose Spring Boot health groups designed for Kubernetes liveness/readiness probes.
         enabled: true
       group:
         readiness:
+          # Readiness currently checks Spring's readiness state only; it does not verify OpenAI or FAQ-index availability.
           include: readinessState
   health:
     livenessstate:
+      # Enable the liveness state indicator used to decide whether the process should be restarted.
       enabled: true
     readinessstate:
+      # Enable the readiness state indicator used to decide whether the Pod should receive traffic.
       enabled: true
 emerald:
   security:
+    # Internal Gateway endpoint used by BackendSecurityContextFilter to validate the resident's session cookie.
+    # In Kubernetes, the deployment overrides this with the Gateway Service DNS name.
     gateway-session-validation-url: ${GATEWAY_SESSION_VALIDATION_URL:http://localhost:8080/internal/auth/session}
+    # Name of the browser session cookie forwarded to the Gateway and Society Service.
     session-cookie-name: ${SESSION_COOKIE_NAME:SESSION}
+    # Shared internal credential sent to Gateway for service-to-service session validation.
+    # Supply through an environment variable/Secret; the client refuses to validate if it is too short or missing.
     session-validation-token: ${SESSION_VALIDATION_TOKEN:}
+    # Maximum time to establish a connection to the Gateway session-validation endpoint.
     validation-connect-timeout: ${SESSION_VALIDATION_CONNECT_TIMEOUT:2s}
+    # Maximum time to wait for the Gateway's response after connecting.
     validation-read-timeout: ${SESSION_VALIDATION_READ_TIMEOUT:3s}
 society:
   service:
+    # Base address of Society Service for the maintenance-status tool. Kubernetes replaces localhost with Service DNS.
     base-url: ${SOCIETY_SERVICE_BASE_URL:http://localhost:8081}
+    # Maximum time to establish an HTTP connection to Society Service.
     connect-timeout: ${SOCIETY_SERVICE_CONNECT_TIMEOUT:2s}
+    # Maximum time to wait for Society Service to return the maintenance status.
     read-timeout: ${SOCIETY_SERVICE_READ_TIMEOUT:3s}
 assistant:
   retrieval:
+    # Maximum number of FAQ passages returned by vector search and supplied as context to the chat model.
+    # A smaller value limits context size; too small a value can omit relevant FAQ passages.
     top-k: ${ASSISTANT_RETRIEVAL_TOP_K:3}
+    # Minimum semantic-similarity score accepted for a FAQ passage. Raising it rejects weaker matches;
+    # lowering it may return more passages but can include less relevant information. Tune using retrieval examples.
     similarity-threshold: ${ASSISTANT_RETRIEVAL_SIMILARITY_THRESHOLD:0.30}

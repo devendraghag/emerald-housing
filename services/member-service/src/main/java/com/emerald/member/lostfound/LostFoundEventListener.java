@@ -6,16 +6,27 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.json.JsonMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class LostFoundEventListener {
+    private static final Logger log = LoggerFactory.getLogger(LostFoundEventListener.class);
     private final JdbcTemplate db;
     private final JsonMapper json;
-    public LostFoundEventListener(JdbcTemplate db, JsonMapper json) { this.db=db; this.json=json; }
+    private final MeterRegistry meters;
+    public LostFoundEventListener(JdbcTemplate db, JsonMapper json, MeterRegistry meters) { this.db=db; this.json=json; this.meters=meters; }
 
     @KafkaListener(topics = LostFoundEventPublisher.TOPIC, groupId = "lost-found-notifications")
+    @Transactional
     public void onEvent(String payload) {
         LostFoundEvent event=json.readValue(payload,LostFoundEvent.class);
+        if (db.update("INSERT INTO kafka_processed_events(flow,event_id) VALUES ('lost-found',?) ON CONFLICT DO NOTHING",event.eventId()) == 0) {
+            meters.counter("kafka.messages.duplicate","flow","lost-found").increment();
+            return;
+        }
         db.update("""
                 INSERT INTO in_app_notifications(event_id,recipient_id,report_id,event_type)
                 SELECT DISTINCT ?, au.id, ?, ?
@@ -40,5 +51,7 @@ public class LostFoundEventListener {
                 )
                 ON CONFLICT DO NOTHING
                 """, event.eventId(),event.reportId(),event.eventType(),event.actorId(),event.reportId(),event.reportId());
+        meters.counter("kafka.messages.consumed","flow","lost-found").increment();
+        log.info("Consumed lost-and-found event eventId={} schemaVersion={} correlationId={}",event.eventId(),event.schemaVersion(),event.correlationId());
     }
 }

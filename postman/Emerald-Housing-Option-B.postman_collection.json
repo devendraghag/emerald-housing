@@ -4844,6 +4844,196 @@
               }
             }
           ]
+        },
+        {
+          "name": "Kafka notification event flows (manual)",
+          "description": "These Member Service API workflows trigger Kafka events indirectly. Sign in as an admin, retain the Gateway session cookies, and set csrfToken. Postman cannot consume Kafka topics; use docs/kafka-operations.md to inspect DLTs. Lost-and-found creation requires flatId set to an existing flat UUID.",
+          "item": [
+            {
+              "name": "Create community notice (Kafka outbox setup)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/notices",
+                "description": "Creates a draft notice; saves its ID for the following steps.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"title\":\"Postman Kafka notice {{$timestamp}}\",\"message\":\"Manual Postman event-flow check\",\"audienceScope\":\"SOCIETY\",\"flatIds\":[]}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Notice created\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));if(pm.response.code===200||pm.response.code===201)pm.environment.set(\"communityNoticeId\",pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Review community notice",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/notices/admin/{{communityNoticeId}}/status",
+                "description": "Moves the new notice into review.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\":\"UNDER_REVIEW\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Publish community notice (emits Kafka event)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/notices/admin/{{communityNoticeId}}/status",
+                "description": "Publishing writes an event to the community-notices.events outbox. Confirm through kafka.messages.sent or Kafka tooling.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\":\"PUBLISHED\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Create lost-and-found report (Kafka outbox setup)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/lost-found",
+                "description": "Requires flatId set to an existing flat UUID; saves the report ID for following steps.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reportType\":\"FOUND\",\"flatId\":\"{{flatId}}\",\"itemType\":\"Keys\",\"location\":\"Postman lobby {{$timestamp}}\",\"occurredAt\":\"{{$isoTimestamp}}\",\"description\":\"Manual Postman Kafka event-flow check\",\"contactPreference\":\"ADMIN\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Report created\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));if(pm.response.code===200||pm.response.code===201)pm.environment.set(\"lostFoundReportId\",pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Review lost-and-found report",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/lost-found/admin/reports/{{lostFoundReportId}}/status",
+                "description": "Moves the report into review.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\":\"UNDER_REVIEW\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Publish lost-and-found report (emits Kafka event)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "url": "{{externalBaseUrl}}/api/v1/lost-found/admin/reports/{{lostFoundReportId}}/status",
+                "description": "Publishing writes an event to the lost-found.events outbox. Confirm through kafka.messages.sent or Kafka tooling.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\":\"PUBLISHED\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -4856,12 +5046,21 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-XSRF-TOKEN", "value": "{{csrfToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-XSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
             ],
             "url": "{{externalBaseUrl}}/api/v1/assistant/questions",
             "description": "Start a conversation. Save conversationId from the response and use it in the follow-up request.",
-            "body": { "mode": "raw", "raw": "{\n  \"question\": \"How do I report a lost item?\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How do I report a lost item?\"\n}"
+            }
           },
           "event": [
             {
@@ -4880,12 +5079,21 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-XSRF-TOKEN", "value": "{{csrfToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-XSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
             ],
             "url": "{{externalBaseUrl}}/api/v1/assistant/questions",
             "description": "Uses conversation history from the first request.",
-            "body": { "mode": "raw", "raw": "{\n  \"conversationId\": \"{{assistantConversationId}}\",\n  \"question\": \"What if I found it?\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{assistantConversationId}}\",\n  \"question\": \"What if I found it?\"\n}"
+            }
           }
         }
       ]

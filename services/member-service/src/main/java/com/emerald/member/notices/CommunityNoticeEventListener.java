@@ -4,16 +4,27 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class CommunityNoticeEventListener {
+    private static final Logger log = LoggerFactory.getLogger(CommunityNoticeEventListener.class);
     private final JdbcTemplate db;
     private final JsonMapper json;
-    public CommunityNoticeEventListener(JdbcTemplate db, JsonMapper json) { this.db=db; this.json=json; }
+    private final MeterRegistry meters;
+    public CommunityNoticeEventListener(JdbcTemplate db, JsonMapper json, MeterRegistry meters) { this.db=db; this.json=json; this.meters=meters; }
 
     @KafkaListener(topics=CommunityNoticeEventPublisher.TOPIC, groupId="community-notice-notifications")
+    @Transactional
     public void onEvent(String payload) {
         CommunityNoticeEvent event=json.readValue(payload,CommunityNoticeEvent.class);
+        if (db.update("INSERT INTO kafka_processed_events(flow,event_id) VALUES ('community-notices',?) ON CONFLICT DO NOTHING",event.eventId()) == 0) {
+            meters.counter("kafka.messages.duplicate","flow","community-notices").increment();
+            return;
+        }
         db.update("""
                 INSERT INTO community_notice_notifications(event_id,recipient_id,notice_id,event_type)
                 SELECT DISTINCT ?, au.id, ?, ?
@@ -44,5 +55,7 @@ public class CommunityNoticeEventListener {
                     )
                 ) ON CONFLICT DO NOTHING
                 """,event.eventId(),event.noticeId(),event.eventType(),event.actorId(),event.noticeId(),event.noticeId());
+        meters.counter("kafka.messages.consumed","flow","community-notices").increment();
+        log.info("Consumed community notice event eventId={} schemaVersion={} correlationId={}",event.eventId(),event.schemaVersion(),event.correlationId());
     }
 }
