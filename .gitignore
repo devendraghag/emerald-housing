@@ -13,3 +13,5 @@ local-certs/
 .env.*
 !.env.example
 
+
+rootkey.csv
