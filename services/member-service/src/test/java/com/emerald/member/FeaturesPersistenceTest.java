@@ -63,6 +63,7 @@ class FeaturesPersistenceTest {
  @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:16-alpine");
  @DynamicPropertySource static void database(DynamicPropertyRegistry p) { p.add("app.datasource.writer.jdbc-url",POSTGRES::getJdbcUrl);p.add("app.datasource.writer.username",POSTGRES::getUsername);p.add("app.datasource.writer.password",POSTGRES::getPassword); }
  @Autowired MemberService service; @Autowired JdbcTemplate jdbc; @Autowired PlatformTransactionManager manager;
+ @Autowired com.emerald.member.service.MembershipService membershipService;
  @Autowired jakarta.persistence.EntityManagerFactory emf;
  @Autowired com.emerald.member.auth.AccountController accounts;
  @Autowired com.emerald.member.auth.AccountIdentityService identities;
@@ -94,6 +95,18 @@ class FeaturesPersistenceTest {
   assertThrows(org.springframework.security.access.AccessDeniedException.class,()->create("104"));
   login("COMMITTEE",null,Set.of());assertEquals(3,service.searchPage(0,20,"createdAt","asc",null,null).totalElements());
   assertThrows(org.springframework.security.access.AccessDeniedException.class,()->create("105"));
+ }
+ @Test void membershipCursorContinuesWithoutOffsetAndRejectsDifferentScope() {
+  var member=create("cursor-history");var older=UUID.randomUUID();var newer=UUID.randomUUID();var flat=UUID.randomUUID();
+  jdbc.update("insert into flat_memberships(id,member_id,flat_id,relationship_type,start_date,created_at,updated_at) values(?,?,?,'RESIDENT',current_date,current_timestamp - interval '2 seconds',current_timestamp)",older,member.memberId(),flat);
+  jdbc.update("insert into flat_memberships(id,member_id,flat_id,relationship_type,start_date,created_at,updated_at) values(?,?,?,'RESIDENT',current_date,current_timestamp - interval '1 seconds',current_timestamp)",newer,member.memberId(),flat);
+  var first=membershipService.cursorByMember(member.memberId(),1,null);
+  assertTrue(first.hasNext());assertEquals(newer,first.items().getFirst().membershipId());
+  var second=membershipService.cursorByMember(member.memberId(),1,first.nextCursor());
+  assertFalse(second.hasNext());assertEquals(older,second.items().getFirst().membershipId());
+  var other=create("cursor-other");
+  assertThrows(ApiFailure.class,()->membershipService.cursorByMember(other.memberId(),1,first.nextCursor()));
+  assertThrows(ApiFailure.class,()->membershipService.cursorByMember(member.memberId(),101,null));
  }
  @Test void auditIsAtomicAndConditionalUpdateRejectsOldVersion() {
   var created=create("201");var id=id(created);

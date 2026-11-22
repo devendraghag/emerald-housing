@@ -26,4 +26,11 @@ public class MembershipController {
             @RequestParam(defaultValue = "desc") String direction) {
         return service.pageByFlat(flatId, page, size, sortBy, direction);
     }
+    @GetMapping("/{flatId}/memberships/cursor")
+    public com.emerald.member.api.CursorPage<MembershipResponse> getMembershipsCursor(
+            @PathVariable UUID flatId,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String after) {
+        return service.cursorByFlat(flatId, limit, after);
+    }
 }

@@ -110,6 +110,14 @@ public class MemberController {
         return membershipService.pageByMember(memberId, page, size, sortBy, direction);
     }
 
+    @GetMapping("/{memberId}/flats/cursor")
+    public com.emerald.member.api.CursorPage<MembershipResponse> getMembershipsCursor(
+            @PathVariable UUID memberId,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String after) {
+        return membershipService.cursorByMember(memberId, limit, after);
+    }
+
     @PatchMapping("/{memberId}/flats/{membershipId}/end")
     public MembershipResponse endMembership(@PathVariable UUID memberId, @PathVariable UUID membershipId,
             @Valid @RequestBody EndMembershipRequest request) {

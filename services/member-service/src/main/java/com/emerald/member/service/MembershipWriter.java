@@ -4,6 +4,9 @@ import com.emerald.member.dto.CreateMembershipRequest;
 import com.emerald.member.dto.MembershipResponse;
 import com.emerald.member.dto.PageResponse;
 import com.emerald.member.dto.EndMembershipRequest;
+import com.emerald.member.api.CursorCodec;
+import com.emerald.member.api.CursorPage;
+import com.emerald.member.api.ApiFailure;
 import com.emerald.member.entity.FlatMembershipEntity;
 import com.emerald.member.exception.DuplicateMembershipException;
 import com.emerald.member.exception.MemberNotFoundException;
@@ -15,9 +18,13 @@ import com.emerald.member.service.MemberStatus;
 import com.emerald.member.repository.FlatMembershipRepository;
 import com.emerald.member.repository.MemberRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.Set;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,6 +37,7 @@ public class MembershipWriter {
     @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.auth.AccessRegistry registry;
     @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.audit.AuditTrail audit;
     @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
+    @org.springframework.beans.factory.annotation.Autowired private EntityManager entityManager;
     private final FlatMembershipRepository memberships;
     private final MemberRepository members;
     public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) { this.memberships=memberships; this.members=members; }
@@ -76,6 +84,43 @@ public class MembershipWriter {
                 Set.of("startDate", "endDate", "createdAt", "updatedAt", "relationshipType"));
         Page<FlatMembershipEntity> result = access!=null && access.resident() ? memberships.findAllByFlatIdAndMemberId(flatId,access.ownMember(),pageable) : memberships.findAllByFlatId(flatId, pageable);
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
+    }
+    @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.member(#p0)")
+    public CursorPage<MembershipResponse> cursorByMember(UUID memberId, int limit, String after) {
+        if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
+        return cursor(memberId, true, limit, after);
+    }
+    @Transactional(readOnly = true)
+    @PreAuthorize("@memberAccess.flat(#p0)")
+    public CursorPage<MembershipResponse> cursorByFlat(UUID flatId, int limit, String after) {
+        return cursor(flatId, false, limit, after);
+    }
+    private CursorPage<MembershipResponse> cursor(UUID scopeId, boolean byMember, int limit, String after) {
+        if (limit < 1 || limit > 100) throw new ApiFailure(400, "INVALID_PAGE", "limit must be between 1 and 100");
+        var actor = access.identity();
+        String scope = CursorCodec.scope("membership|" + (byMember ? "member|" : "flat|") + scopeId + "|"
+                + actor.adminId() + "|" + actor.role() + "|" + actor.memberId() + "|"
+                + actor.flatIds().stream().sorted(Comparator.naturalOrder()).toList());
+        var position = CursorCodec.decode(after, scope);
+        var cb = entityManager.getCriteriaBuilder();
+        var query = cb.createQuery(FlatMembershipEntity.class);
+        var root = query.from(FlatMembershipEntity.class);
+        List<Predicate> filters = new ArrayList<>();
+        filters.add(cb.equal(root.get(byMember ? "memberId" : "flatId"), scopeId));
+        if (!byMember && access.resident()) filters.add(cb.equal(root.get("memberId"), actor.memberId()));
+        if (position != null) {
+            filters.add(cb.or(cb.lessThan(root.<Instant>get("createdAt"), position.createdAt()),
+                    cb.and(cb.equal(root.get("createdAt"), position.createdAt()),
+                            cb.lessThan(root.<UUID>get("id"), position.id()))));
+        }
+        query.where(filters.toArray(Predicate[]::new));
+        query.orderBy(cb.desc(root.get("createdAt")), cb.desc(root.get("id")));
+        var rows = entityManager.createQuery(query).setMaxResults(limit + 1).getResultList();
+        boolean hasNext = rows.size() > limit;
+        var items = rows.subList(0, Math.min(limit, rows.size())).stream().map(MembershipWriter::response).toList();
+        var last = rows.isEmpty() ? null : rows.get(Math.min(limit, rows.size()) - 1);
+        return new CursorPage<>(items, hasNext ? CursorCodec.encode(last.getCreatedAt(), last.getId(), scope) : null, hasNext);
     }
     @Transactional
     @PreAuthorize("@memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")

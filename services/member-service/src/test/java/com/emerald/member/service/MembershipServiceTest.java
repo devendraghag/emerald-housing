@@ -25,6 +25,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class MembershipServiceTest {
+    @Test void membershipDatabaseTransactionsStartInWriterAfterExternalWorkAndLockWait() throws Exception {
+        assertFalse(MembershipService.class
+                .getMethod("assign", UUID.class, CreateMembershipRequest.class)
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+        assertTrue(MembershipWriter.class
+                .getMethod("persist", UUID.class, CreateMembershipRequest.class)
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+        assertFalse(MembershipService.class
+                .getMethod("end", UUID.class, UUID.class, com.emerald.member.dto.EndMembershipRequest.class)
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+        assertTrue(MembershipWriter.class
+                .getMethod("end", UUID.class, UUID.class, com.emerald.member.dto.EndMembershipRequest.class)
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+    }
+
     @Test void inactiveFlatNeverAcquiresLockOrPersists() {
         UUID memberId = UUID.randomUUID(), flatId = UUID.randomUUID();
         var request = new CreateMembershipRequest(flatId, RelationshipType.OWNER, LocalDate.of(2026, 10, 1));

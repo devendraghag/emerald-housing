@@ -33,6 +33,6 @@ public class FlatMembershipEntity implements MembershipPeriod {
     }
     public UUID getId(){return id;} public UUID getMemberId(){return memberId;} public UUID getFlatId(){return flatId;}
     public String getRelationshipType(){return relationshipType;} public LocalDate getStartDate(){return startDate;} public LocalDate getEndDate(){return endDate;}
-    public Instant getUpdatedAt(){return updatedAt;}
+    public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;}
     public void end(LocalDate endDate, Instant now) { this.endDate = endDate; this.updatedAt = now; }
 }
