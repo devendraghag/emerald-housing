@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pagination from Zero | Emerald Housing</title>
+  <style>
+    :root{--ink:#172b3a;--muted:#526777;--brand:#087e72;--wash:#eef7f5;--line:#d5e1df;--night:#102631;--gold:#fff5d9;--blue:#edf4ff}
+    *{box-sizing:border-box}body{margin:0;background:#f5f8fa;color:var(--ink);font:16px/1.7 system-ui,"Segoe UI",sans-serif}
+    header{background:linear-gradient(125deg,#103c4c,#087e72);color:#fff;padding:44px max(22px,calc((100% - 1120px)/2))}
+    header .eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.78rem;font-weight:700;color:#bde9df}
+    header h1{font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.1;margin:.35em 0}
+    header p{max-width:850px;color:#e5f5f1;font-size:1.1rem}
+    .layout{max-width:1120px;margin:24px auto;padding:0 22px 55px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px}
+    nav{position:sticky;top:14px;align-self:start;background:white;border:1px solid var(--line);border-radius:13px;padding:15px}
+    nav a{display:block;color:#17695f;text-decoration:none;padding:4px 0;font-size:.92rem}nav a:hover{text-decoration:underline}
+    main section{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px;scroll-margin:14px}
+    h2{margin:.2em 0 .45em;color:#14594f;line-height:1.25}h3{color:#14594f;margin-bottom:.3em}
+    .step-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.09em;color:#548178;font-weight:800}
+    .callout{background:var(--wash);border-left:5px solid var(--brand);padding:13px 16px;border-radius:8px;margin:15px 0}
+    .warn{background:var(--gold);border-color:#d39d26}.info{background:var(--blue);border-color:#4880c2}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+    .card{border:1px solid var(--line);border-radius:9px;padding:12px;background:#fff}.card b{display:block;color:#14594f}
+    .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;align-items:stretch;margin:15px 0}
+    .flow div{border:1px solid var(--line);background:#fbfdfd;border-radius:9px;padding:12px;text-align:center}
+    .flow b{display:block;color:#14594f}.arrow{color:var(--brand);font-size:1.25rem;font-weight:800}
+    code,pre{font-family:Consolas,"Courier New",monospace}code{background:#eef3f4;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+    pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--night);color:#fff;padding:15px;border-radius:9px;overflow-x:auto}
+    pre code{background:none;color:inherit;padding:0}table{border-collapse:collapse;width:100%;font-size:.93rem}
+    th,td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line)}th{background:var(--wash)}
+    .table-wrap{overflow-x:auto}.tag{display:inline-block;border-radius:999px;padding:2px 9px;background:#def2e9;color:#135844;font-size:.8rem;font-weight:700}
+    .tag.gap{background:#fff0d1;color:#704d0a}details{padding:10px 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:700;color:#14594f}
+    .small{color:var(--muted);font-size:.92rem}.interview{font-size:1.05rem}
+    footer{text-align:center;color:var(--muted);padding:5px 20px 28px}
+    @media(max-width:760px){.layout{display:block}nav{position:static;margin-bottom:16px}table{min-width:680px}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Beginner-to-developer walkthrough · Emerald Housing</div>
+  <h1>Pagination, from zero</h1>
+  <p>Learn the idea first, then see what this project already built, how one HTTP request reaches a bounded database query, how to check high-volume endpoint coverage, and how to explain the design in an interview.</p>
+</header>
+<div class="layout">
+  <nav aria-label="Guide contents">
+    <b>Learning path</b>
+    <a href="#start">1. What to know first</a><a href="#problem">2. Why the feature exists</a>
+    <a href="#implemented">3. What was built</a><a href="#walkthrough">4. Trace one request</a>
+    <a href="#page">5. Page-number flow</a><a href="#cursor">6. Cursor flow</a>
+    <a href="#coverage">7. High-volume coverage</a><a href="#operate">8. Try and read it</a>
+    <a href="#tradeoffs">9. Limits and next steps</a><a href="#interview">10. Interview practice</a>
+    <a href="#sources">Source files</a>
+  </nav>
+  <main>
+    <section id="start">
+      <div class="step-label">Step 1 · Before opening the code</div>
+      <h2>What pagination means</h2>
+      <p>Suppose a building has 20,000 flats. If an API sends every flat for every screen refresh, the server must load and serialize a huge result, the network carries it all, and the browser must keep it in memory. Pagination means asking for a manageable slice at a time.</p>
+      <div class="cards">
+        <div class="card"><b>Page number</b>The position of a slice. This project numbers from zero: page 0 is the first page.</div>
+        <div class="card"><b>Page size</b>The maximum number of rows requested, such as 20.</div>
+        <div class="card"><b>Offset</b>How many matching rows come before this page. Page 2 at size 20 has offset 40.</div>
+        <div class="card"><b>Sort order</b>The order in which rows are arranged before selecting a slice.</div>
+        <div class="card"><b>Cursor</b>A continuation bookmark identifying where the previous batch ended.</div>
+        <div class="card"><b>Count metadata</b>The total matching rows/pages, when the endpoint calculates and returns them.</div>
+      </div>
+      <div class="callout"><b>Simple analogy:</b> a directory is a thick book. Page-number pagination says “open page 4.” Cursor pagination says “continue after the last name I just read.” Both avoid handing over the entire book at once.</div>
+    </section>
+    <section id="problem">
+      <div class="step-label">Step 2 · Understand the problem</div>
+      <h2>What changes when a list grows?</h2>
+      <div class="flow">
+        <div><b>Without pagination</b>API asks for every matching row</div><div class="arrow">→</div>
+        <div><b>More work</b>Database, service, network, and browser handle more data</div><div class="arrow">→</div>
+        <div><b>With pagination</b>Request asks for a bounded batch</div><div class="arrow">→</div>
+        <div><b>Predictable response</b>Client fetches more only when needed</div>
+      </div>
+      <p>Pagination controls the number of returned rows per request. It does not by itself make a filter fast, create a missing database index, or guarantee that every endpoint in an application is paginated.</p>
+      <div class="callout warn"><b>Project review result:</b> core member, flat, membership-history, account, owner, and family browse flows have bounded routes. Some legacy and workflow lists remain unbounded; see the coverage table.</div>
+    </section>
+    <section id="implemented">
+      <div class="step-label">Step 3 · What this project already has</div>
+      <h2>Build order: request contract, validation, query, response</h2>
+      <ol>
+        <li><b>HTTP routes:</b> controllers expose page routes, and member/flat controllers also expose cursor routes.</li>
+        <li><b>Safe request rules:</b> <code>PageRequests.of(...)</code> checks that page is non-negative, size is 1–100, sort field is allowed, and direction is <code>asc</code> or <code>desc</code>.</li>
+        <li><b>Bounded database access:</b> directory query code sets the offset and maximum rows. It also adds an ID tie-breaker so rows with the same primary sort value have a stable order.</li>
+        <li><b>Response mapping:</b> page responses include content and page metadata. Cursor responses include items, a continuation cursor, and <code>hasNext</code>.</li>
+        <li><b>Client usage:</b> the portal uses page routes for the main member, flat, family, and owner directories.</li>
+      </ol>
+      <p>This feature is already implemented for these routes. This documentation update does not add or change pagination behavior.</p>
+    </section>
+    <section id="walkthrough">
+      <div class="step-label">Step 4 · Follow an actual request through the code</div>
+      <h2>Example: list the first 20 members</h2>
+      <pre><code>GET /api/v1/members/page?page=0&amp;size=20&amp;sortBy=createdAt&amp;direction=desc</code></pre>
+      <div class="flow">
+        <div><b>1 · Browser</b>Sends page, size, sort, optional search/status</div><div class="arrow">→</div>
+        <div><b>2 · Gateway</b>Routes the API request to Member Service</div><div class="arrow">→</div>
+        <div><b>3 · Controller</b><code>MemberController.getPage</code> reads query parameters</div><div class="arrow">→</div>
+        <div><b>4 · Service</b><code>MemberService.searchPage</code> validates and delegates</div><div class="arrow">→</div>
+        <div><b>5 · Query</b><code>DirectoryQueries.page</code> builds bounded query plus count</div><div class="arrow">→</div>
+        <div><b>6 · Database</b>Returns selected rows; API maps them to response DTOs</div>
+      </div>
+      <p><b>Put simply:</b> the controller does not fetch every member and trim the list in Java. The service passes paging instructions to the query layer, and the database applies the requested offset and maximum result size.</p>
+      <p>In <code>DirectoryQueries.page</code>, JPA calls <code>setFirstResult(offset)</code> and <code>setMaxResults(pageSize)</code>. For page 0 and size 20, offset is 0 and the result is capped at 20. A separate count query computes <code>totalElements</code> for the response. The actual database SQL syntax is generated by the JPA provider and database dialect.</p>
+      <div class="callout info"><b>Where does the index fit?</b> Pagination says how many rows to return and where to start. A suitable database index can help find and order those rows efficiently. Pagination itself does not create an index; indexes are managed separately through database schema migrations.</div>
+    </section>
+    <section id="page">
+      <div class="step-label">Step 5 · Learn page-number pagination</div>
+      <h2>Page 0, page 1, and the response</h2>
+      <p>For <code>size=20</code>, page 0 asks for rows 1–20; page 1 asks for rows 21–40. In general, offset = <code>page × size</code>.</p>
+      <pre><code>GET /api/v1/members/page?page=0&amp;size=20
+GET /api/v1/members/page?page=1&amp;size=20</code></pre>
+      <p>The member page response is a <code>PageResponse</code>: <code>content</code>, <code>page</code>, <code>size</code>, <code>totalElements</code>, <code>totalPages</code>, <code>sortBy</code>, and <code>direction</code>. Filters such as <code>search</code> and <code>status</code> are applied to both the page query and the count query.</p>
+      <p>Sort fields are allow-listed by each service before the query is built. The query appends the row ID as a tie-breaker. For example, if two members have the same <code>createdAt</code>, the ID still gives them a deterministic order.</p>
+      <div class="callout warn"><b>Why cap size at 100?</b> It prevents a caller from asking for a huge “page” that defeats the purpose of pagination. Invalid page, size, sort, or direction inputs are rejected rather than silently accepted.</div>
+    </section>
+    <section id="cursor">
+      <div class="step-label">Step 6 · Learn cursor pagination</div>
+      <h2>Use a bookmark for continued browsing</h2>
+      <p>Offset pagination may become more expensive for very deep pages because the database can need to pass over earlier matching rows. For member and flat directories, this project also provides cursor routes ordered by <code>createdAt</code> and <code>id</code>.</p>
+      <pre><code>GET /api/v1/members/cursor?limit=20
+GET /api/v1/members/cursor?limit=20&amp;after={nextCursor}</code></pre>
+      <div class="flow">
+        <div><b>First call</b>No cursor; get up to 20 members</div><div class="arrow">→</div>
+        <div><b>Extra row</b>Query asks for 21 to detect another page</div><div class="arrow">→</div>
+        <div><b>Response</b>Return 20 items and <code>hasNext=true</code></div><div class="arrow">→</div>
+        <div><b>Next call</b>Send <code>nextCursor</code> as <code>after</code></div>
+      </div>
+      <p>The cursor encodes the last row’s timestamp and ID plus a hash representing the query/access scope. It is URL-safe Base64 encoded, which makes it opaque-looking but <b>not encrypted</b>. Limits are capped at 100. Cursor pagination uses its fixed ordering; it does not provide arbitrary sort choices. Membership histories currently have page routes, not cursor routes.</p>
+    </section>
+    <section id="coverage">
+      <div class="step-label">Step 7 · Check whether high-volume endpoints are covered</div>
+      <h2>Coverage and remaining gaps</h2>
+      <div class="table-wrap"><table><thead><tr><th>Data/list</th><th>Bounded route or approach</th><th>Coverage notes</th></tr></thead><tbody>
+        <tr><td>Members</td><td><code>/api/v1/members/page</code>, <code>/api/v1/members/cursor</code></td><td>Page/cursor limit max 100; portal uses the page route.</td></tr>
+        <tr><td>Flats</td><td><code>/api/v1/flats/page</code>, <code>/api/v1/flats/cursor</code>, <code>/api/v1/flats/by-floor/{n}/page</code></td><td>Bounded alternatives; portal uses page routes.</td></tr>
+        <tr><td>Membership histories</td><td><code>/api/v1/members/{id}/flats/page</code>; <code>/api/v1/flats/{id}/memberships/page</code></td><td>Bounded pages; corresponding legacy list routes remain.</td></tr>
+        <tr><td>Accounts</td><td><code>/api/v1/accounts?page=0&amp;size=20</code></td><td>Raw SQL uses LIMIT/OFFSET; max 100; response has no total metadata.</td></tr>
+        <tr><td>Owners and families</td><td><code>/api/v1/owners?page=0&amp;size=20</code>; <code>/api/v1/families?page=0&amp;size=20</code></td><td>Bounded SQL routes, maximum 100; portal uses paged calls.</td></tr>
+        <tr><td>Audit lists</td><td>Audit routes accept a bounded limit and sequence “before” value.</td><td>Continuation is sequence-based, not a page-number response.</td></tr>
+        <tr><td>Floors</td><td><code>/api/v1/floors/page</code></td><td>Page route exists; domain itself limits floor numbers to 1–99.</td></tr>
+        <tr><td>Legacy member/flat lists</td><td><span class="tag gap">Unbounded</span> <code>/api/v1/members</code>, <code>/api/v1/flats</code>, <code>/api/v1/flats/by-floor/{n}</code></td><td>Use the page alternatives for growing data.</td></tr>
+        <tr><td>Legacy membership histories</td><td><span class="tag gap">Unbounded</span> <code>/api/v1/members/{id}/flats</code> and <code>/api/v1/flats/{id}/memberships</code></td><td>Use the respective <code>/page</code> alternatives.</td></tr>
+        <tr><td>Workflow collections</td><td><span class="tag gap">Review needed</span> Some notice/review, lost-and-found board/admin report, and rental list endpoints lack page/cursor alternatives.</td><td>Can become high-volume; prioritize if these datasets grow or are frequently read.</td></tr>
+      </tbody></table></div>
+      <div class="callout"><b>Coverage conclusion:</b> the main directory browsing paths are bounded, including the ones used by the portal. Pagination is not universal across all collection endpoints. The legacy and workflow endpoints marked above are the specific high-volume coverage gaps.</div>
+    </section>
+    <section id="operate">
+      <div class="step-label">Step 8 · How a developer operates and reads it</div>
+      <h2>Try a request and interpret the result</h2>
+      <p>Use an environment where the app is running and pass the required authentication for that route. Example member requests:</p>
+      <pre><code>GET /api/v1/members/page?page=0&amp;size=20&amp;sortBy=createdAt&amp;direction=desc
+GET /api/v1/members/page?page=1&amp;size=20&amp;sortBy=createdAt&amp;direction=desc
+GET /api/v1/members/cursor?limit=20</code></pre>
+      <ul>
+        <li>Use <code>page</code> and <code>size</code> when a UI needs numbered pages and total counts.</li>
+        <li>Use the returned page metadata to render page controls and know the number of matches.</li>
+        <li>For cursor browsing, pass the returned <code>nextCursor</code> as <code>after</code> on the next request.</li>
+        <li>If the API rejects a request, check page ≥ 0, size 1–100, allowed sort field, and direction.</li>
+        <li>For performance analysis, inspect the generated SQL and database execution plan; a bounded result alone does not prove the query is fast.</li>
+      </ul>
+    </section>
+    <section id="tradeoffs">
+      <div class="step-label">Step 9 · What it does not guarantee</div>
+      <h2>Limits and practical next steps</h2>
+      <ul>
+        <li><b>Deep offsets:</b> high page numbers can still cost work. Prefer cursor traversal for long sequential member/flat browsing.</li>
+        <li><b>Count query:</b> page metadata includes totals, which requires a count query and may be costly for complex filters.</li>
+        <li><b>Concurrent changes:</b> records can be inserted or removed between page requests, so offset pages may shift. Cursor continuation is more stable for traversal but is not a frozen snapshot.</li>
+        <li><b>Indexes:</b> pagination limits result size; review indexes for filter and sort columns using actual query plans.</li>
+        <li><b>Coverage:</b> migrate callers away from unbounded legacy routes and add bounded variants for growing workflow collections where needed.</li>
+        <li><b>Different route implementations:</b> JPA directory pages return page metadata, while some raw SQL routes return only a list. Consumers should not assume all responses share one shape.</li>
+      </ul>
+    </section>
+    <section id="interview">
+      <div class="step-label">Step 10 · Explain it in an interview</div>
+      <h2>Developer explanation</h2>
+      <div class="callout interview"><b>“I reviewed pagination in Emerald Housing. The member and flat directories expose page-number endpoints with a maximum size of 100, validation for page and sort input, deterministic ordering, and page metadata. The JPA query applies offset and max results in the database query, while a count query supplies total metadata. For deeper member and flat traversal, cursor endpoints use createdAt and ID, fetch limit plus one to determine whether more results exist, and return a continuation cursor. The portal uses bounded routes for its main directories. I also found legacy full-list routes and some workflow collections without pagination, so the feature covers core browsing but not every collection API.”</b></div>
+      <h3>Likely follow-up questions</h3>
+      <details><summary>Does the controller itself paginate the Java list?</summary><p>No. The controller forwards the requested page to the service. The query layer applies the offset and maximum result count in JPA or SQL, so the service does not load the full list and slice it afterward.</p></details>
+      <details><summary>Why validate page size?</summary><p>A maximum prevents clients from requesting an enormous response and defeating the resource bound. The shared page helper permits sizes from 1 through 100.</p></details>
+      <details><summary>Why add ID to the sort?</summary><p>The primary sort value can be identical for multiple rows. ID supplies a deterministic tie-breaker so page boundaries are less likely to reorder arbitrarily.</p></details>
+      <details><summary>Why use a cursor instead of page numbers?</summary><p>Cursor traversal resumes after a known key and avoids increasingly large offsets. In this implementation it is available for member and flat directory traversal.</p></details>
+      <details><summary>What does limit plus one accomplish?</summary><p>If the client asks for 20, the query fetches up to 21. The extra row indicates that a next page exists; it is removed from the returned 20 items.</p></details>
+      <details><summary>Does pagination make the query fast automatically?</summary><p>No. It bounds the result returned. Query predicates, sort, indexes, database load, and count-query cost still matter and should be checked with execution plans and metrics.</p></details>
+    </section>
+    <section id="sources">
+      <div class="step-label">Continue learning · Source map</div>
+      <h2>Open these files in this order</h2>
+      <ol>
+        <li><code>services/member-service/src/main/java/com/emerald/member/controller/MemberController.java</code> — HTTP routes and request parameters.</li>
+        <li><code>services/member-service/src/main/java/com/emerald/member/service/MemberService.java</code> — service delegation and response mapping.</li>
+        <li><code>services/member-service/src/main/java/com/emerald/member/config/PageRequests.java</code> — page, size, sort, and direction validation.</li>
+        <li><code>services/member-service/src/main/java/com/emerald/member/api/DirectoryQueries.java</code> — filters, stable ordering, offset query, count query, and cursor query.</li>
+        <li><code>services/member-service/src/main/java/com/emerald/member/dto/PageResponse.java</code> and <code>CursorPage.java</code> — response models.</li>
+        <li><code>services/member-service/src/main/java/com/emerald/member/api/CursorCodec.java</code> — cursor encoding and query/access scope validation.</li>
+        <li><code>services/society-service/src/main/java/com/emerald/society/controller/FlatController.java</code> and <code>api/DirectoryQueries.java</code> — corresponding flat endpoints and query mechanics.</li>
+        <li><code>infrastructure/api-gateway/src/main/resources/static/portal.js</code> — frontend calls to paginated directories.</li>
+      </ol>
+      <p class="small">The guide describes checked-in implementation. Endpoint availability and authorization can vary with runtime configuration and deployed version. This change documents pagination; it does not add pagination behavior.</p>
+    </section>
+  </main>
+</div>
+<footer>Emerald Housing · Learn the concept, trace the request, then verify coverage.</footer>
+</body>
+</html>
