@@ -1,50 +1,51 @@
 package com.emerald.member.service;
 
-import com.emerald.member.dto.CreateMembershipRequest;
-import com.emerald.member.dto.MembershipResponse;
-import com.emerald.member.dto.PageResponse;
-import com.emerald.member.dto.EndMembershipRequest;
+import com.emerald.member.api.ApiFailure;
 import com.emerald.member.api.CursorCodec;
 import com.emerald.member.api.CursorPage;
-import com.emerald.member.api.ApiFailure;
-import com.emerald.member.entity.FlatMembershipEntity;
-import com.emerald.member.exception.DuplicateMembershipException;
-import com.emerald.member.exception.MemberNotFoundException;
-import com.emerald.member.exception.InactiveMemberException;
-import com.emerald.member.exception.InvalidMembershipEndDateException;
-import com.emerald.member.exception.MembershipNotFoundException;
 import com.emerald.member.config.PageRequests;
-import com.emerald.member.service.MemberStatus;
+import com.emerald.member.dto.CreateMembershipRequest;
+import com.emerald.member.dto.EndMembershipRequest;
+import com.emerald.member.dto.MembershipResponse;
+import com.emerald.member.dto.PageResponse;
+import com.emerald.member.entity.FlatMembershipEntity;
+import com.emerald.member.exception.*;
 import com.emerald.member.repository.FlatMembershipRepository;
 import com.emerald.member.repository.MemberRepository;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
-import java.util.Set;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.*;
+
 @Service
 public class MembershipWriter {
-    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.auth.AccessRegistry registry;
-    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.audit.AuditTrail audit;
-    @org.springframework.beans.factory.annotation.Autowired private com.emerald.member.security.MemberAccess access;
-    @org.springframework.beans.factory.annotation.Autowired private EntityManager entityManager;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.emerald.member.auth.AccessRegistry registry;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.emerald.member.audit.AuditTrail audit;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.emerald.member.security.MemberAccess access;
+    @org.springframework.beans.factory.annotation.Autowired
+    private EntityManager entityManager;
     private final FlatMembershipRepository memberships;
     private final MemberRepository members;
-    public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) { this.memberships=memberships; this.members=members; }
+
+    public MembershipWriter(FlatMembershipRepository memberships, MemberRepository members) {
+        this.memberships = memberships;
+        this.members = members;
+    }
+
     @Transactional
     @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY')")
     public MembershipResponse persist(UUID memberId, CreateMembershipRequest request) {
-        if(registry!=null)registry.lock();
+        if (registry != null) registry.lock();
         var member = members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
         if (member.getStatus() != MemberStatus.ACTIVE) throw new InactiveMemberException();
         String relationship = request.relationshipType().name();
@@ -54,20 +55,27 @@ public class MembershipWriter {
         try {
             FlatMembershipEntity saved = memberships.saveAndFlush(new FlatMembershipEntity(UUID.randomUUID(), memberId,
                     request.flatId(), relationship, request.startDate(), now));
-            var result=response(saved);if(audit!=null)audit.record("ASSIGN","MEMBERSHIP",saved.getId(),null,result);return result;
-        } catch (DataIntegrityViolationException ex) { throw new DuplicateMembershipException(); }
+            var result = response(saved);
+            if (audit != null) audit.record("ASSIGN", "MEMBERSHIP", saved.getId(), null, result);
+            return result;
+        } catch (DataIntegrityViolationException ex) {
+            throw new DuplicateMembershipException();
+        }
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.member(#p0)")
     public List<MembershipResponse> byMember(UUID memberId) {
         if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
         return memberships.findAllByMemberIdOrderByStartDateDesc(memberId).stream().map(MembershipWriter::response).toList();
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.flat(#p0)")
     public List<MembershipResponse> byFlat(UUID flatId) {
-        return memberships.findAllByFlatIdOrderByStartDateDesc(flatId).stream().filter(row->access==null || !access.resident() || row.getMemberId().equals(access.ownMember())).map(MembershipWriter::response).toList();
+        return memberships.findAllByFlatIdOrderByStartDateDesc(flatId).stream().filter(row -> access == null || !access.resident() || row.getMemberId().equals(access.ownMember())).map(MembershipWriter::response).toList();
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.member(#p0)")
     public PageResponse<MembershipResponse> pageByMember(UUID memberId, int page, int size, String sortBy, String direction) {
@@ -77,25 +85,29 @@ public class MembershipWriter {
         Page<FlatMembershipEntity> result = memberships.findAllByMemberId(memberId, pageable);
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.flat(#p0)")
     public PageResponse<MembershipResponse> pageByFlat(UUID flatId, int page, int size, String sortBy, String direction) {
         Pageable pageable = PageRequests.of(page, size, sortBy, direction,
                 Set.of("startDate", "endDate", "createdAt", "updatedAt", "relationshipType"));
-        Page<FlatMembershipEntity> result = access!=null && access.resident() ? memberships.findAllByFlatIdAndMemberId(flatId,access.ownMember(),pageable) : memberships.findAllByFlatId(flatId, pageable);
+        Page<FlatMembershipEntity> result = access != null && access.resident() ? memberships.findAllByFlatIdAndMemberId(flatId, access.ownMember(), pageable) : memberships.findAllByFlatId(flatId, pageable);
         return PageResponse.from(result, MembershipWriter::response, sortBy, direction);
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.member(#p0)")
     public CursorPage<MembershipResponse> cursorByMember(UUID memberId, int limit, String after) {
         if (!members.existsById(memberId)) throw new MemberNotFoundException(memberId);
         return cursor(memberId, true, limit, after);
     }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@memberAccess.flat(#p0)")
     public CursorPage<MembershipResponse> cursorByFlat(UUID flatId, int limit, String after) {
         return cursor(flatId, false, limit, after);
     }
+
     private CursorPage<MembershipResponse> cursor(UUID scopeId, boolean byMember, int limit, String after) {
         if (limit < 1 || limit > 100) throw new ApiFailure(400, "INVALID_PAGE", "limit must be between 1 and 100");
         var actor = access.identity();
@@ -122,22 +134,24 @@ public class MembershipWriter {
         var last = rows.isEmpty() ? null : rows.get(Math.min(limit, rows.size()) - 1);
         return new CursorPage<>(items, hasNext ? CursorCodec.encode(last.getCreatedAt(), last.getId(), scope) : null, hasNext);
     }
+
     @Transactional
     @PreAuthorize("@memberAccess.has('OWNER_END_OWNERSHIP','SOCIETY')")
     public MembershipResponse end(UUID memberId, UUID membershipId, EndMembershipRequest request) {
-        if(registry!=null)registry.lock();
+        if (registry != null) registry.lock();
         members.findByIdForUpdate(memberId).orElseThrow(() -> new MemberNotFoundException(memberId));
         FlatMembershipEntity membership = memberships.findByIdAndMemberId(membershipId, memberId)
                 .orElseThrow(() -> new MembershipNotFoundException(membershipId));
         if (request.endDate().isBefore(membership.getStartDate())) throw new InvalidMembershipEndDateException();
         if (membership.getEndDate() == null) {
-            var before=response(membership);
+            var before = response(membership);
             membership.end(request.endDate(), Instant.now());
             memberships.saveAndFlush(membership);
-            if(audit!=null)audit.record("END","MEMBERSHIP",membership.getId(),before,response(membership));
+            if (audit != null) audit.record("END", "MEMBERSHIP", membership.getId(), before, response(membership));
         }
         return response(membership);
     }
+
     private static MembershipResponse response(FlatMembershipEntity m) {
         return new MembershipResponse(m.getId(), m.getMemberId(), m.getFlatId(),
                 com.emerald.member.dto.RelationshipType.valueOf(m.getRelationshipType()), m.getStartDate(), m.getEndDate());

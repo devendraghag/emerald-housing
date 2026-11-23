@@ -12,6 +12,9 @@ import io.micrometer.core.instrument.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import org.springframework.kafka.support.SendResult;
 
 @Component
 public class LostFoundEventPublisher {
@@ -41,17 +44,34 @@ public class LostFoundEventPublisher {
         UUID claim=UUID.randomUUID();
         var batch=db.query("WITH picked AS (SELECT event_id FROM lost_found_event_outbox WHERE claimed_until IS NULL OR claimed_until < now() ORDER BY created_at LIMIT 50 FOR UPDATE SKIP LOCKED) UPDATE lost_found_event_outbox o SET claim_token=?,claimed_until=now()+interval '180 seconds' FROM picked p WHERE o.event_id=p.event_id RETURNING o.event_id,o.report_id,o.event_type,o.actor_id,o.occurred_at,o.schema_version,o.event_timestamp,o.correlation_id",
                 (rs,n)->new LostFoundEvent(rs.getObject("event_id",UUID.class),rs.getObject("report_id",UUID.class),rs.getString("event_type"),rs.getObject("actor_id",UUID.class),rs.getTimestamp("occurred_at").toInstant(),rs.getInt("schema_version"),rs.getTimestamp("event_timestamp").toInstant(),rs.getString("correlation_id")),claim);
+        var pending = new ArrayList<Pending>();
         for(var event:batch) {
             try {
-                kafka.send(TOPIC,event.reportId().toString(),json.writeValueAsString(event)).get();
+                CompletableFuture<SendResult<String,String>> send =
+                        kafka.send(TOPIC,event.reportId().toString(),json.writeValueAsString(event));
+                pending.add(new Pending(event, send));
+            } catch(Exception ex) {
+                fail(event, claim, ex);
+            }
+        }
+        for(var item:pending) {
+            var event = item.event();
+            try {
+                item.send().get();
                 db.update("DELETE FROM lost_found_event_outbox WHERE event_id=? AND claim_token=?",event.eventId(),claim);
                 meters.counter("kafka.messages.sent","flow","lost-found").increment();
                 log.info("Published lost-and-found event eventId={} correlationId={}",event.eventId(),event.correlationId());
             } catch(Exception ex) {
-                db.update("UPDATE lost_found_event_outbox SET attempts=attempts+1,claim_token=NULL,claimed_until=NULL WHERE event_id=? AND claim_token=?",event.eventId(),claim);
-                meters.counter("kafka.messages.failed","flow","lost-found","stage","outbox").increment();
-                log.error("Failed publishing lost-and-found event eventId={}",event.eventId(),ex);
+                fail(event, claim, ex);
             }
         }
     }
+
+    private void fail(LostFoundEvent event, UUID claim, Exception error) {
+        db.update("UPDATE lost_found_event_outbox SET attempts=attempts+1,claim_token=NULL,claimed_until=NULL WHERE event_id=? AND claim_token=?",event.eventId(),claim);
+        meters.counter("kafka.messages.failed","flow","lost-found","stage","outbox").increment();
+        log.error("Failed publishing lost-and-found event eventId={}",event.eventId(),error);
+    }
+
+    private record Pending(LostFoundEvent event, CompletableFuture<SendResult<String,String>> send) {}
 }

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Threads — Learn the Existing Scoped Use Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:900px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:740px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 35</span>
+<h1>Virtual threads, from zero</h1>
+<p>Learn what virtual threads are, then follow the one scoped use in this repository: a dedicated executor supplied to the blocking Society HTTP client. Understand what the tests prove, why the whole application is not switched to virtual threads, and what evidence is still needed before making a wider default change.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#status">2. Current implementation status</a><a href="#flow">3. Trace one request</a><a href="#config">4. Configuration and lifecycle</a><a href="#test">5. What the tests prove</a><a href="#evaluate">6. Evaluate the workload</a><a href="#limits">7. Limits and risks</a><a href="#interview">8. Interview preparation</a><a href="#files">9. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<p>A <b>platform thread</b> is an operating-system-backed Java thread. A <b>virtual thread</b> is a lightweight Java thread scheduled by the JVM over a smaller set of carrier platform threads.</p>
+<p>Virtual threads are useful when many tasks spend time waiting on blocking operations such as network I/O. They reduce the cost of representing waiting tasks. They do not make the remote service faster, remove network latency, or make CPU-heavy work faster.</p>
+<p>Virtual threads are still threads: they need concurrency limits around databases and downstream services, and code must handle timeouts, cancellation, errors, and resource cleanup as before.</p>
+<div class="callout ok"><b>Short status:</b> virtual threads are already used for the JDK HTTP client’s dedicated executor in Member Service. They are not enabled as the application-wide Spring/Tomcat default.</div>
+</section>
+<section id="status"><h2>2. Current implementation status</h2>
+<table><thead><tr><th>Area</th><th>Checked-in behavior</th></tr></thead><tbody>
+<tr><td>Java baseline</td><td>Member Service compiles for Java 21, which includes stable virtual threads.</td></tr>
+<tr><td>Scoped virtual executor</td><td><code>SocietyRestClientConfig</code> creates a named virtual thread per task executor for the JDK <code>HttpClient</code> used by Society <code>RestClient</code>.</td></tr>
+<tr><td>Global application default</td><td><code>spring.threads.virtual.enabled</code> is not configured. The Spring MVC/Tomcat request pool remains explicitly configured with a maximum of 100 threads by default.</td></tr>
+<tr><td>Concurrency control</td><td>Society HTTP lookups are protected by a Resilience4j bulkhead, configured to 12 concurrent calls by default. Tomcat connections and queue are also separately bounded.</td></tr>
+<tr><td>Performance conclusion</td><td>No before/after load benchmark or production comparison was found. Existing tests verify wiring and selected behavior, not throughput or resource savings.</td></tr>
+</tbody></table>
+<p>This is a scoped evaluation already coded into the Society HTTP transport. It is not a project-wide switch and there is no evidence in this repository that a global switch would improve the application.</p>
+</section>
+<section id="flow"><h2>3. Trace one request through the system</h2>
+<div class="diagram" role="img" aria-label="Tomcat platform thread runs synchronous service request and SocietyClient; RestClient delegates HTTP transport to JDK HttpClient with a dedicated virtual-thread executor; response returns to caller">
+<div class="flow"><div class="box"><b>Incoming request</b><br>Spring MVC / Tomcat platform thread</div><div class="arrow">→</div><div class="box"><b>MembershipService</b><br>validates member, calls Society once</div><div class="arrow">→</div><div class="box"><b>SocietyClient</b><br>synchronous RestClient + resilience</div><div class="arrow">→</div><div class="box"><b>JDK HttpClient</b><br>dedicated virtual-thread executor</div><div class="arrow">→</div><div class="box"><b>Society Service</b><br>response or timeout</div></div>
+</div>
+<p>Important distinction: <code>MembershipService.assign</code> makes a synchronous call to <code>societyClient.getFlat</code>. The request handler’s caller is still executing in the application’s normal MVC request model. The custom virtual-thread executor is supplied to the JDK <code>HttpClient</code>; it does not by itself turn every Tomcat request thread into a virtual thread.</p>
+<div class="step"><h3>Step 1 — create a dedicated executor</h3><p>The bean uses <code>Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("society-http-", 0).factory())</code>. Each submitted executor task receives a named virtual thread.</p></div>
+<div class="step"><h3>Step 2 — supply it to JDK HttpClient</h3><p>The <code>societyHttpClient</code> bean calls <code>HttpClient.newBuilder().executor(executor)</code> and applies a connect timeout. The executor is scoped to this client rather than replacing Spring’s general executor.</p></div>
+<div class="step"><h3>Step 3 — adapt it for Spring RestClient</h3><p>The <code>RestClient</code> bean uses <code>JdkClientHttpRequestFactory</code> with that JDK client and applies the read timeout. <code>SocietyClient</code> uses this RestClient for flat lookups and the notice flat directory.</p></div>
+<div class="step"><h3>Step 4 — protect the dependency</h3><p>SocietyClient keeps synchronous request semantics and applies timeout/error mapping, retry, circuit breaker, and a bulkhead. The default bulkhead maximum is 12 concurrent calls, so using lightweight threads does not imply unbounded Society traffic.</p></div>
+<div class="step"><h3>Step 5 — close resources in dependency order</h3><p>The executor bean declares <code>destroyMethod="close"</code>; the HTTP client also declares close and depends on the executor. The tests verify both are terminated when the Spring context closes.</p></div>
+</section>
+<section id="config"><h2>4. Configuration and lifecycle</h2>
+<table><thead><tr><th>Setting</th><th>Current value / default</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Java</td><td>21</td><td>Required runtime/compiler baseline for <code>Thread.ofVirtual()</code>.</td></tr>
+<tr><td>Society connect timeout</td><td>2 seconds</td><td>Bounds connection establishment. Set in application YAML; Kubernetes Member Deployment also supplies 2s.</td></tr>
+<tr><td>Society read timeout</td><td>3 seconds</td><td>Bounds the blocking HTTP response wait. Set in application YAML; Kubernetes Member Deployment also supplies 3s.</td></tr>
+<tr><td>Society bulkhead</td><td>12 concurrent calls</td><td>Caps simultaneous protected downstream calls per Member Service instance.</td></tr>
+<tr><td>Tomcat request threads</td><td>100 maximum by default</td><td>Application’s platform-thread request pool remains configured independently of the Society client’s executor.</td></tr>
+<tr><td>Global virtual-thread mode</td><td>Not enabled</td><td>No <code>spring.threads.virtual.enabled=true</code> setting appears in the application configuration.</td></tr>
+</tbody></table>
+<p>The dedicated executor bean uses <code>defaultCandidate=false</code>, which prevents it from being selected as a general-purpose Spring <code>Executor</code>. That is a deliberate scope boundary.</p>
+</section>
+<section id="test"><h2>5. What the tests prove</h2>
+<p><code>SocietyRestClientConfigTest</code> contains four checks:</p>
+<ol><li>The Spring context creates the Society RestClient and its JDK HttpClient uses the configured executor.</li><li>Eight tasks submitted to that executor run on virtual threads; after context close, HttpClient and executor report terminated.</li><li>A finite task source completes on the executor, keeping the test submission bounded.</li><li>A WireMock-backed ready request succeeds, while a deliberately slow endpoint exceeds the configured read timeout and raises <code>ResourceAccessException</code>.</li></ol>
+<p>The transport test uses a 2-second read timeout and a 4-second delayed response. This test-only window was widened from 500 ms/1.5 seconds after the fast localhost request was cancelled on the test host before the intended timeout assertion. Production defaults remain 2 seconds connect and 3 seconds read.</p>
+<div class="callout warn"><b>Evidence boundary:</b> these tests prove virtual task execution, dependency wiring, resource closure, and timeout behavior. They do not compare virtual threads with platform threads under realistic traffic or prove that the Society HTTP dependency has more capacity.</div>
+</section>
+<section id="evaluate"><h2>6. Evaluate the workload before widening scope</h2>
+<p>To decide whether to enable virtual threads more broadly, benchmark representative blocking workloads and compare:</p>
+<ul><li>throughput and p50/p95/p99 request latency under the same load;</li><li>platform/carrier thread count and virtual-thread task count;</li><li>CPU use, heap use, allocation, and garbage collection;</li><li>DB connection pool saturation, Society bulkhead rejections, retries, timeouts, and downstream saturation;</li><li>thread pinning and blocking behavior using Java Flight Recorder or thread dumps.</li></ul>
+<p>Use realistic concurrency and failure scenarios, including slow Society responses. Virtual threads make blocked tasks cheaper to represent; they can also allow more work to wait at once. Keep bulkheads, timeouts, rate limits, connection pools, and downstream capacity controls in place.</p>
+<p>There are no measurements checked into this repository that justify enabling Spring Boot’s global virtual-thread mode or changing Tomcat defaults. The safe current state is the existing scoped executor plus controlled downstream concurrency.</p>
+</section>
+<section id="limits"><h2>7. Limits and risks</h2>
+<ul><li>Only the Society JDK HttpClient is explicitly given the virtual-thread executor in the inspected configuration.</li><li>The Spring MVC request thread is not shown running as a virtual thread by this configuration.</li><li>Virtual threads do not speed CPU-heavy tasks or the Society Service itself.</li><li>Connection pools, DB pools, bulkheads, and remote service capacity remain the actual resource constraints.</li><li>Blocking operations that pin carrier threads can reduce the benefit; inspect with JFR for the real workload.</li><li>Retries can multiply downstream calls. The Society bulkhead and retry policy still matter when concurrency rises.</li><li>The automated tests are functional, not a performance benchmark. No production rollout comparison or benchmark is documented.</li></ul>
+</section>
+<section id="interview"><h2>8. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“The application targets Java 21 and uses virtual threads in a narrow place: Member Service creates a dedicated virtual-thread-per-task executor and supplies it to the JDK HttpClient behind its synchronous Society RestClient. The rest of the Spring MVC/Tomcat model is not switched globally. The client still has connect/read timeouts, circuit breaker, retries, and a 12-call bulkhead, so lightweight threads do not mean unlimited downstream concurrency. Tests confirm tasks on that executor are virtual, the HTTP client is wired to it, resources close with the context, and slow responses time out. We have not run a representative platform-versus-virtual-thread benchmark, so we would not enable the global Spring setting without measurements.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Do virtual threads make blocking I/O non-blocking?</td><td>No. The code can still block. Virtual threads reduce the cost of waiting by letting the JVM unmount/schedule many waiting tasks efficiently in supported blocking operations.</td></tr>
+<tr><td>Does this make Tomcat request threads virtual?</td><td>No. The custom executor is dedicated to the Society JDK HttpClient. Global Spring virtual threads are not enabled, and Tomcat has its own configured platform-thread pool.</td></tr>
+<tr><td>Why use a dedicated executor?</td><td>It scopes the experiment to one blocking HTTP client and avoids replacing Spring’s general executor. The bean is not a default candidate for general injection.</td></tr>
+<tr><td>Can the executor handle unlimited calls?</td><td>Virtual thread creation is lightweight, but downstream resources are finite. The Society bulkhead caps protected concurrent calls at 12 per instance, and the HTTP/database pools and rate controls remain relevant.</td></tr>
+<tr><td>What does the test establish?</td><td>It establishes virtual-thread execution for tasks submitted to the configured executor, client wiring and lifecycle, and timeout behavior. It does not establish a throughput or memory improvement under production traffic.</td></tr>
+<tr><td>When would you enable Spring’s global virtual-thread mode?</td><td>After comparing representative workloads, checking libraries for pinning/ThreadLocal assumptions, reviewing scheduler behavior and resource limits, and observing latency, CPU, memory, and downstream pressure in a controlled rollout.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>9. Code map: read in this order</h2>
+<ul>
+<li><a href="../services/member-service/pom.xml"><code>services/member-service/pom.xml</code></a> — Java 21 target.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/SocietyRestClientConfig.java"><code>SocietyRestClientConfig.java</code></a> — dedicated virtual executor, JDK HttpClient, and RestClient bridge.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/client/SocietyClient.java"><code>SocietyClient.java</code></a> — synchronous downstream calls, timeouts/error translation, retry, circuit breaker, and bulkhead decorators.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/service/MembershipService.java"><code>MembershipService.java</code></a> — example request flow that makes one required flat lookup.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — Tomcat thread settings, downstream timeouts, and bulkhead default.</li>
+<li><a href="../kubernetes/member/deployment.yaml"><code>member deployment.yaml</code></a> and <a href="../kubernetes/config/application-config.yaml"><code>application-config.yaml</code></a> — deployed HTTP limits and bulkhead configuration.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/config/SocietyRestClientConfigTest.java"><code>SocietyRestClientConfigTest.java</code></a> — virtual thread, lifecycle, and timeout checks.</li>
+<li><a href="http-connection-pooling-step-by-step.html"><code>http-connection-pooling-step-by-step.html</code></a> and <a href="bulkhead-pattern-step-by-step.html"><code>bulkhead-pattern-step-by-step.html</code></a> — related HTTP resource limits.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> understand platform versus virtual threads → inspect the dedicated executor → follow the RestClient wiring → read the Society request and bulkhead → run the four focused tests → benchmark before changing the global thread model.</div>
+</section>
+<footer><p><small>Repository-grounded guide. It documents scoped virtual-thread use and explicitly separates functional test evidence from performance conclusions.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

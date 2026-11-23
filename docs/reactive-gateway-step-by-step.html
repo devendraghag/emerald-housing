@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reactive Programming at the Gateway — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:900px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:740px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 36</span>
+<h1>Reactive programming at the Gateway, from zero</h1>
+<p>Start with the reactive vocabulary, then follow a proxied API request and an authentication request through Emerald Housing’s API Gateway. Learn where non-blocking I/O is used, where the MVC services begin, how to operate it, and why the repository does not call for a broad rewrite.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#status">2. What is reactive here?</a><a href="#architecture">3. System boundary</a><a href="#proxy">4. Trace a proxied request</a><a href="#auth">5. Trace login and session</a><a href="#compose">6. Read Reactor code</a><a href="#config">7. Configuration and operations</a><a href="#boundary">8. What is not reactive</a><a href="#tests">9. Verification and coverage</a><a href="#limits">10. Limits and trade-offs</a><a href="#interview">11. Interview preparation</a><a href="#files">12. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<p>Traditional blocking I/O ties up the calling thread while it waits for a socket, database, or other resource. With <b>non-blocking I/O</b>, the thread can do other work while the operation is pending; a completion signal resumes the next step.</p>
+<p>In this Gateway, Reactor is the async composition model:</p>
+<ul><li><b><code>Mono&lt;T&gt;</code>:</b> a deferred operation that can produce zero or one value, or an error.</li><li><b><code>Flux&lt;T&gt;</code>:</b> a deferred sequence that can produce zero or many values.</li><li><b><code>map</code>:</b> transform a value synchronously.</li><li><b><code>flatMap</code>:</b> compose another asynchronous operation that returns a publisher.</li><li><b><code>onErrorResume</code>/<code>onErrorMap</code>:</b> recover from or translate an error without blocking for a result.</li><li><b>Subscription:</b> the WebFlux/Gateway runtime subscribes to controller/filter publishers and drives the work.</li></ul>
+<p>Reactive is not a synonym for “every method runs on another thread.” It is a way to represent and compose asynchronous work without holding an event-loop thread waiting for I/O.</p>
+<div class="callout ok"><b>Current status:</b> API Gateway is built on Spring Cloud Gateway’s WebFlux server starter, WebFlux security and session APIs, Reactor return types, and reactive HTTP/Redis components. There is no <code>.block()</code> or manual <code>subscribe()</code> in the Gateway’s production Java code inspected for this guide.</div>
+</section>
+<section id="status"><h2>2. What is reactive here?</h2>
+<table><thead><tr><th>Component</th><th>Reactive role in this project</th></tr></thead><tbody>
+<tr><td>Spring Cloud Gateway Server WebFlux</td><td>Matches routes, applies filters, and forwards traffic using the reactive server stack.</td></tr>
+<tr><td>Gateway controllers and filters</td><td>Use <code>Mono</code>, <code>ServerWebExchange</code>, and WebFlux filter chains.</td></tr>
+<tr><td>Spring Security</td><td>Uses <code>SecurityWebFilterChain</code>, <code>ReactiveAuthenticationManager</code>, reactive security context, and WebSession APIs.</td></tr>
+<tr><td>Credential/session calls</td><td>Use Reactor Netty-backed <code>WebClient</code> and return <code>Mono</code>.</td></tr>
+<tr><td>Session and rate limiting</td><td>Use Spring Session Redis and Redis reactive support, plus Gateway <code>RedisRateLimiter</code>.</td></tr>
+<tr><td>Upstream business services</td><td>Member and Society services are Spring MVC applications. Gateway non-blocking I/O does not make their internal handlers reactive.</td></tr>
+</tbody></table>
+<p>The API Gateway POM includes <code>spring-cloud-starter-gateway-server-webflux</code>, <code>spring-boot-starter-session-data-redis</code>, and <code>spring-boot-starter-data-redis-reactive</code>. It does not include the servlet Gateway starter.</p>
+</section>
+<section id="architecture"><h2>3. System boundary and request flow</h2>
+<div class="diagram" role="img" aria-label="Client request reaches reactive gateway filters and security, gets routed through Reactor Netty to separate MVC member society or AI upstream service">
+<div class="flow"><div class="box"><b>Browser/client</b><br>HTTP request</div><div class="arrow">→</div><div class="box"><b>Reactive Gateway</b><br>WebFlux security + filters</div><div class="arrow">→</div><div class="box"><b>Reactor Netty</b><br>route and proxy I/O</div><div class="arrow">→</div><div class="box"><b>Upstream service</b><br>Member / Society / AI</div></div>
+</div>
+<p>At the Gateway boundary, a response can remain asynchronous while the upstream service is processing it. The upstream service itself can still use MVC, blocking database access, and its own thread pools. The Gateway and services are separate applications and can have different programming models.</p>
+<p>Gateway routes are configured in <code>application.yml</code> for Member, Society, and AI service URLs. Route filters apply authenticated-admin Redis rate limits. Global filters add correlation/error handling, remove untrusted internal headers, and count rate-limited responses.</p>
+</section>
+<section id="proxy"><h2>4. Trace a proxied API request step by step</h2>
+<div class="step"><h3>Step 1 — accept and decorate the exchange</h3><p><code>CorrelationAndErrorFilter</code> validates or creates an <code>X-Correlation-ID</code>, adds it to the request/response, and starts timing. The filter returns a <code>Mono&lt;Void&gt;</code> representing the downstream chain.</p></div>
+<div class="step"><h3>Step 2 — remove untrusted internal headers</h3><p><code>InternalHeaderSanitizingFilter</code> removes gateway/service authentication and identity headers from the incoming request before forwarding. It also returns the filter chain’s <code>Mono</code>.</p></div>
+<div class="step"><h3>Step 3 — authenticate and authorize</h3><p><code>GatewaySecurityConfiguration</code> permits public/login/health routes, protects <code>/api/v1/**</code>, configures CSRF and session behavior, and denies unmatched exchanges by default.</p></div>
+<div class="step"><h3>Step 4 — match a route and apply rate limiting</h3><p>Spring Cloud Gateway matches the configured path predicates. The route’s <code>RequestRateLimiter</code> asks Redis through the reactive limiter; the key resolver derives a stable authenticated-admin key, or uses the unauthenticated bucket.</p></div>
+<div class="step"><h3>Step 5 — proxy the request upstream</h3><p>The Gateway HTTP client uses configured connect and response timeouts. Reactor Netty performs network I/O without a servlet request thread waiting synchronously for the upstream response.</p></div>
+<div class="step"><h3>Step 6 — map errors and finish instrumentation</h3><p><code>CorrelationAndErrorFilter</code> translates timeout, unavailable, and not-found failures into JSON responses when the response is not already committed. Its <code>doFinally</code> logs status and duration for completion, error, or cancellation signals.</p></div>
+</section>
+<section id="auth"><h2>5. Trace login and session validation separately</h2>
+<p>Authentication is also composed reactively, but it follows a local controller flow rather than a Gateway proxy route:</p>
+<ol><li><code>AuthController.login</code> asks the reactive Redis login limiter for a decision.</li><li>When allowed, it calls <code>AdminAuthenticationManager.authenticate</code>, which returns a <code>Mono&lt;Authentication&gt;</code> from a <code>WebClient</code> request to Member Service.</li><li>The credential response is validated and mapped to an authenticated principal. HTTP 401 is mapped to invalid credentials; other errors become an authentication-service-unavailable response.</li><li>The controller changes the session ID, saves the security context and clears the old CSRF token through reactive session/repository operations.</li><li><code>/api/v1/auth/me</code> and <code>/internal/auth/session</code> compose session reads with a reactive call to Member Service for current account information.</li></ol>
+<p>Connect and response timeouts are configured for the credential <code>WebClient</code>. The session cookie and CSRF policies are configured in the reactive security configuration. Reactive session state is backed by Spring Session Redis.</p>
+</section>
+<section id="compose"><h2>6. Read Reactor code without losing the flow</h2>
+<p>Use this mental model on the login method:</p>
+<pre><code>rateLimiter.isAllowed(...)
+  .flatMap(rate -&gt; rate.isAllowed()
+      ? authenticate(request, exchange)
+      : loginRateLimited(exchange))
+  .onErrorResume(error -&gt; serviceUnavailableResponse(error))</code></pre>
+<p>Nothing is synchronously extracted from the publisher. Each <code>flatMap</code> composes another asynchronous result; error recovery returns another publisher. The framework subscribes when it handles the request.</p>
+<p>Tests sometimes call <code>.block()</code> to get a result in a synchronous JUnit assertion. The inspected production Gateway code does not. A production <code>.block()</code> on a Reactor Netty event-loop thread would undermine the non-blocking design and can cause starvation or runtime blocking warnings.</p>
+<p>Likewise, do not call <code>subscribe()</code> inside a request handler to “start” work and return early. That detaches errors and completion from the HTTP response lifecycle. Return and compose the publisher instead.</p>
+</section>
+<section id="config"><h2>7. Configuration and how to operate it</h2>
+<table><thead><tr><th>Setting</th><th>Default / behavior</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Gateway route connect timeout</td><td>2000 ms by default</td><td>Bounds establishing the upstream connection.</td></tr>
+<tr><td>Gateway response timeout</td><td>28 seconds by default</td><td>Bounds waiting for an upstream response.</td></tr>
+<tr><td>Credential connect/response timeout</td><td>2 seconds / 3 seconds</td><td>Bounds the WebClient call to Member Service during authentication/account refresh.</td></tr>
+<tr><td>Session timeout</td><td>30 minutes by default</td><td>Spring Session Redis expiry.</td></tr>
+<tr><td>Route rate limits</td><td>Environment-overridable per Member, Society, and AI routes</td><td>Reactive Redis token-bucket limits; login has a separate limiter.</td></tr>
+<tr><td>Prometheus</td><td>Actuator exposes health, info, metrics, and Prometheus</td><td>Use Gateway metrics and logs to inspect request latency, rate-limit rejections, and availability.</td></tr>
+</tbody></table>
+<p>When troubleshooting, correlate the Gateway request ID across Gateway and service logs. Separate connect timeout from response timeout, inspect Redis/session/rate-limiter availability, and check whether the upstream service itself is slow. A Gateway timeout tells you the boundary stopped waiting; it does not prove the backend stopped its work.</p>
+</section>
+<section id="boundary"><h2>8. What is not reactive in this repository?</h2>
+<p>Member Service and Society Service use Spring MVC and imperative patterns such as <code>RestClient</code>, JDBC, and JPA. Their own request threads may block while performing downstream or database I/O. The Gateway’s reactive proxy cannot change those execution models automatically.</p>
+<p>The Gateway also contains a small synchronous static-resource controller for serving a classpath rental page. It returns a local resource and does not perform remote blocking I/O. Reactive applications can contain short synchronous computation; the concern is blocking an event-loop thread on slow I/O or long-running work.</p>
+<p>No broad rewrite was made. A service migration would require separate workload evidence, compatible reactive database/client drivers, transaction and security redesign, tests, and operational comparison. Replacing only the controller return type would not make JDBC/JPA calls non-blocking.</p>
+</section>
+<section id="tests"><h2>9. Verification and what tests cover</h2>
+<p>The Gateway Maven test suite passed: <b>21 tests, zero failures, zero errors, and zero skips</b>. The tests cover route predicates, WebFlux filters, error mapping, dynamic authentication, role/session behavior, service failures, and internal-header sanitization.</p>
+<p>Several unit tests use <code>.block()</code> at the test boundary to assert a publisher result. That is test harness behavior, not a production Gateway blocking call.</p>
+<p>The suite verifies reactive code paths and response behavior. It is not a load test proving a specific concurrency or memory advantage over a blocking Gateway, nor does it prove downstream MVC services are non-blocking.</p>
+</section>
+<section id="limits"><h2>10. Limits, trade-offs, and safe evolution</h2>
+<ul><li>Reactive code can still block if a blocking library or explicit wait runs on an event-loop thread.</li><li>Reactive Gateway backpressure does not guarantee upstream service capacity, database capacity, or low latency.</li><li>Session, rate limiter, and authentication flows depend on Redis and Member Service availability; timeouts and error mapping define the failure response.</li><li>Gateway response timeout and upstream service timeout budgets should be coordinated. A Gateway timeout can happen while backend work continues.</li><li>Every service boundary requires independent telemetry. Gateway p95 alone cannot identify whether delay is in routing, Redis, Member Service, Society Service, or the database.</li><li>Reactive composition can be harder to debug if code detaches publishers or loses context. Keep return types composed and propagate correlation/tracing context.</li><li>No performance benchmark in the repository supports converting the MVC services to reactive programming.</li></ul>
+</section>
+<section id="interview"><h2>11. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“The API Gateway is built on Spring Cloud Gateway’s WebFlux server and Reactor Netty. Its route filters, WebFlux security, login/session controllers, Redis rate limiting, and Member credential calls compose through Reactor publishers such as Mono; the production Gateway code does not block or manually subscribe. The Gateway proxies requests to separate Member, Society, and AI services, which remain Spring MVC applications. So I describe the Gateway boundary as reactive, not the whole system. We keep connect/response timeouts, Redis-backed sessions and rate limits, correlation IDs, and error translation. The Gateway test suite passes, but we have not benchmarked a broad service rewrite, so there is no evidence to do that.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Does returning <code>Mono</code> make blocking code non-blocking?</td><td>No. A blocking call still blocks the thread it runs on. Reactive composition helps only when the I/O client and participating libraries are non-blocking or blocking work is isolated appropriately.</td></tr>
+<tr><td>Are the backend services reactive?</td><td>No. Member and Society use Spring MVC/imperative persistence. The Gateway forwards to them over HTTP.</td></tr>
+<tr><td>Why use <code>flatMap</code> in login?</td><td>Authentication, session changes, and security-context persistence return asynchronous publishers; <code>flatMap</code> composes their results without waiting synchronously.</td></tr>
+<tr><td>Why is <code>.block()</code> acceptable in a test?</td><td>The test is a synchronous boundary that needs an assertion value. Production handlers should return/compose the publisher rather than block an event-loop thread.</td></tr>
+<tr><td>What are the main risks?</td><td>Accidentally blocking event loops, detached subscriptions, missing timeouts, unbounded concurrency, and assuming reactive Gateway behavior gives downstream services unlimited capacity.</td></tr>
+<tr><td>What evidence would justify a broader migration?</td><td>Profiling that shows thread scarcity caused by blocking I/O, representative load tests, reactive replacements for database and client access, and before/after latency/resource/error measurements.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>12. Code map: learn in this order</h2>
+<ul>
+<li><a href="../infrastructure/api-gateway/pom.xml"><code>api-gateway/pom.xml</code></a> — WebFlux Gateway, WebClient, security, session and reactive Redis dependencies.</li>
+<li><a href="../infrastructure/api-gateway/src/main/resources/application.yml"><code>application.yml</code></a> — WebFlux routes, timeouts, Redis session and route limits.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/GatewaySecurityConfiguration.java"><code>GatewaySecurityConfiguration.java</code></a> — reactive security chain, CSRF, sessions, authorization.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/AdminAuthenticationManager.java"><code>AdminAuthenticationManager.java</code></a> — reactive WebClient credential/current-account calls.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/AuthController.java"><code>AuthController.java</code></a> — CSRF, login, session setup, current-admin request flow.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/InternalSessionValidationController.java"><code>InternalSessionValidationController.java</code></a> — reactive internal session validation.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/GatewayRateLimitConfiguration.java"><code>GatewayRateLimitConfiguration.java</code></a> and <a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/RateLimitMetricsFilter.java"><code>RateLimitMetricsFilter.java</code></a> — reactive key resolution and rate-limit metrics.</li>
+<li><a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/CorrelationAndErrorFilter.java"><code>CorrelationAndErrorFilter.java</code></a> and <a href="../infrastructure/api-gateway/src/main/java/com/emerald/gateway/security/InternalHeaderSanitizingFilter.java"><code>InternalHeaderSanitizingFilter.java</code></a> — reactive global filter chain.</li>
+<li><a href="../infrastructure/api-gateway/src/test/java/com/emerald/gateway/GatewayRoutesTest.java"><code>GatewayRoutesTest.java</code></a> and related Gateway tests — route and reactive behavior checks.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> learn Mono/Flux and subscription → inspect WebFlux Gateway dependency → follow route configuration → trace one proxy request → trace login and session flow → inspect timeout/error filters → compare Gateway with MVC services → review tests and telemetry.</div>
+</section>
+<footer><p><small>Repository-grounded guide. Reactive behavior is scoped to the API Gateway; upstream service implementations and performance characteristics remain separate.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

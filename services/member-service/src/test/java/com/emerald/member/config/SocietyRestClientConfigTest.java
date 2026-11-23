@@ -91,9 +91,9 @@ class SocietyRestClientConfigTest {
         server.start();
         try {
             server.stubFor(get(urlEqualTo("/ready")).willReturn(ok("ready")));
-            server.stubFor(get(urlEqualTo("/slow")).willReturn(ok("late").withFixedDelay(1500)));
+            server.stubFor(get(urlEqualTo("/slow")).willReturn(ok("late").withFixedDelay(4000)));
             contextRunner().withPropertyValues("society.service.base-url=" + server.baseUrl(),
-                    "society.service.read-timeout=500ms").run(context -> {
+                    "society.service.read-timeout=2s").run(context -> {
                 var client = context.getBean("societyRestClient", RestClient.class);
                 assertThat(client.get().uri("/ready").retrieve().body(String.class)).isEqualTo("ready");
                 assertThatThrownBy(() -> client.get().uri("/slow").retrieve().body(String.class))

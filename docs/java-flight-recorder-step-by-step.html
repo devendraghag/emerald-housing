@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java Flight Recorder — Step by Step</title>
+<style>
+:root{color-scheme:light;--ink:#1c2b3d;--muted:#536579;--blue:#1756a9;--line:#d6e0eb;--pale:#eef5ff;--green:#edf8f0;--amber:#fff5df}
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.7 system-ui,"Segoe UI",sans-serif}header{padding:45px max(22px,calc((100% - 1140px)/2)) 38px;background:linear-gradient(125deg,#102944,#1d5b84);color:#fff}header p{max-width:850px;color:#dcecff}h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;margin:10px 0}main{max-width:1140px;margin:28px auto;padding:0 20px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:22px}nav,article{background:#fff;border:1px solid var(--line);border-radius:15px}nav{position:sticky;top:15px;align-self:start;padding:17px;max-height:calc(100vh - 30px);overflow:auto}nav b{display:block;margin-bottom:8px}nav a{display:block;color:#285180;text-decoration:none;padding:3px 0;font-size:14px}nav a:hover{text-decoration:underline}article{padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #1029440b}h2{margin:42px 0 10px;padding-top:13px;border-top:1px solid var(--line);font-size:1.65rem}h3{margin:23px 0 7px;font-size:1.15rem}p{margin:10px 0}a{color:var(--blue)}code,pre{font-family:ui-monospace,Consolas,monospace}code{background:#edf1f6;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow:auto;background:#101b2a;color:#eef5ff;border-radius:10px;padding:16px}pre code{background:none;padding:0}.tag{display:inline-block;border-radius:20px;padding:4px 10px;background:#dceaff;color:#173f72;font-size:.82rem;font-weight:700}.callout{margin:17px 0;padding:14px 17px;border-left:4px solid var(--blue);border-radius:7px;background:var(--pale)}.ok{background:var(--green);border-color:#26804c}.warn{background:var(--amber);border-color:#be8615}.flow{display:flex;gap:9px;align-items:stretch;min-width:680px}.diagram{overflow:auto;padding:16px;border:1px solid var(--line);border-radius:11px;background:#f4f7fb}.box{flex:1;padding:13px;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:9px}.arrow{align-self:center;color:#42658f;font-weight:bold}table{width:100%;border-collapse:collapse;margin:15px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{background:#edf3fb}.step{border-left:3px solid #7ca4dc;margin:18px 0;padding:2px 0 8px 16px}.small{color:var(--muted);font-size:.93rem}@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:32px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Emerald Housing · Feature 38</span><h1>Java profiling with JFR, from zero</h1><p>Learn what a profile is, how Java Flight Recorder fits this Java 21 service stack, and how to capture a bounded recording while a representative workload is running. This guide describes the new opt-in Kubernetes workflow and the evidence it does—and does not—provide.</p></header>
+<main>
+<nav aria-label="Table of contents"><b>Learn in this order</b><a href="#basics">1. Start with the concepts</a><a href="#status">2. What existed first</a><a href="#flow">3. How the workflow fits together</a><a href="#steps">4. Capture a recording</a><a href="#read">5. Read the recording</a><a href="#interpret">6. Interpret results</a><a href="#safety">7. Safety and limitations</a><a href="#verify">8. Verification</a><a href="#interview">9. Interview preparation</a><a href="#files">10. Source map</a></nav>
+<article>
+<section id="basics"><h2>1. Start with the concepts</h2>
+<p><b>Profiling</b> means collecting runtime evidence while an application does useful work, then using that evidence to locate where CPU, memory, threads, locks, or latency are spent. A profile is evidence about one build, environment, and workload—not a general performance verdict.</p>
+<p><b>Java Flight Recorder (JFR)</b> is the recording facility built into the Java runtime. A recording is saved as a <code>.jfr</code> file. Java Mission Control can explore it graphically; the JDK's <code>jfr</code> command can print summaries and selected events.</p>
+<p>A representative load is a repeatable request or background-job mix that resembles the behavior being investigated: the same endpoint mix, data shape, concurrency, and duration. Profiling an idle service mostly describes startup and waiting.</p>
+<div class="callout"><b>Before interpreting a recording:</b> note the application image/version, pod, JVM options, time window, load profile, request rate, latency, errors, CPU and memory. Compare recordings only when those conditions are meaningfully similar.</div>
+</section>
+<section id="status"><h2>2. What existed first, and what was missing</h2>
+<table><thead><tr><th>Repository evidence</th><th>Meaning</th><th>Change for this feature</th></tr></thead><tbody>
+<tr><td>Services compile and run on Java 21; runtime images use <code>eclipse-temurin:21-jre-jammy</code>.</td><td>JFR is part of the Java runtime family already in use.</td><td>No JDK migration or application dependency was needed.</td></tr>
+<tr><td>Containers run as UID 10001 with a read-only root filesystem and a writable <code>/tmp</code> emptyDir.</td><td>A recording can be written to <code>/tmp</code> without making the image filesystem writable.</td><td>The recording workflow writes into that existing temporary volume.</td></tr>
+<tr><td>Dockerfiles set <code>JAVA_TOOL_OPTIONS</code> to retain container-aware heap sizing.</td><td>JVM options are already supplied through an environment variable.</td><td>The capture script temporarily overrides it while preserving those baseline options, then removes the override.</td></tr>
+<tr><td>No JFR command, capture script, or checked-in recording was found.</td><td>JFR existed as a runtime capability, but the project did not have an operational capture workflow.</td><td>Added an opt-in PowerShell capture script. It does not run continuously or change the default deployment.</td></tr>
+</tbody></table>
+<div class="callout warn"><b>Implementation status:</b> JFR capability was available, but the project workflow was not implemented. This change adds a bounded, opt-in capture-and-copy procedure. No profiling result or performance improvement is claimed.</div>
+</section>
+<section id="flow"><h2>3. How the workflow fits together</h2>
+<div class="diagram" role="img" aria-label="PowerShell sets a temporary Java Flight Recorder startup option on a Kubernetes deployment; pods restart, record into writable temporary storage while representative load runs; the script copies files to the workstation and removes the option">
+<div class="flow"><div class="box"><b>Choose a service</b><br>Gateway, Member, or Society</div><div class="arrow">→</div><div class="box"><b>Temporary JVM option</b><br>profile settings and duration</div><div class="arrow">→</div><div class="box"><b>JFR file in pod</b><br><code>/tmp/*.jfr</code></div><div class="arrow">→</div><div class="box"><b>Copy to workstation</b><br><code>artifacts/jfr/</code></div><div class="arrow">→</div><div class="box"><b>Inspect and compare</b><br>JDK <code>jfr</code> or Mission Control</div></div>
+</div>
+<p>The script first prompts you to start representative load. It then edits the selected Deployment's <code>JAVA_TOOL_OPTIONS</code> and rolls the pods. Each replacement JVM begins its bounded recording at startup while the load remains active. After rollout, the script waits for the configured duration, copies each pod's file, removes the temporary override, and waits for the normal deployment to roll out again.</p>
+<p>The target container already has a writable <code>/tmp</code> volume. The JFR file is temporary pod data, so the script copies it before the cleanup restart deletes that pod.</p>
+</section>
+<section id="steps"><h2>4. Capture a recording step by step</h2>
+<ol>
+<li><b>Choose a safe environment.</b> The procedure restarts every pod in the selected Deployment twice: once to enable the profile and once to restore defaults. Use a non-production cluster unless that restart is explicitly acceptable.</li>
+<li><b>Prepare the workload.</b> Agree on the endpoint mix, test data, rate/concurrency, duration, and success/latency targets. Have the load generator ready before starting the capture command.</li>
+<li><b>Run the script from the repository root.</b> Example for a two-minute Member Service profile:
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\profiling\record-jfr.ps1 `
+  -Deployment member-service `
+  -DurationSeconds 120 `
+  -Namespace emerald-housing `
+  -Context docker-desktop</code></pre>
+<p><code>-Context</code> is optional; omit it to use the current kubectl context. Supported deployment names are <code>api-gateway</code>, <code>member-service</code>, <code>society-service</code>, and <code>ai-service</code>. Duration is bounded from 15 to 900 seconds.</p></li>
+<li><b>Start load before the profiling rollout.</b> When the script prompts, launch the prepared workload in another terminal and press Enter. Keep it running through the replacement pod startup and the configured recording window. Each recording starts when its JVM starts, so it includes some startup time; the script waits the full configured duration after rollout to let all files finish.</li>
+<li><b>Collect the output.</b> The script copies each selected pod's <code>/tmp/emerald-&lt;deployment&gt;.jfr</code> into <code>artifacts/jfr/</code> by default, using the pod name as a filename prefix.</li>
+<li><b>Confirm cleanup.</b> The script removes the temporary <code>JAVA_TOOL_OPTIONS</code> value and waits for the deployment to return to the image's normal JVM defaults.</li>
+</ol>
+<div class="callout warn"><b>Don't profile production casually:</b> the command causes a rolling restart and JFR adds runtime overhead. Coordinate the window and assess impact before using a live environment.</div>
+</section>
+<section id="read"><h2>5. Read the recording</h2>
+<p>Use a JDK 21 installation on your workstation. The deployment image is a JRE; the local inspection commands below require the JDK's <code>jfr</code> tool or Java Mission Control.</p>
+<pre><code>jfr summary .\artifacts\jfr\&lt;pod-name&gt;-emerald-member-service.jfr
+jfr print --events jdk.ExecutionSample,jdk.ThreadPark,jdk.JavaMonitorEnter .\artifacts\jfr\&lt;pod-name&gt;-emerald-member-service.jfr</code></pre>
+<p>For a graphical timeline and event navigation, open the file in Java Mission Control. Start with recording duration and event counts, then examine hot methods, allocation, blocking/parking, monitor contention, garbage collection, and thread activity over the load interval.</p>
+<table><thead><tr><th>Observation</th><th>What to investigate next</th></tr></thead><tbody>
+<tr><td>Repeated execution samples cluster in one method</td><td>Trace that hot path and determine whether the work is necessary, repeated, or CPU-bound.</td></tr>
+<tr><td>Many threads are parked or blocked</td><td>Identify the resource they wait for: database connections, locks, sockets, or another dependency. Waiting is not itself proof of a bug.</td></tr>
+<tr><td>High allocation rate or frequent GC</td><td>Inspect allocation sites, object lifetime, heap sizing, and request data volume; compare with heap/GC behavior under the same load.</td></tr>
+<tr><td>Low CPU with slow requests</td><td>Check dependency latency, pool wait, lock contention, and network/database timings; a CPU profile alone may not explain waiting time.</td></tr>
+</tbody></table>
+</section>
+<section id="interpret"><h2>6. Interpret results without overclaiming</h2>
+<p>JFR helps answer “where did this JVM spend time and allocate?” It does not by itself prove which endpoint caused a sample, explain every external wait, or measure user-visible latency. Pair it with request-level load-generator results and existing service metrics and logs.</p>
+<ol><li>Record the exact build, pod, JVM, resource limits, and load-generator settings.</li><li>Check that the recording overlaps the representative steady-state period, not only startup or warm-up.</li><li>Look for repeated patterns, not one isolated event.</li><li>Form one specific hypothesis and make one controlled code/configuration change.</li><li>Repeat the same load and compare throughput, p50/p95/p99 latency, errors, CPU, memory, and the relevant JFR events.</li></ol>
+<p>Do not infer a speedup from a flame view alone. The measurement should include application behavior and the dependencies that constrain it, such as the database pool or downstream service.</p>
+</section>
+<section id="safety"><h2>7. Safety, configuration, and limitations</h2>
+<table><thead><tr><th>Item</th><th>Current behavior</th><th>Operational implication</th></tr></thead><tbody>
+<tr><td>JFR settings</td><td><code>settings=profile</code></td><td>Uses the standard profiling configuration; event volume and overhead depend on workload and runtime.</td></tr>
+<tr><td>Recording window</td><td>Script default 120 seconds; allowed 15–900 seconds.</td><td>Recording is bounded, but the workload must overlap it.</td></tr>
+<tr><td>Destination</td><td>Pod-local <code>/tmp</code>; local <code>artifacts/jfr</code> by default.</td><td>Pod files disappear at restart. Treat local recordings as potentially sensitive and do not commit them.</td></tr>
+<tr><td>Restoration</td><td>Temporary deployment environment override is removed in a <code>finally</code> block.</td><td>The script waits for the normal deployment rollout even if capture/copy errors occur; if the cluster is unreachable, inspect the Deployment and remove <code>JAVA_TOOL_OPTIONS</code> manually.</td></tr>
+<tr><td>Scope</td><td>One selected Deployment at a time; all matching replicas restart and record.</td><td>Traffic distribution may mean each pod sees different load. The script does not target one pod or synthesize traffic.</td></tr>
+<tr><td>Load generation</td><td>Operator supplies the representative workload.</td><td>No project-specific traffic is guessed or generated by the capture script.</td></tr>
+<tr><td>Artifact transfer</td><td>The script uses <code>kubectl cp</code>.</td><td><code>kubectl cp</code> uses <code>tar</code> in the container; confirm the selected runtime image includes it before the exercise, or use an approved alternative transfer method.</td></tr>
+</tbody></table>
+<p>The script preserves the image's existing <code>-XX:MaxRAMPercentage=75.0</code> and <code>-XX:+UseContainerSupport</code> options while recording. It assumes the selected Deployment inherits those image defaults and does not define a separate <code>JAVA_TOOL_OPTIONS</code> override in its pod spec. Review local deployment customizations before running.</p>
+<p>This workflow uses startup recording because the production images are JRE images and the repository did not establish that <code>jcmd</code> is available inside them. It is not an attach-to-running-process feature and cannot begin at an exact point after warm-up.</p>
+</section>
+<section id="verify"><h2>8. Verification and evidence</h2>
+<p>The implementation is an operational PowerShell script; there is no Java code change. PowerShell syntax parsing succeeded. A local Java 21 smoke run generated a JFR file and the JDK <code>jfr summary</code> command opened it successfully. The Kubernetes base rendered with <code>kubectl kustomize</code>, and this guide's local file links were checked. These checks validate the local JFR options and repository configuration, not the end-to-end pod capture.</p>
+<p>A cluster exercise under representative load was not run, so successful artifact collection from a pod and any performance findings are not claimed. The repository does not contain a checked-in representative workload definition for this script; choose one matching the service and record its profile parameters alongside the resulting JFR file.</p>
+</section>
+<section id="interview"><h2>9. Interview preparation</h2>
+<h3>Developer-level answer</h3><div class="callout ok"><b>60-second explanation:</b> “The services run on Java 21, so JFR is available in the runtime, but the repository did not include a capture workflow. I added an opt-in PowerShell script that temporarily adds a bounded <code>StartFlightRecording</code> option to one Kubernetes Deployment, preserves its container-aware heap flags, prompts the operator to start representative load before the rollout, copies each pod's recording from the existing writable <code>/tmp</code> volume, then removes the override and restores the image defaults. It restarts the pods and records from JVM startup, so we use it in a safe environment and keep the load active through pod replacement. JFR helps locate runtime CPU, allocation, GC, and thread-wait patterns; we pair it with latency and throughput measurements and repeat the same workload before claiming an improvement. The workflow is implemented, but a cluster capture/load run has not been demonstrated here.”</div>
+<h3>Likely follow-up questions</h3>
+<details><summary>Why use JFR rather than only application logs?</summary><p>JFR samples and records JVM runtime events such as execution, allocations, garbage collection, thread state, and contention. Logs are useful for application events and errors but generally do not provide that same runtime view.</p></details>
+<details><summary>Does JFR have zero overhead?</summary><p>No. Its overhead is designed to be practical, but it depends on enabled events and workload. Use bounded recordings and measure the capture impact.</p></details>
+<details><summary>Why is recording enabled at JVM startup?</summary><p>The checked-in images are JRE-based and the repository did not prove attach tooling availability. Startup options work with the existing launch command and avoid changing images; the trade-off is that the profile includes startup and cannot be triggered at an exact warm steady-state instant.</p></details>
+<details><summary>What makes a load representative?</summary><p>The endpoint/job mix, data sizes, concurrency, request rate, and duration should reflect the question and target operating conditions. Document them so another run can reproduce the comparison.</p></details>
+<details><summary>Can the JFR file explain slow HTTP response time by itself?</summary><p>No. It gives JVM evidence. Correlate time windows with endpoint latency, errors, dependency timings, database pool metrics, and load-generator output.</p></details>
+<details><summary>What happens if the script fails?</summary><p>The <code>finally</code> block attempts to remove the temporary JVM option and wait for the normal rollout. If kubectl cannot reach the cluster during cleanup, inspect the deployment and remove the override when connectivity returns.</p></details>
+</section>
+<section id="files"><h2>10. Source map: read in this order</h2>
+<ol>
+<li><a href="../scripts/profiling/record-jfr.ps1"><code>scripts/profiling/record-jfr.ps1</code></a> — parameters, bounded JFR JVM option, rollout, artifact copy, and restoration.</li>
+<li><a href="../services/member-service/Dockerfile"><code>services/member-service/Dockerfile</code></a> — Java 21 JRE image and baseline JVM options; Society Service and Gateway Dockerfiles follow the same runtime pattern.</li>
+<li><a href="../kubernetes/member/deployment.yaml"><code>kubernetes/member/deployment.yaml</code></a> — non-root/read-only container and writable <code>/tmp</code> volume; Society and Gateway deployments use the same shape.</li>
+<li><a href="../kubernetes/society/deployment.yaml"><code>kubernetes/society/deployment.yaml</code></a>, <a href="../kubernetes/gateway/deployment.yaml"><code>kubernetes/gateway/deployment.yaml</code></a>, and <a href="../kubernetes/ai/deployment.yaml"><code>kubernetes/ai/deployment.yaml</code></a> — supported target workloads.</li>
+<li><a href="../services/ai-service/Dockerfile"><code>services/ai-service/Dockerfile</code></a> — Java 21 runtime and baseline JVM options for the AI Service.</li>
+<li><a href="../kubernetes/kustomization.yaml"><code>kubernetes/kustomization.yaml</code></a> — base deployment resources for the local Kubernetes stack.</li>
+</ol>
+<p class="small">Keep the load profile, build identifier, and measurement notes with the artifact. JFR files can contain method names and runtime details; store and share them according to the environment's data-handling rules.</p>
+</section>
+</article>
+</main>
+</body>
+</html>

@@ -10,7 +10,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
 import tools.jackson.databind.json.JsonMapper;
+import org.springframework.kafka.support.SendResult;
 
 @Component
 public class CommunityNoticeEventPublisher {
@@ -40,17 +43,34 @@ public class CommunityNoticeEventPublisher {
                 (rs,n)->new CommunityNoticeEvent(rs.getObject("event_id",java.util.UUID.class),
                         rs.getObject("notice_id",java.util.UUID.class),rs.getString("event_type"),
                         rs.getObject("actor_id",java.util.UUID.class),rs.getTimestamp("occurred_at").toInstant(),rs.getInt("schema_version"),rs.getTimestamp("event_timestamp").toInstant(),rs.getString("correlation_id")), claim);
+        var pending = new ArrayList<Pending>();
         for(var event:batch) {
             try {
-                kafka.send(TOPIC,event.noticeId().toString(),json.writeValueAsString(event)).get();
+                CompletableFuture<SendResult<String,String>> send =
+                        kafka.send(TOPIC,event.noticeId().toString(),json.writeValueAsString(event));
+                pending.add(new Pending(event, send));
+            } catch(Exception ex) {
+                fail(event, claim, ex);
+            }
+        }
+        for(var item:pending) {
+            var event = item.event();
+            try {
+                item.send().get();
                 db.update("DELETE FROM community_notice_outbox WHERE event_id=? AND claim_token=?",event.eventId(),claim);
                 meters.counter("kafka.messages.sent","flow","community-notices").increment();
                 log.info("Published community notice event eventId={} correlationId={}",event.eventId(),event.correlationId());
             } catch(Exception ex) {
-                db.update("UPDATE community_notice_outbox SET attempts=attempts+1,claim_token=NULL,claimed_until=NULL WHERE event_id=? AND claim_token=?",event.eventId(),claim);
-                meters.counter("kafka.messages.failed","flow","community-notices","stage","outbox").increment();
-                log.error("Failed publishing community notice event eventId={}",event.eventId(),ex);
+                fail(event, claim, ex);
             }
         }
     }
+
+    private void fail(CommunityNoticeEvent event, UUID claim, Exception error) {
+        db.update("UPDATE community_notice_outbox SET attempts=attempts+1,claim_token=NULL,claimed_until=NULL WHERE event_id=? AND claim_token=?",event.eventId(),claim);
+        meters.counter("kafka.messages.failed","flow","community-notices","stage","outbox").increment();
+        log.error("Failed publishing community notice event eventId={}",event.eventId(),error);
+    }
+
+    private record Pending(CommunityNoticeEvent event, CompletableFuture<SendResult<String,String>> send) {}
 }

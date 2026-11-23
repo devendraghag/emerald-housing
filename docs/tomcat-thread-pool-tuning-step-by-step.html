@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tomcat Thread Pool Tuning — Step by Step</title>
+<style>
+:root{--ink:#1b293b;--muted:#526579;--blue:#1657a7;--line:#d6e0eb;--pale:#edf5ff;--green:#edf8f0;--amber:#fff4dc}
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.7 system-ui,"Segoe UI",sans-serif}header{padding:44px max(22px,calc((100% - 1140px)/2)) 38px;background:linear-gradient(125deg,#102944,#1d5b84);color:#fff}header p{max-width:900px;color:#dcecff}h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;margin:10px 0}main{max-width:1140px;margin:28px auto;padding:0 20px;display:grid;grid-template-columns:255px minmax(0,1fr);gap:22px}nav,article{background:#fff;border:1px solid var(--line);border-radius:15px}nav{position:sticky;top:15px;align-self:start;padding:17px;max-height:calc(100vh - 30px);overflow:auto}nav b{display:block;margin-bottom:8px}nav a{display:block;color:#285180;text-decoration:none;padding:3px 0;font-size:14px}nav a:hover{text-decoration:underline}article{padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #1029440b}h2{margin:42px 0 10px;padding-top:13px;border-top:1px solid var(--line);font-size:1.65rem}h3{margin:23px 0 7px;font-size:1.15rem}p{margin:10px 0}a{color:var(--blue)}code,pre{font-family:ui-monospace,Consolas,monospace}code{background:#edf1f6;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow:auto;background:#101b2a;color:#eef5ff;border-radius:10px;padding:16px}pre code{background:none;padding:0}.tag{display:inline-block;border-radius:20px;padding:4px 10px;background:#dceaff;color:#173f72;font-size:.82rem;font-weight:700}.callout{margin:17px 0;padding:14px 17px;border-left:4px solid var(--blue);border-radius:7px;background:var(--pale)}.good{background:var(--green);border-color:#27804c}.warn{background:var(--amber);border-color:#bd8210}.flow{display:flex;gap:9px;align-items:stretch;min-width:690px}.diagram{overflow:auto;padding:16px;border:1px solid var(--line);border-radius:11px;background:#f4f7fb}.box{flex:1;padding:13px;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:9px}.arrow{align-self:center;color:#42658f;font-weight:bold}table{width:100%;border-collapse:collapse;margin:15px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{background:#edf3fb}.step{border-left:3px solid #7ca4dc;margin:18px 0;padding:2px 0 8px 16px}.small{color:var(--muted);font-size:.93rem}details{padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:10px 0}summary{cursor:pointer;font-weight:650}@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:32px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Emerald Housing · Feature 42</span><h1>Tomcat thread pool tuning, from zero</h1><p>First understand how a servlet server assigns request work, then trace which Emerald Housing services actually use Tomcat and what their manifests configure. Finish with a repeatable measurement process for deciding whether a pool change is justified. Existing settings and framework defaults are clearly separated.</p></header>
+<main>
+<nav aria-label="Table of contents"><b>Learn in this order</b><a href="#basics">1. Learn Tomcat terms</a><a href="#services">2. Identify Tomcat services</a><a href="#config">3. Read current settings</a><a href="#flow">4. Trace saturation</a><a href="#measure">5. Measure before tuning</a><a href="#change">6. Change the right property</a><a href="#operate">7. Run a controlled exercise</a><a href="#limits">8. Limits and gaps</a><a href="#verify">9. Verification</a><a href="#interview">10. Interview preparation</a><a href="#files">11. Source map</a></nav>
+<article>
+<section id="basics"><h2>1. Learn Tomcat terms first</h2>
+<p>Embedded Tomcat accepts HTTP connections and assigns servlet request work to worker threads. A request worker can be occupied while application code runs or waits on a database, remote HTTP service, lock, or other blocking call.</p>
+<ul><li><b>Maximum worker threads</b> bounds the number of request tasks Tomcat can process concurrently.</li><li><b>Maximum connections</b> limits the number of open connections the connector manages; it is not the worker count.</li><li><b>Accept count</b> controls the incoming connection backlog when the server cannot accept/process work immediately. It can smooth a short burst, but a large backlog can turn overload into long waits.</li></ul>
+<p>These limits interact with database pools, downstream bulkheads, CPU, memory, and replicas. More request workers can increase the number of requests waiting for a smaller database pool without improving useful throughput.</p>
+<div class="callout"><b>Do not apply Tomcat properties to a reactive server.</b> The API Gateway uses WebFlux/Reactor Netty; it does not use Tomcat's servlet request-worker pool.</div>
+</section>
+<section id="services"><h2>2. Identify which services use Tomcat</h2>
+<table><thead><tr><th>Application</th><th>Web stack in its build</th><th>Tomcat tuning applies?</th></tr></thead><tbody>
+<tr><td>Member Service</td><td><code>spring-boot-starter-webmvc</code></td><td>Yes. Embedded servlet server; explicit worker setting exists.</td></tr>
+<tr><td>Society Service</td><td><code>spring-boot-starter-webmvc</code></td><td>Yes. Explicit connection/backlog settings exist; worker maximum is not set in project config.</td></tr>
+<tr><td>AI Service</td><td><code>spring-boot-starter-webmvc</code></td><td>Yes. No Tomcat pool properties found in its application config.</td></tr>
+<tr><td>API Gateway</td><td><code>spring-cloud-starter-gateway-server-webflux</code></td><td>No. It uses a reactive server and framework-managed Netty event loops.</td></tr>
+</tbody></table>
+<p>Request path: the reactive Gateway routes calls to an MVC backend; each backend's own Tomcat server handles its HTTP request. The Member-to-Society service client and Kafka consumers use different execution resources and must be examined separately.</p>
+</section>
+<section id="config"><h2>3. What has been configured so far</h2>
+<table><thead><tr><th>Setting</th><th>Member Service</th><th>Society Service</th><th>AI Service</th></tr></thead><tbody>
+<tr><td>Tomcat max worker threads</td><td><code>MEMBER_HTTP_MAX_THREADS</code>, default 100; Kubernetes ConfigMap sets 100.</td><td>No explicit value found; Spring Boot/Tomcat default applies.</td><td>No explicit value found; Spring Boot/Tomcat default applies.</td></tr>
+<tr><td>Max connections</td><td><code>MEMBER_HTTP_MAX_CONNECTIONS</code>, default/configured 500.</td><td><code>SOCIETY_HTTP_MAX_CONNECTIONS</code>, default/configured 500.</td><td>No explicit project value found.</td></tr>
+<tr><td>Accept backlog</td><td><code>MEMBER_HTTP_ACCEPT_COUNT</code>, default/configured 50.</td><td><code>SOCIETY_HTTP_ACCEPT_COUNT</code>, default/configured 50.</td><td>No explicit project value found.</td></tr>
+<tr><td>Graceful shutdown</td><td><code>server.shutdown: graceful</code>, lifecycle timeout 20 seconds.</td><td>Same configured shutdown shape.</td><td>Graceful shutdown configured; lifecycle timeout is not explicit in the inspected AI file.</td></tr>
+</tbody></table>
+<p>Member's thread maximum is in <code>services/member-service/src/main/resources/application.yml</code>. Society sets only connection and accept-count properties in its <code>application.yml</code>. The app ConfigMap supplies the checked-in Member/Society environment variables, and the Deployments load that ConfigMap.</p>
+<p>Requests and limits also differ: Member and Society request 100m CPU and 256 Mi memory, with limits 750m CPU and 640 Mi memory. AI requests 100m CPU and 256 Mi memory, with limits 1000m CPU and 1 Gi memory. These are resource budgets, not thread counts.</p>
+<div class="callout warn"><b>Implementation status:</b> Member has an explicit Tomcat thread cap, while all three MVC services use Tomcat. The project does not record a representative load result proving these values are optimal. This guide documents the implementation; it does not change limits without measurements.</div>
+</section>
+<section id="flow"><h2>4. Follow what happens when Tomcat reaches its limit</h2>
+<div class="diagram" role="img" aria-label="Requests arrive at Tomcat; available workers handle work; additional connection work waits within connection and accept limits; worker threads may wait on database or Society capacity; latency and errors rise if the bottleneck persists">
+<div class="flow"><div class="box"><b>HTTP arrives</b><br>connection accepted</div><div class="arrow">→</div><div class="box"><b>Tomcat worker</b><br>runs MVC request</div><div class="arrow">→</div><div class="box"><b>Blocking dependency</b><br>DB / HTTP / lock</div><div class="arrow">→</div><div class="box"><b>Workers occupied</b><br>more work may wait</div><div class="arrow">→</div><div class="box"><b>Observe outcome</b><br>latency, queue, errors</div></div>
+</div>
+<p>Member's worker can call Society using a dedicated virtual-thread JDK client, but its Resilience4j bulkhead limits admitted downstream calls to 12 per process with zero wait. This does not raise Tomcat's worker count or Society's capacity. If servlet workers pile up while waiting on a DB pool of 8, increasing workers may worsen contention.</p>
+</section>
+<section id="measure"><h2>5. Measure before tuning</h2>
+<p>Run a controlled, non-production workload with a defined endpoint mix, ramp-up, concurrency, duration, and response-time/error objectives. Capture a baseline before changing any setting.</p>
+<table><thead><tr><th>Evidence</th><th>Question it answers</th></tr></thead><tbody>
+<tr><td>Tomcat current/busy threads and max threads (if exposed by the running Actuator version)</td><td>Are request workers close to the configured cap during the latency increase?</td></tr>
+<tr><td>Active connections and accept/backlog behavior</td><td>Are sockets/backlog limits involved, or are request workers the saturated resource?</td></tr>
+<tr><td>Request throughput, p50/p95/p99, errors and timeouts</td><td>Does a change improve useful work and tail latency, or only allow more queued work?</td></tr>
+<tr><td>Hikari active/idle connections and acquisition waits</td><td>Are servlet workers blocked waiting for database capacity?</td></tr>
+<tr><td>Member-to-Society bulkhead rejections, retries and remote latency</td><td>Is downstream dependency capacity the limiting boundary?</td></tr>
+<tr><td>CPU throttling, memory, JVM thread count, JFR and thread dumps</td><td>Do more workers fit the pod resource budget, and are workers running or mostly waiting?</td></tr>
+</tbody></table>
+<p>Actuator exposes <code>/actuator/metrics</code> and <code>/actuator/prometheus</code> for these services. Query the actual endpoint for available meter names; do not assume every desired Tomcat gauge is registered. The optional Prometheus overlay discovers pods with scrape annotations. The checked-in Grafana config has no dedicated Tomcat thread-pool panel.</p>
+<p>The repository's JFR script can capture Java execution and thread state while load runs; it restarts the target Deployment when enabling and restoring the recording. See the <a href="java-flight-recorder-step-by-step.html">JFR guide</a> and the broader <a href="thread-pool-optimization-step-by-step.html">thread-pool optimization guide</a>.</p>
+</section>
+<section id="change"><h2>6. Change the right property only after evidence</h2>
+<ol><li><b>If Member workers are saturated and downstreams have headroom:</b> test a small change to <code>MEMBER_HTTP_MAX_THREADS</code> in a controlled environment. Keep the 500 connection and 50 accept-count limits in view.</li><li><b>If Society workers are the measured bottleneck:</b> there is no project-specific worker environment variable today. Configure <code>server.tomcat.threads.max</code> (or its Spring Boot environment equivalent) for that workload, record the value, and test it before rollout.</li><li><b>If AI is the measured bottleneck:</b> first collect its own evidence; it currently relies on embedded-server defaults and has different resource limits and downstream behavior.</li><li><b>If connection/backlog saturates:</b> evaluate connection and accept settings independently from worker threads.</li><li><b>If DB or Society capacity saturates:</b> tune that dependency or reduce admitted load; increasing Tomcat threads is not the fix.</li></ol>
+<p>Change one setting at a time. Compare throughput, p99 latency, errors, server queue/wait metrics, CPU, memory, DB pool wait, and downstream rejections. Keep a rollback value and confirm the effective runtime setting after deployment.</p>
+<div class="callout good"><b>Replicas multiply local capacity.</b> A Member limit of 100 workers per pod can represent up to 200 configured workers at two replicas or 300 at three replicas. That is only a theoretical sum; it does not mean the database or Society service can sustain that concurrency.</div>
+</section>
+<section id="operate"><h2>7. Run a controlled exercise</h2>
+<ol><li>Select one MVC service and non-production environment. Confirm the active Kubernetes context, current replica count, image, CPU/memory limits, and DB pool sizes.</li><li>Prepare the representative request mix and load generator. Set a safe maximum concurrency and stop condition before starting.</li><li>Record a no-change baseline: effective Tomcat settings, throughput, latency percentiles, errors, CPU throttling, memory, thread/connection metrics, DB pool occupancy, and dependency signals.</li><li>Ramp load gradually. Observe whether busy threads approach the cap before latency rises, and whether work is waiting on DB/downstream pools.</li><li>Change one tested boundary. Repeat the same scenario with the same data and warm-up.</li><li>Stop load and verify queues drain, latency recovers, and the service remains healthy. Record the result and rollback procedure.</li></ol>
+<pre><code># Inspect the exposed metric names in a local/staging deployment
+Invoke-RestMethod http://localhost:8082/actuator/metrics
+
+# Then request a specific metric only after confirming its name is listed
+Invoke-RestMethod http://localhost:8082/actuator/metrics/&lt;metric-name&gt;</code></pre>
+<p>Use the correct service port for your deployment and keep Actuator access within the intended trusted network. The commands above are examples; they do not claim a metric is present or that a load test has been executed.</p>
+</section>
+<section id="limits"><h2>8. Limits and gaps</h2>
+<ul><li>No representative Tomcat saturation benchmark or evidence-based tuning outcome was found.</li><li>Only Member has an explicit maximum worker-thread value; Society and AI use server defaults.</li><li>Society and Member have explicit connection/backlog values; AI does not.</li><li>Gateway is reactive and needs event-loop diagnosis, not Tomcat worker settings.</li><li>Actuator endpoint exposure does not guarantee every Tomcat metric is available or Prometheus is currently scraping it.</li><li>There is no dedicated Tomcat thread-pool Grafana panel in the inspected dashboard configuration.</li><li>Static YAML values do not prove the live Pod's effective settings; verify runtime configuration after deployment.</li><li>Increasing workers can amplify DB contention, downstream calls, memory use, and context-switching overhead.</li></ul>
+</section>
+<section id="verify"><h2>9. Verification and implementation status</h2>
+<p>Repository inspection confirmed all three MVC services use the Spring MVC starter; Member's <code>max-threads=100</code>, <code>max-connections=500</code>, and <code>accept-count=50</code>; Society's connection/backlog values of 500/50; the absence of explicit AI Tomcat pool settings; Gateway's WebFlux dependency; the relevant ConfigMap values; and the Kubernetes CPU/memory budgets.</p>
+<p>Tomcat pool configuration is partially present, but no measured tuning change is supported by repository evidence. This task adds the feature-specific guide and makes no application or deployment setting changes. Verification consisted of checking the guide's local file/section links, rendering the Kubernetes base with <code>kubectl kustomize</code>, and running <code>git diff --check</code>. No load test was run; no performance gain is claimed.</p>
+</section>
+<section id="interview"><h2>10. Interview preparation</h2>
+<h3>Developer-level explanation</h3><div class="callout good"><b>60-second answer:</b> “Member, Society, and AI use Spring MVC with embedded Tomcat; Gateway uses reactive WebFlux/Reactor Netty. Member explicitly sets a 100-worker maximum, 500 connections, and a 50-request accept backlog. Society sets 500 connections and a 50 backlog but leaves worker sizing to Tomcat's default; AI also uses defaults. Those settings are not yet validated by a representative load test. I would measure busy workers, backlog, request tail latency, DB pool waits, downstream bulkhead/retries, CPU, and memory, then change one boundary and repeat the same workload. Increasing the worker cap is useful only if workers are truly the constraint and dependencies have capacity.”</div>
+<h3>Likely follow-up questions</h3>
+<details><summary>Are max threads and max connections the same?</summary><p>No. Worker threads run servlet requests; max connections limits managed sockets. The server can have connections that are not actively consuming a worker at that moment.</p></details>
+<details><summary>What does accept-count do?</summary><p>It bounds incoming connection requests waiting when the server cannot accept/process them immediately. It trades short burst absorption against queueing delay.</p></details>
+<details><summary>Why doesn't the Gateway use these Tomcat settings?</summary><p>Its build uses Spring Cloud Gateway WebFlux and a reactive server. Its execution resource is the Reactor Netty event-loop model.</p></details>
+<details><summary>What would make you increase Member's max threads?</summary><p>Load evidence that Tomcat workers are saturated while CPU and downstream pools have headroom, followed by a controlled test showing improved useful throughput or tail latency without excess memory or errors.</p></details>
+<details><summary>Why could more workers make things worse?</summary><p>They may all wait for a smaller DB pool or downstream service, multiplying in-flight work, memory use, and contention without increasing the constrained dependency's throughput.</p></details>
+<details><summary>Does this repository prove the default thread number for Society?</summary><p>No project setting specifies it. The framework/server default applies, and the live effective value should be checked from runtime configuration/metrics rather than inferred as a project-tuned value.</p></details>
+</section>
+<section id="files"><h2>11. Source map: read in this order</h2>
+<ol>
+<li><a href="../services/member-service/pom.xml"><code>services/member-service/pom.xml</code></a>, <a href="../services/society-service/pom.xml"><code>services/society-service/pom.xml</code></a>, <a href="../services/ai-service/pom.xml"><code>services/ai-service/pom.xml</code></a> — MVC dependencies; compare with <a href="../infrastructure/api-gateway/pom.xml"><code>infrastructure/api-gateway/pom.xml</code></a> for WebFlux.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>services/member-service/src/main/resources/application.yml</code></a> — explicit Tomcat thread, connection, and backlog properties.</li>
+<li><a href="../services/society-service/src/main/resources/application.yml"><code>services/society-service/src/main/resources/application.yml</code></a> and <a href="../services/ai-service/src/main/resources/application.yml"><code>services/ai-service/src/main/resources/application.yml</code></a> — what is and is not set for the other MVC services.</li>
+<li><a href="../kubernetes/config/application-config.yaml"><code>kubernetes/config/application-config.yaml</code></a> — Member/Society environment overrides.</li>
+<li><a href="../kubernetes/member/deployment.yaml"><code>kubernetes/member/deployment.yaml</code></a>, <a href="../kubernetes/society/deployment.yaml"><code>kubernetes/society/deployment.yaml</code></a>, and <a href="../kubernetes/ai/deployment.yaml"><code>kubernetes/ai/deployment.yaml</code></a> — per-pod resources and scrape annotations.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/SocietyRestClientConfig.java"><code>SocietyRestClientConfig.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/config/SocietyResilienceConfiguration.java"><code>SocietyResilienceConfiguration.java</code></a> — separate downstream executor and bulkhead constraints.</li>
+<li><a href="thread-pool-optimization-step-by-step.html"><code>thread-pool-optimization-step-by-step.html</code></a> — broader cross-service worker/executor review.</li>
+</ol>
+<p class="small">Learning order: identify MVC versus reactive → read the worker/connection/backlog settings → map dependency limits → observe saturation under controlled load → tune one measured bottleneck → compare and document.</p>
+</section>
+</article>
+</main>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outbox Pattern — Learn It Step by Step</title>
+<style>
+:root{color-scheme:light;--ink:#182333;--muted:#526174;--blue:#174ea6;--pale:#eef4ff;--line:#d5deea;--green:#eaf7ef;--amber:#fff5dc;--code:#101b2b}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f5f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:linear-gradient(125deg,#102b50,#1b5e91);color:white;padding:52px max(24px,calc((100% - 1120px)/2)) 42px}header p{max-width:850px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:255px minmax(0,1fr);gap:26px}
+nav{align-self:start;position:sticky;top:16px;background:white;border:1px solid var(--line);border-radius:14px;padding:18px;max-height:calc(100vh - 32px);overflow:auto}nav strong{display:block;margin-bottom:8px}nav a{display:block;color:#274b79;text-decoration:none;padding:4px 0;font-size:14px}nav a:hover{text-decoration:underline}
+article{min-width:0;background:white;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2.1rem,5vw,3.2rem);line-height:1.12;margin:0 0 14px}h2{margin:48px 0 12px;padding-top:10px;border-top:1px solid var(--line);font-size:1.75rem}h3{margin:27px 0 8px;font-size:1.2rem}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.badge{display:inline-block;background:#dceaff;color:#153e72;font-weight:700;border-radius:30px;padding:5px 11px;font-size:.82rem}.callout{padding:15px 18px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:18px 0}.good{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{background:#f2f6fb;border:1px solid var(--line);border-radius:12px;padding:20px;overflow:auto}.flow{display:flex;align-items:stretch;gap:10px;min-width:710px}.box{flex:1;background:white;border:1px solid #9eb4d0;border-radius:10px;padding:13px;text-align:center}.arrow{align-self:center;color:#42658f;font-weight:800}.branch{margin-top:15px;padding:12px;border-radius:9px;background:#fff}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--code);color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto}pre code{background:transparent;color:inherit;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}
+.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 18px;margin:20px 0}.step h3{margin-top:3px}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header>
+  <span class="badge">Repository learning guide · Feature 29</span>
+  <h1>Outbox pattern, from zero</h1>
+  <p>A step-by-step walkthrough of the outbox already implemented in Emerald Housing. Start with the problem it solves, then follow the transaction, database row, scheduled publisher, Kafka acknowledgement, metrics, operations, and interview questions.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. What to know first</a><a href="#problem">2. The failure problem</a><a href="#architecture">3. Architecture at a glance</a><a href="#walkthrough">4. Follow one event</a><a href="#transaction">5. Transaction and schema</a><a href="#publisher">6. Claim, publish, acknowledge</a><a href="#config">7. Configuration and deployment</a><a href="#metrics">8. Monitor backlog and throughput</a><a href="#operate">9. Operational runbook</a><a href="#coverage">10. Tests and coverage</a><a href="#limits">11. Limits and risks</a><a href="#interview">12. Interview explanation</a><a href="#files">13. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. What to know first</h2>
+<p>Before reading the implementation, know four terms:</p>
+<ul><li><b>Database transaction:</b> a group of database changes that commit or roll back together.</li><li><b>Kafka:</b> a broker that stores messages for consumers.</li><li><b>Dual write:</b> updating a database and publishing to Kafka as two independent operations.</li><li><b>At-least-once delivery:</b> a message can be delivered more than once, so consumers need duplicate protection.</li></ul>
+<p>The outbox is a database table used as a durable handoff point. Business data and an event row are committed in one database transaction. A separate worker later publishes that row to Kafka.</p>
+<div class="callout good"><b>Current project status:</b> Outbox publishing is implemented for community notices and lost-and-found events in the Member Service. This guide documents existing behavior; it does not add or change runtime code.</div>
+</section>
+<section id="problem"><h2>2. The failure problem the pattern solves</h2>
+<p>Suppose an API changes a notice to published and must notify other parts of the system. If it commits the database first and crashes before Kafka publish, the database says “published” but no event exists. If it publishes first and the database rolls back, consumers observe an event for a change that never committed.</p>
+<p>Writing the outbox row in the same transaction as the business change removes that gap: either both database changes commit, or neither does. Kafka publication happens after commit and can be retried from the durable row.</p>
+<div class="callout warn"><b>Important:</b> this is not a single transaction spanning PostgreSQL and Kafka. The outbox makes the database side atomic and the background publisher retries delivery; duplicates remain possible around acknowledgement and deletion.</div>
+</section>
+<section id="architecture"><h2>3. Architecture at a glance</h2>
+<div class="diagram" role="img" aria-label="Business transaction writes event to PostgreSQL outbox; scheduled publisher claims rows, sends to Kafka, then deletes after acknowledgement">
+<div class="flow"><div class="box"><b>Business operation</b><br>Member Service changes notice/report</div><div class="arrow">→</div><div class="box"><b>One DB transaction</b><br>business row + outbox row</div><div class="arrow">→</div><div class="box"><b>Scheduled publisher</b><br>claims pending rows</div><div class="arrow">→</div><div class="box"><b>Kafka</b><br>topic per event flow</div></div>
+<div class="branch"><b>After broker acknowledgement:</b> delete claimed row and increment sent counter.<br><b>On publish error:</b> increment attempts, clear claim, increment failed counter; the next poll can try again.</div>
+</div>
+<p>There are two parallel flows with the same basic algorithm:</p>
+<table><thead><tr><th>Flow</th><th>Outbox table</th><th>Kafka topic</th><th>Publisher</th></tr></thead><tbody>
+<tr><td>Community notices</td><td><code>community_notice_outbox</code></td><td><code>community-notices.events</code></td><td><code>CommunityNoticeEventPublisher</code></td></tr>
+<tr><td>Lost and found</td><td><code>lost_found_event_outbox</code></td><td><code>lost-found.events</code></td><td><code>LostFoundEventPublisher</code></td></tr>
+</tbody></table></section>
+<section id="walkthrough"><h2>4. Follow one event, step by step</h2>
+<div class="step"><h3>Step 1 — a business action creates an event</h3><p>A service operation decides an event should be emitted. For example, changing a community notice to <code>PUBLISHED</code> creates a <code>CommunityNoticeEvent</code>; lost-and-found service operations create corresponding report events. Event construction and call sites are in the service classes listed in the code map.</p></div>
+<div class="step"><h3>Step 2 — write the outbox row inside the transaction</h3><p>The publisher’s <code>publish</code> method is annotated <code>@Transactional</code> and inserts event identity, entity ID, event type, actor, occurrence time, schema version, event timestamp, and correlation ID. It participates in the business transaction under Spring’s default REQUIRED propagation.</p></div>
+<div class="step"><h3>Step 3 — a scheduled job finds eligible work</h3><p><code>@EnableScheduling</code> activates publisher scheduling. Each dispatcher uses a configurable fixed delay (default 1,000 ms), selects rows that are unclaimed or whose lease has expired, orders by creation time, and claims at most 50 rows.</p></div>
+<div class="step"><h3>Step 4 — claim prevents workers from taking the same row</h3><p>A PostgreSQL CTE uses <code>FOR UPDATE SKIP LOCKED</code> and assigns a random claim token plus a 180-second lease. This supports multiple service instances: concurrent dispatchers skip rows another transaction has locked/claimed. The lease lets a later poll recover rows left behind by a crashed worker.</p></div>
+<div class="step"><h3>Step 5 — serialize and publish synchronously</h3><p>For each claimed row, the publisher serializes the event and calls <code>kafka.send(...).get()</code>. The Kafka key is the notice ID or report ID, preserving key-based partition ordering when a topic has multiple partitions; current topic configuration is single-partition.</p></div>
+<div class="step"><h3>Step 6 — acknowledgement decides whether to delete</h3><p>Only after the send future completes successfully does the publisher delete the row, matching both event ID and claim token, and increment <code>kafka.messages.sent</code>. If send/serialization fails, it increments the row’s attempts, clears claim/lease so it is eligible again, increments <code>kafka.messages.failed</code> with stage <code>outbox</code>, and logs the error.</p></div>
+<div class="callout"><b>At-least-once consequence:</b> a process could publish successfully and fail before deleting the row. Once its lease expires, it can publish again. The consumers use event IDs and processed-event records to deduplicate effects; the publisher itself does not guarantee exactly-once delivery.</div>
+</section>
+<section id="transaction"><h2>5. Transaction and schema: what is persisted</h2>
+<p>The table schemas originate in Flyway migrations <code>V14__lost_found.sql</code> and <code>V16__community_notices_and_audiences.sql</code>. <code>V17__kafka_delivery_reliability.sql</code> adds fields used by resilient publishing: schema version, event timestamp, correlation ID, claim token, lease expiry, and claim indexes.</p>
+<p>Each row includes an event ID, target entity ID, event type, actor, occurrence timestamp, attempts count, creation timestamp, and later-added event metadata and claim state. These records are not a long-term event archive: after successful broker acknowledgement, the row is deleted.</p>
+<p>The durable guarantee depends on the business change and outbox insert sharing the same transaction and database. A publisher call made outside the intended transaction would weaken that guarantee; inspect its service call site when adding a new event.</p>
+</section>
+<section id="publisher"><h2>6. Claim, publish, acknowledge: implementation details</h2>
+<ul><li><b>Polling:</b> <code>@Scheduled(fixedDelayString=...)</code> waits the configured delay after the previous dispatch method finishes, rather than firing at a fixed wall-clock rate.</li><li><b>Batch size:</b> hard-coded to 50 in each SQL claim query.</li><li><b>Claim lease:</b> hard-coded to 180 seconds.</li><li><b>Concurrency:</b> <code>SKIP LOCKED</code> and token-guarded delete/update protect work across concurrent database workers.</li><li><b>Publish wait:</b> sends are awaited sequentially with <code>.get()</code>; the next event in the batch waits for the current send result.</li><li><b>Failure policy:</b> outbox producer attempts are not capped in these publisher classes. Failed rows are immediately eligible for a later poll; there is no per-row exponential backoff or dead-lettering for outbox-send failures.</li></ul>
+<p>Do not confuse this publisher retry loop with the consumer listener retry/DLT configuration. Consumer failures are handled separately by Kafka listener configuration and DLT topics.</p>
+</section>
+<section id="config"><h2>7. Configuration and deployment</h2>
+<table><thead><tr><th>Setting</th><th>Current behavior</th><th>Where</th></tr></thead><tbody>
+<tr><td><code>community-notices.outbox-poll</code></td><td>Default 1 second between completed dispatches</td><td><code>CommunityNoticeEventPublisher</code> annotation</td></tr>
+<tr><td><code>lost-found.outbox-poll</code></td><td>Default 1 second between completed dispatches</td><td><code>LostFoundEventPublisher</code> annotation</td></tr>
+<tr><td><code>spring.kafka.bootstrap-servers</code></td><td>Environment-overridable broker address</td><td>Member Service <code>application.yml</code></td></tr>
+<tr><td>Producer durability</td><td><code>acks: all</code>, producer retries 10, idempotence enabled, delivery timeout 120 seconds</td><td>Member Service <code>application.yml</code></td></tr>
+<tr><td>Topic partitions</td><td>Event and DLT topics are declared with one partition and one replica</td><td>Kafka topic configuration classes</td></tr>
+</tbody></table>
+<p>Scheduling is enabled by <code>MemberServiceApplication</code>. Kubernetes deploys two Member Service replicas and annotates them for Prometheus scraping, so database claims matter for avoiding duplicate concurrent work.</p>
+<p>Changing poll interval affects how quickly a new row is noticed and the polling cadence. It does not change the batch limit or lease duration, which are constants in SQL today.</p>
+</section>
+<section id="metrics"><h2>8. Monitor backlog and publishing throughput</h2>
+<p>The publishers register the following Micrometer meters. Prometheus can scrape the Member Service at <code>/actuator/prometheus</code>; the Kubernetes Prometheus configuration scrapes annotated pods every 15 seconds.</p>
+<table><thead><tr><th>Meter</th><th>Kind / tags</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td><code>kafka.outbox.waiting</code></td><td>Gauge; <code>flow=community-notices</code> or <code>flow=lost-found</code></td><td>Current count of rows in that outbox table, including rows currently claimed.</td></tr>
+<tr><td><code>kafka.messages.sent</code></td><td>Counter; flow tag</td><td>Successful outbox sends observed by the publisher since process start. Use a rate over time to estimate publishing throughput.</td></tr>
+<tr><td><code>kafka.messages.failed</code></td><td>Counter; flow and <code>stage=outbox</code></td><td>Outbox publish attempts that threw an exception. Consumer/DLT failures use a different stage.</td></tr>
+</tbody></table>
+<h3>How to read the signals together</h3>
+<ul><li>Backlog near zero and sent rate steady: the publisher is generally keeping up.</li><li>Backlog rising while sent rate remains low: demand is exceeding effective publishing capacity, Kafka/DB may be unhealthy, or the publisher is stalled.</li><li>Backlog positive with failed counter increasing: inspect Kafka reachability, serialization errors, logs, and DB health.</li><li>Backlog drops while sent rate rises: queued work is draining. Compare both flows independently.</li></ul>
+<p>Micrometer’s Prometheus naming convention typically maps these meters to names such as <code>kafka_outbox_waiting</code> and <code>kafka_messages_sent_total</code>. Confirm the exact exposed names and tags at <code>/actuator/prometheus</code> in the running version before saving production queries. A useful conceptual PromQL expression is <code>sum by (flow) (rate(kafka_messages_sent_total[5m]))</code>; adapt it to the actual exported name and label names.</p>
+<div class="callout warn"><b>Observability boundary:</b> repository code defines backlog depth and sent/failed counters. It does not define a dedicated outbox dashboard/alert, oldest-row age, send-duration histogram, batch-size metric, or explicit backlog-drain SLO. The counters provide throughput only after calculating their rate. A stable count alone does not prove freshness.</div>
+</section>
+<section id="operate"><h2>9. Operational runbook</h2>
+<ol><li>Confirm Member Service targets are up in Prometheus and inspect <code>/actuator/prometheus</code> for the three meters and flow tags.</li><li>Graph backlog gauge by flow beside the rate of successful sends and rate of outbox failures.</li><li>If a backlog grows, correlate the time window with publisher error logs and Kafka broker health; also verify PostgreSQL availability and connection capacity.</li><li>Check whether the backlog is actively claimed: claim leases last 180 seconds. A worker crash may leave rows claimed until expiry.</li><li>Inspect outbox row age and attempts directly in PostgreSQL when diagnosing an old/stuck backlog. Use a read-only query and the actual schema names; the built-in gauge does not expose age.</li><li>After fixing the dependency, verify backlog declines and sent rate resumes. Since failed rows remain eligible for later polls, no manual replay is normally needed for those rows.</li></ol>
+<p>For consumer dead letters and manual event replay, see <a href="kafka-operations.md">Kafka notification operations</a>. That runbook covers consumer DLTs, which are distinct from outbox publisher failures.</p>
+</section>
+<section id="coverage"><h2>10. Tests and what they prove</h2>
+<p><code>CommunityNoticeKafkaIntegrationTest</code> runs with Testcontainers Kafka and PostgreSQL. It inserts an event via the publisher, confirms its outbox row exists, manually dispatches, checks the row is removed after broker acknowledgement, and reads the event back from Kafka to compare it with the original.</p>
+<p>This is a valuable happy-path end-to-end test for the community notice publisher. It does not load-test throughput, verify the lost-and-found publisher end to end, force broker failures, test lease expiry/recovery, assert concurrent-claimer behavior, or validate metric values/alerts. The current evidence therefore confirms basic publication, not production capacity or failure-path completeness.</p>
+</section>
+<section id="limits"><h2>11. Limits and risks to understand</h2>
+<ul><li><b>No exactly-once transaction:</b> a send can be acknowledged and then the process can fail before deleting the row; duplicate publication is possible.</li><li><b>Sequential worker:</b> waiting synchronously for each send limits batch throughput and ties up the scheduler thread during broker latency.</li><li><b>Fixed batch and lease:</b> 50 rows and 180 seconds are constants, not externally configurable.</li><li><b>Retry amplification:</b> failed rows become eligible again on the next polling cycle; no exponential delay or cap is implemented, so an extended Kafka outage can cause repeated attempts and logs.</li><li><b>Metrics are incomplete for diagnosis:</b> no age/lag distribution or publish latency metric is defined; count and counter-rate can hide a small set of very old rows.</li><li><b>Counter lifecycle:</b> counters are process-local and reset on restart; monitoring should use Prometheus counter rate functions, which handle resets.</li><li><b>Topic scale:</b> one partition limits parallel consumer throughput and ordering is only per partition; scale strategy needs workload evidence.</li></ul>
+<p>Any tuning should use observed arrival rate, drain rate, database load, broker latency, and acceptable event delay. Increasing batch size or shortening polling can raise database and broker pressure; this repository does not include a load-test result that justifies a particular production setting.</p>
+</section>
+<section id="interview"><h2>12. Interview explanation and likely follow-ups</h2>
+<h3>60-second answer</h3><p>“The Member Service uses the transactional outbox for community notice and lost-and-found events. The business operation writes the event row into PostgreSQL in the same transaction as its domain update. A scheduled dispatcher claims up to 50 eligible rows using a lease and <code>FOR UPDATE SKIP LOCKED</code>, publishes each to Kafka, and deletes it only after broker acknowledgement. On failure it increments attempts, releases the claim, and retries on a later poll. This avoids losing events in the database-to-Kafka dual-write gap, but is at-least-once, so consumers deduplicate by event ID. Micrometer exposes per-flow backlog gauges and send/failure counters; there is no built-in age metric or dedicated dashboard.”</p>
+<h3>Likely follow-up questions</h3>
+<table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Why not publish to Kafka inside the database transaction?</td><td>PostgreSQL and Kafka do not share an ordinary local transaction here. The outbox makes the database update and event intent atomic, then publishes asynchronously.</td></tr>
+<tr><td>Can an event be published twice?</td><td>Yes. If Kafka acknowledges and the process fails before deleting the row, lease expiry can lead to another send. Consumers deduplicate using event identity.</td></tr>
+<tr><td>How are concurrent service replicas coordinated?</td><td>The claim query selects eligible rows with <code>FOR UPDATE SKIP LOCKED</code>, assigns a UUID claim token and lease, and later mutates only rows matching that token.</td></tr>
+<tr><td>How do you detect that the publisher is falling behind?</td><td>Graph <code>kafka.outbox.waiting</code> per flow and compare it with the rate of <code>kafka.messages.sent</code>; watch outbox-stage failures. Age metrics would improve detection of stale rows but are not currently exposed.</td></tr>
+<tr><td>How is throughput computed?</td><td>Use a rate function over the successful-send counter over a useful window, per flow. Validate actual Prometheus-exported meter and label names first.</td></tr>
+<tr><td>What happens during a prolonged Kafka outage?</td><td>Rows stay durable, each failed attempt increments attempts and releases the claim, and future polls try again. There is no backoff/cap in the outbox dispatcher, so repeated attempts can increase load.</td></tr>
+<tr><td>What would you improve next?</td><td>Add tests for both flows, failure and lease recovery, instrument send duration and oldest pending age, alert on sustained backlog growth/staleness, and consider bounded exponential retry/backoff after measuring workload.</td></tr>
+</tbody></table></section>
+<section id="files"><h2>13. Code map: where to read next</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventPublisher.java"><code>CommunityNoticeEventPublisher.java</code></a> — notice outbox insert, gauge, claim SQL, publish/delete/failure logic.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventPublisher.java"><code>LostFoundEventPublisher.java</code></a> — equivalent lost-and-found flow.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/MemberServiceApplication.java"><code>MemberServiceApplication.java</code></a> — enables scheduled dispatch.</li>
+<li><a href="../services/member-service/src/main/resources/db/migration/V14__lost_found.sql"><code>V14__lost_found.sql</code></a> — lost-and-found tables including initial outbox table.</li>
+<li><a href="../services/member-service/src/main/resources/db/migration/V16__community_notices_and_audiences.sql"><code>V16__community_notices_and_audiences.sql</code></a> — community notice outbox schema.</li>
+<li><a href="../services/member-service/src/main/resources/db/migration/V17__kafka_delivery_reliability.sql"><code>V17__kafka_delivery_reliability.sql</code></a> — event metadata and claim/lease columns and indexes.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — Kafka producer and Actuator configuration.</li>
+<li><a href="../kubernetes-observability/prometheus.yaml"><code>prometheus.yaml</code></a> and <a href="../kubernetes/member/deployment.yaml"><code>member deployment.yaml</code></a> — Prometheus pod discovery and scrape annotation.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/notices/CommunityNoticeKafkaIntegrationTest.java"><code>CommunityNoticeKafkaIntegrationTest.java</code></a> — Testcontainers happy-path integration test.</li>
+<li><a href="kafka-operations.md"><code>kafka-operations.md</code></a> — consumer DLT inspection/replay and metric notes.</li>
+</ul>
+<div class="callout good"><b>Learning sequence:</b> read the domain service call site → publisher <code>publish</code> → migration schema → scheduled <code>dispatch</code> → integration test → Prometheus scrape config → operations guide. That order follows the event from business intent to production signals.</div>
+</section>
+<footer><p><small>Repository-grounded guide. Statements describe the checked-in implementation and configuration; operational behavior can differ if deployment overrides properties or uses a different build.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

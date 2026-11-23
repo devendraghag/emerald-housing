@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Object Creation Optimization — Step by Step</title>
+<style>
+:root{--ink:#1b293b;--muted:#526579;--blue:#1657a7;--line:#d6e0eb;--pale:#edf5ff;--green:#edf8f0;--amber:#fff4dc}
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.7 system-ui,"Segoe UI",sans-serif}header{padding:44px max(22px,calc((100% - 1140px)/2)) 38px;background:linear-gradient(125deg,#102944,#1d5b84);color:#fff}header p{max-width:900px;color:#dcecff}h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;margin:10px 0}main{max-width:1140px;margin:28px auto;padding:0 20px;display:grid;grid-template-columns:255px minmax(0,1fr);gap:22px}nav,article{background:#fff;border:1px solid var(--line);border-radius:15px}nav{position:sticky;top:15px;align-self:start;padding:17px;max-height:calc(100vh - 30px);overflow:auto}nav b{display:block;margin-bottom:8px}nav a{display:block;color:#285180;text-decoration:none;padding:3px 0;font-size:14px}nav a:hover{text-decoration:underline}article{padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #1029440b}h2{margin:42px 0 10px;padding-top:13px;border-top:1px solid var(--line);font-size:1.65rem}h3{margin:23px 0 7px;font-size:1.15rem}p{margin:10px 0}a{color:var(--blue)}code,pre{font-family:ui-monospace,Consolas,monospace}code{background:#edf1f6;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow:auto;background:#101b2a;color:#eef5ff;border-radius:10px;padding:16px}pre code{background:none;padding:0}.tag{display:inline-block;border-radius:20px;padding:4px 10px;background:#dceaff;color:#173f72;font-size:.82rem;font-weight:700}.callout{margin:17px 0;padding:14px 17px;border-left:4px solid var(--blue);border-radius:7px;background:var(--pale)}.good{background:var(--green);border-color:#27804c}.warn{background:var(--amber);border-color:#bd8210}.flow{display:flex;gap:9px;align-items:stretch;min-width:720px}.diagram{overflow:auto;padding:16px;border:1px solid var(--line);border-radius:11px;background:#f4f7fb}.box{flex:1;padding:13px;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:9px}.arrow{align-self:center;color:#42658f;font-weight:bold}table{width:100%;border-collapse:collapse;margin:15px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{background:#edf3fb}.step{border-left:3px solid #7ca4dc;margin:18px 0;padding:2px 0 8px 16px}.small{color:var(--muted);font-size:.93rem}details{padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:10px 0}summary{cursor:pointer;font-weight:650}@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:32px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Emerald Housing · Feature 45</span><h1>Object creation optimization, from zero</h1><p>Learn what allocation pressure is, follow how request data becomes response objects in this project, and use the existing JFR workflow to decide whether object creation is actually a bottleneck. The guiding rule is the feature itself: optimize only after a representative profile identifies pressure.</p></header>
+<main>
+<nav aria-label="Table of contents"><b>Learn in this order</b><a href="#basics">1. Learn allocation concepts</a><a href="#status">2. What exists today</a><a href="#flow">3. Trace one response</a><a href="#patterns">4. Project code patterns</a><a href="#profile">5. Profile before changing code</a><a href="#workflow">6. Step-by-step investigation</a><a href="#changes">7. Choose an optimization</a><a href="#verify">8. Measure and verify</a><a href="#limits">9. Limitations</a><a href="#interview">10. Interview preparation</a><a href="#files">11. Source map</a></nav>
+<article>
+<section id="basics"><h2>1. Learn the concepts first</h2>
+<p><b>Allocation</b> is creating objects such as DTOs, lists, strings, map entries, framework wrappers, and request/response buffers. The JVM garbage collector is designed to reclaim short-lived objects, so “the code creates many objects” is not automatically a performance problem.</p>
+<p><b>Allocation pressure</b> matters when measured object creation causes a meaningful cost: high allocation rate, more GC CPU or pauses, excessive memory bandwidth, or heap churn that harms latency/throughput. The relevant question is usually bytes allocated per request or operation and which allocation sites account for that cost.</p>
+<p><b>Retained memory</b> is different. A leak keeps objects reachable; allocation profiling shows where objects are created, not necessarily why they remain live. For retention questions, use the separate <a href="memory-leak-investigation-step-by-step.html">memory-leak investigation guide</a>.</p>
+<div class="callout"><b>Do not optimize by style alone.</b> Replacing records, streams, immutable collections, or straightforward mapping with mutable reuse can reduce clarity and introduce aliasing/thread-safety bugs without reducing measured cost.</div>
+</section>
+<section id="status"><h2>2. What the project has configured or implemented</h2>
+<table><thead><tr><th>Area</th><th>Repository evidence</th><th>What can be concluded</th></tr></thead><tbody>
+<tr><td>Profiling</td><td>Java 21 runtime and an opt-in JFR script using <code>settings=profile</code> under a bounded workload window.</td><td>There is a way to collect allocation samples; no representative allocation report or hotspot result is checked in.</td></tr>
+<tr><td>Explicit object reuse</td><td>No production object pool, general-purpose mutable DTO reuse layer, or allocation-specific ThreadLocal cache was found.</td><td>There is no broad object-reuse optimization feature.</td></tr>
+<tr><td>Bounded API result sizes</td><td>Member and Society paging reject page sizes outside 1–100; cursor APIs also request a bounded result limit.</td><td>Bounds limit work and the number of response DTOs for those endpoints; they are not proof of allocation efficiency.</td></tr>
+<tr><td>Response models</td><td>Responses such as <code>MemberResponse</code> and <code>FlatResponse</code> are immutable Java records constructed during mapping.</td><td>Per-item DTO creation is intentional. Whether it costs enough to change requires profiling.</td></tr>
+<tr><td>Caching</td><td>Society reference data and some flat responses use Redis-backed cache paths.</td><td>Cache hits can avoid repeated database mapping on those paths; caching has its own serialization, lookup, and memory costs.</td></tr>
+<tr><td>Allocation telemetry</td><td>No allocation-specific application counter, benchmark, or Grafana panel was found.</td><td>Use JFR and the load generator/profile results rather than assuming a metric exists.</td></tr>
+</tbody></table>
+<div class="callout warn"><b>Implementation status:</b> profiling support and bounded/cached data paths exist, but no allocation-driven code optimization has been demonstrated. No code change is justified without a representative profile identifying a material hotspot.</div>
+</section>
+<section id="flow"><h2>3. Trace how a typical response is produced</h2>
+<div class="diagram" role="img" aria-label="An HTTP request reaches a controller, paging and query code fetch a bounded page, services map each result to immutable response records, a page response wraps the list, and Spring serializes it to JSON">
+<div class="flow"><div class="box"><b>Request</b><br>controller input</div><div class="arrow">→</div><div class="box"><b>Bounded query</b><br>page up to 100</div><div class="arrow">→</div><div class="box"><b>Mapping</b><br>entity/projection to DTO</div><div class="arrow">→</div><div class="box"><b>Response wrapper</b><br>page metadata/list</div><div class="arrow">→</div><div class="box"><b>Serialization</b><br>JSON output</div></div>
+</div>
+<p>For a paged Member response, <code>MemberService.getPage</code> validates the requested page through <code>PageRequests</code>, queries a Spring Data page, maps each item with <code>MemberService::toResponse</code>, and returns <code>PageResponse</code>. The record DTO and response list are allocations, but paging bounds how many items this request maps.</p>
+<p>Society's <code>FlatService.page</code> similarly obtains a bounded page and maps query results to <code>FlatResponse</code>. A cache hit on selected paths can bypass database result mapping, while a cache miss still constructs the response objects before storing/returning them.</p>
+</section>
+<section id="patterns"><h2>4. Read the existing code patterns accurately</h2>
+<table><thead><tr><th>Pattern in source</th><th>Example</th><th>Allocation interpretation</th></tr></thead><tbody>
+<tr><td>Immutable response record</td><td><code>new MemberResponse(...)</code> and <code>new FlatResponse(...)</code> during mapping.</td><td>One clear object per response item. Do not reuse mutable records across requests; first measure whether DTO construction or serialization is material.</td></tr>
+<tr><td>Streams and collection materialization</td><td><code>stream().map(...).toList()</code> in service response paths.</td><td>Creates result objects/collection output. A stream rewrite is worthwhile only if a profile shows it is hot and a benchmark confirms the replacement helps.</td></tr>
+<tr><td>Bounded page size</td><td><code>PageRequests.of</code> rejects sizes above 100 in Member and Society.</td><td>Caps per-request data volume for paged endpoints. It does not bound all unpaged endpoints or total concurrent request allocation.</td></tr>
+<tr><td>Cursor pagination</td><td>Member/Society directory cursor query paths return a requested limit and continuation cursor.</td><td>Limits result materialization for cursor endpoints; keep the caller's limit within the endpoint's contract.</td></tr>
+<tr><td>Cache</td><td>Society <code>@Cacheable</code> floor/flat reads backed by the configured cache manager.</td><td>Can avoid repeat DB mapping on hits; adds cache lookup and serialization work. Measure hit ratio and payload size.</td></tr>
+<tr><td>Bounded instrumentation bookkeeping</td><td><code>SocietyCacheMetrics</code> tracks at most 256 local cache-key gauges.</td><td>Bounds that metrics map's retained entries; this is a cardinality/memory guard, not a general allocation optimization.</td></tr>
+</tbody></table>
+<p>Object pools are not automatically a good way to reduce allocation in Java. They can retain oversized objects, add synchronization, complicate ownership, and prevent the garbage collector from reclaiming memory. Prefer clear bounded data flow and measured targeted changes.</p>
+</section>
+<section id="profile"><h2>5. Profile before changing code</h2>
+<p>The existing script captures JFR with <code>settings=profile</code> for a chosen Kubernetes deployment and saves a bounded recording. It restarts that deployment when enabling and restoring JVM options; use a safe environment. Follow the <a href="java-flight-recorder-step-by-step.html">JFR step-by-step guide</a>.</p>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\profiling\record-jfr.ps1 `
+  -Deployment member-service -DurationSeconds 300 -Context docker-desktop
+
+jfr summary .\artifacts\jfr\&lt;pod&gt;-emerald-member-service.jfr
+jfr print --events jdk.ObjectAllocationSample .\artifacts\jfr\&lt;pod&gt;-emerald-member-service.jfr</code></pre>
+<p>Run a representative endpoint mix at the expected concurrency. Record build/image, pod resources, dataset, warm-up, throughput, p50/p95/p99 latency, CPU, GC activity, and the load window. Compare allocation samples for recurring types/call sites; sampled events are not a complete census of every allocation or a retained-object graph.</p>
+<div class="callout warn"><b>Interpretation:</b> high sampled allocation does not alone prove a bottleneck. Look at allocation rate per useful operation, GC cost, heap/latency behavior, and whether a code path runs frequently enough to matter.</div>
+</section>
+<section id="workflow"><h2>6. Step-by-step investigation</h2>
+<div class="step"><h3>Step 1 — choose one operation</h3><p>Pick a high-volume request or job with a measurable latency/throughput objective. Avoid profiling a mixture where the expensive path cannot be identified.</p></div>
+<div class="step"><h3>Step 2 — capture the baseline</h3><p>Use the same build, data, pod limits, cache state, concurrency, and workload for repeatable runs. Save JFR and load-generator output together with the run metadata.</p></div>
+<div class="step"><h3>Step 3 — identify the allocation source</h3><p>Inspect JFR allocation samples and the call path. Decide whether allocation is from application DTO mapping, JSON/HTTP, ORM hydration, framework internals, or a dependency. Avoid optimizing code that contributes little to total cost.</p></div>
+<div class="step"><h3>Step 4 — state a concrete hypothesis</h3><p>Example: “This unpaged response builds thousands of DTOs and lists on every request; a bounded projection/page will reduce bytes allocated per request.” The hypothesis should specify expected behavior and correctness constraints.</p></div>
+<div class="step"><h3>Step 5 — make one focused change</h3><p>Possible changes include bounding an endpoint result, avoiding duplicate intermediate collections, selecting only required columns, caching stable reference data, or reducing repeated serialization/conversion. These are candidate approaches, not claims that this repository currently needs them.</p></div>
+<div class="step"><h3>Step 6 — re-run and compare</h3><p>Repeat the identical workload and compare allocated bytes/operation if available, allocation samples, GC CPU/pause, throughput, p99 latency, errors, and correctness. Keep the change only if it improves the measured goal without harming readability or behavior.</p></div>
+</section>
+<section id="changes"><h2>7. Choose an optimization that matches the profile</h2>
+<table><thead><tr><th>Profile evidence</th><th>Possible response</th><th>Risk to check</th></tr></thead><tbody>
+<tr><td>Many response DTO/list allocations on an unbounded read</td><td>Use bounded pagination/cursor output or a projection, consistent with existing API contracts.</td><td>Completeness, stable ordering, authorization filters, and pagination metadata.</td></tr>
+<tr><td>Same stable reference objects repeatedly rebuilt</td><td>Consider existing cache paths or a bounded cache with a clear invalidation/TTL policy.</td><td>Stale data, cache memory/cardinality, serialization overhead, and hit ratio.</td></tr>
+<tr><td>Repeated temporary collections in one hot method</td><td>Try one-pass accumulation or remove a proven redundant intermediate copy.</td><td>Readability, null/ordering semantics, mutability and concurrency safety.</td></tr>
+<tr><td>Allocation dominated by JSON or framework internals</td><td>Review serializer/configuration or payload shape only with end-to-end tests.</td><td>Compatibility, security, API contracts, and dependency behavior.</td></tr>
+<tr><td>High allocation but low GC cost and acceptable latency</td><td>Often no change is needed; preserve simple code.</td><td>Premature pooling/reuse can cause retention and bugs without measurable benefit.</td></tr>
+</tbody></table>
+</section>
+<section id="verify"><h2>8. Measure and verify the result</h2>
+<p>For a candidate change, compare the baseline and candidate under the same representative workload. Capture at minimum:</p>
+<ul><li>Requests/operations per second and p50/p95/p99 latency;</li><li>allocation samples and, where available, allocated bytes per operation;</li><li>GC frequency, pause time, and GC CPU;</li><li>heap/RSS and container OOM/restarts;</li><li>functional correctness, response shape, ordering, authorization, and error behavior.</li></ul>
+<p>Existing functional tests protect API behavior but do not establish allocation improvement. The repository contains no JMH benchmark or checked-in before/after allocation profile for this feature.</p>
+</section>
+<section id="limits"><h2>9. Gaps and limitations</h2>
+<ul><li>No representative JFR allocation profile or allocation benchmark is checked in.</li><li>No explicit object pool, reusable DTO layer, or allocation-specific memory setting is configured.</li><li>JFR allocation samples are sampled evidence; they do not report every object or explain why an object remains reachable.</li><li>Current pagination and caches help bound/reuse selected data paths but do not optimize every allocation site.</li><li>Record DTO creation and JSON serialization are normal API costs; reducing them can complicate API correctness.</li><li>Optimizations measured on one endpoint, JVM, data shape, and cache state may not transfer to other paths.</li></ul>
+</section>
+<section id="interview"><h2>10. Interview preparation</h2>
+<h3>Developer-level explanation</h3><div class="callout good"><b>60-second answer:</b> “Object creation optimization should follow allocation evidence. Emerald Housing has an opt-in Java Flight Recorder workflow using the JDK profile settings, but there is no representative allocation report or allocation benchmark checked in, so no allocation-driven code rewrite is justified. The API code maps query results to immutable record DTOs; Member and Society bound paged responses to 100, and cursor paths bound result limits. Society also caches selected reference/flat responses, which avoids repeated database mapping on cache hits but has its own costs. I would profile one representative operation, identify the dominant allocation call site, make one focused change such as bounding output or removing a redundant intermediate collection, then compare allocation per operation, GC, throughput, p99 latency, and correctness under the same load. I would not add object pools or mutable reuse just because objects are being created.”</div>
+<h3>Likely follow-up questions</h3>
+<details><summary>Are many short-lived objects always bad?</summary><p>No. Modern JVMs collect many short-lived objects efficiently. They matter when measured allocation rate creates material GC/CPU/latency cost.</p></details>
+<details><summary>Does JFR allocation sampling count every object?</summary><p>No. It samples allocation events according to the recording settings. It helps locate patterns but is not a complete allocation census.</p></details>
+<details><summary>Why not pool DTOs?</summary><p>DTOs are request-specific and often immutable; pooling can create shared mutable state, synchronization, retained memory, and lifecycle complexity. Use only if a profile and benchmark show a clear benefit.</p></details>
+<details><summary>Does pagination optimize allocation?</summary><p>It bounds the number of records and response DTOs produced for the page request. That limits per-request work, but does not prove each individual allocation is cheaper.</p></details>
+<details><summary>How is allocation pressure different from a memory leak?</summary><p>Allocation pressure concerns how quickly objects are created and collected. A leak concerns objects that remain reachable and retained beyond their useful lifetime.</p></details>
+<details><summary>What evidence would justify a code change?</summary><p>A repeatable profile identifies a costly allocation site under representative load, and a controlled before/after run improves allocation per useful operation or a related service objective without correctness or memory regressions.</p></details>
+</section>
+<section id="files"><h2>11. Source map: read in this order</h2>
+<ol>
+<li><a href="java-flight-recorder-step-by-step.html"><code>docs/java-flight-recorder-step-by-step.html</code></a> and <a href="../scripts/profiling/record-jfr.ps1"><code>scripts/profiling/record-jfr.ps1</code></a> — how to capture bounded JFR recordings under a supplied load.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/service/MemberService.java"><code>MemberService.java</code></a> — page/cursor result mapping into response DTOs.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/PageRequests.java"><code>Member PageRequests.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/dto/PageResponse.java"><code>Member PageResponse.java</code></a> — 1–100 page size bound and immutable response wrapper.</li>
+<li><a href="../services/society-service/src/main/java/com/emerald/society/service/FlatService.java"><code>FlatService.java</code></a> and <a href="../services/society-service/src/main/java/com/emerald/society/dto/FlatResponse.java"><code>FlatResponse.java</code></a> — page mapping, cache annotations, and response record.</li>
+<li><a href="../services/society-service/src/main/java/com/emerald/society/config/SocietyCacheMetrics.java"><code>SocietyCacheMetrics.java</code></a> — bounded local key-gauge tracking.</li>
+<li><a href="../docs/memory-leak-investigation-step-by-step.html"><code>memory-leak-investigation-step-by-step.html</code></a> — distinguish allocation hotspots from retained-object leaks.</li>
+</ol>
+<p class="small">Learning order: understand allocation versus retention → trace a bounded request → capture JFR under representative load → identify the dominant allocation site → form one hypothesis → change and compare → keep only a measured improvement.</p>
+</section>
+</article>
+</main>
+</body>
+</html>

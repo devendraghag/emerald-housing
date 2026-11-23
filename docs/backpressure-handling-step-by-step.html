@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backpressure Handling — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:900px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:740px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 37</span>
+<h1>Backpressure, from zero</h1>
+<p>Learn what backpressure means, then follow the actual Kafka event path from the durable outbox to the listener. See what was already bounded, the poll-size guard added here, how to read lag, and what the change does not guarantee.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#status">2. What was present and missing</a><a href="#architecture">3. End-to-end flow</a><a href="#walkthrough">4. Follow consumer pressure</a><a href="#config">5. Configuration</a><a href="#measure">6. Observe and tune</a><a href="#operate">7. Operational steps</a><a href="#limits">8. Guarantees and limits</a><a href="#verify">9. Verification</a><a href="#interview">10. Interview preparation</a><a href="#files">11. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<p><b>Backpressure</b> is how a system prevents a faster producer from overwhelming a slower consumer. In a push stream, the consumer can signal how much work it is ready to receive. In Kafka, consumers pull records with <code>poll()</code>; records not yet committed remain in Kafka, so lag acts as the backlog signal.</p>
+<p>Backpressure is different from dropping data. A safe design slows or bounds intake while preserving work in a durable queue. Here, PostgreSQL outbox tables preserve events before Kafka, Kafka stores published events, and the consumer group advances offsets as records complete.</p>
+<div class="callout ok"><b>What was already present:</b> durable outbox tables, 50-row publisher batches, Kafka consumer groups, record-level acknowledgement, single-partition topics, consumer lag measurement, and Gateway rate limiting. The Member Service had no explicit cap on records returned in one Kafka poll. This task adds a configurable cap of 25 records per poll.</div>
+</section>
+<section id="status"><h2>2. What existed first, and what changed</h2>
+<table><thead><tr><th>Layer</th><th>Existing control</th><th>Change in this task</th></tr></thead><tbody>
+<tr><td>Business write → event</td><td>Event row is written to a transactional PostgreSQL outbox.</td><td>No change.</td></tr>
+<tr><td>Outbox → Kafka</td><td>Publisher claims up to 50 rows; queues their send futures and waits for each acknowledgement.</td><td>No change.</td></tr>
+<tr><td>Kafka → listener</td><td>Two groups, one partition per topic, listener concurrency one, auto commit disabled, record acknowledgement.</td><td>Set <code>max.poll.records</code> to a configurable default of 25.</td></tr>
+<tr><td>Backlog visibility</td><td>Per-group/topic Kafka lag gauge, Prometheus scrape, Grafana panels, sent/consumed counters.</td><td>No new metric in this task; existing lag remains the backlog signal.</td></tr>
+<tr><td>HTTP ingress</td><td>Gateway route/login rate limits and reactive request flow.</td><td>No change.</td></tr>
+</tbody></table>
+<p>The 25-record limit is a configurable starting bound, not a benchmark result. It limits the maximum number of records delivered from one poll to the listener container; it does not promise a poll will contain 25 records.</p>
+</section>
+<section id="architecture"><h2>3. End-to-end pressure flow</h2>
+<div class="diagram" role="img" aria-label="Business transaction writes outbox, publisher submits Kafka records, broker retains backlog, consumer polls up to 25 records, processes one at a time, commits record offsets, and lag measures remaining work">
+<div class="flow"><div class="box"><b>Business transaction</b><br>outbox row is durable</div><div class="arrow">→</div><div class="box"><b>Outbox publisher</b><br>bounded claim batch 50</div><div class="arrow">→</div><div class="box"><b>Kafka topic</b><br>durable queue / lag grows here</div><div class="arrow">→</div><div class="box"><b>Consumer poll</b><br>maximum 25 records returned</div><div class="arrow">→</div><div class="box"><b>Listener + database</b><br>process and acknowledge records</div></div>
+</div>
+<p>For notice events, the listener inserts a processed-event identity and notification rows in a database transaction. Lost-and-found has the same general pattern. If processing is slow, the listener stops making progress at its own rate and Kafka retains the remaining records. The lag gauge lets operators see the gap.</p>
+</section>
+<section id="walkthrough"><h2>4. Follow what happens when consumers fall behind</h2>
+<div class="step"><h3>Step 1 — event intent is persisted</h3><p>The business operation commits its domain change and an outbox row together. If Kafka is unavailable or slow, the database outbox remains the durable publication backlog.</p></div>
+<div class="step"><h3>Step 2 — publisher work is bounded</h3><p>Each publisher claims at most 50 rows, sends those records, and waits for acknowledgements before deleting rows. Failures release the row for a later poll. This bounds each dispatch batch, while retries and Kafka producer buffers remain additional limits.</p></div>
+<div class="step"><h3>Step 3 — Kafka holds published work</h3><p>Each event topic has one partition. Kafka stores records until its retention policy removes them; the consumer group’s committed offsets indicate progress.</p></div>
+<div class="step"><h3>Step 4 — listener asks for a bounded poll batch</h3><p>The Member Service Kafka consumer now caps a poll at 25 records by default. One partition and listener concurrency one mean one active consumer per flow in the current design.</p></div>
+<div class="step"><h3>Step 5 — records are processed and acknowledged</h3><p>Auto-commit is disabled and acknowledgement mode is <code>record</code>. The listener performs database work transactionally; completed records are acknowledged through the container. A failed record follows the configured retry/error-handler path rather than being silently discarded.</p></div>
+<div class="step"><h3>Step 6 — lag reveals whether intake exceeds service rate</h3><p>If records arrive faster than the listener completes them, committed offsets advance more slowly than the log end offsets. Lag rises. Lowering the poll cap bounds each delivery batch but does not increase processing capacity; use lag and database health to choose a safe value.</p></div>
+</section>
+<section id="config"><h2>5. Configuration and meaning</h2>
+<table><thead><tr><th>Setting</th><th>Current value</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>spring.kafka.consumer.max-poll-records</code></td><td>25 by default</td><td>Maximum number of records returned from one consumer poll; configurable by environment.</td></tr>
+<tr><td><code>KAFKA_CONSUMER_MAX_POLL_RECORDS</code></td><td>25 in the Kubernetes application ConfigMap</td><td>Deployment override for the poll cap.</td></tr>
+<tr><td><code>enable-auto-commit</code></td><td>false</td><td>Offsets are managed by the Spring listener container rather than auto-committed in the background.</td></tr>
+<tr><td><code>spring.kafka.listener.ack-mode</code></td><td><code>record</code></td><td>Commit progress at record granularity after listener processing succeeds.</td></tr>
+<tr><td><code>spring.kafka.listener.concurrency</code></td><td>1</td><td>One listener consumer per container; both event topics also have one partition.</td></tr>
+<tr><td><code>kafka.consumer-lag.poll</code></td><td>15 seconds</td><td>Refreshes the committed-offset versus log-end lag gauge.</td></tr>
+</tbody></table>
+<p><code>max.poll.records</code> is a count, not a byte limit. Kafka fetch byte settings, producer buffer memory, database pools, and request rate limits are separate resource controls.</p>
+</section>
+<section id="measure"><h2>6. Observe pressure and tune from evidence</h2>
+<p>The existing observability path exposes <code>kafka.consumer.lag</code> by group/topic, <code>kafka.messages.consumed</code> by flow, publisher sent/failed counters, and outbox waiting depth. Grafana shows lag beside consumed rate. Compare trends across multiple samples rather than reacting to one poll.</p>
+<ul><li><b>Lag rising, database healthy, consumer rate below input:</b> inspect per-record processing time and consider a measured increase to poll size or partition count, with a load test.</li><li><b>Lag rising with high DB latency or pool saturation:</b> increasing the poll cap may create a larger burst of DB work; reduce pressure or improve the database/listener path first.</li><li><b>Outbox depth rising but Kafka lag is low:</b> investigate publisher/broker delivery rather than consumer capacity.</li><li><b>Failures/DLT increasing:</b> address poison events or dependency/database errors; a larger poll does not fix failures.</li><li><b>Lag steady or falling:</b> the consumer is keeping up or draining a backlog over that interval.</li></ul>
+<p>The Gateway’s Redis rate limit protects ingress at the HTTP edge. It is a separate control from Kafka consumer polling and should not be presented as Kafka backpressure.</p>
+</section>
+<section id="operate"><h2>7. Operational steps</h2>
+<ol><li>Identify the affected group/topic from the lag metric and Grafana panel.</li><li>Compare lag slope with the event send and consume rates; inspect outbox waiting depth to locate whether pressure is before or after Kafka.</li><li>Check the relevant listener logs, DLT rate, Member Service CPU, PostgreSQL query latency, connection pool pressure, and active pod count.</li><li>If records are safe and the database has headroom, adjust <code>KAFKA_CONSUMER_MAX_POLL_RECORDS</code> gradually and test representative bursts. Keep the value bounded.</li><li>If sustained lag remains and a single partition is the throughput ceiling, review partition scaling separately; increasing consumer concurrency above partition count is ineffective.</li><li>After each change, validate lag recovery, consumed throughput, database resources, and notification correctness. Roll back if downstream pressure rises without a throughput improvement.</li></ol>
+<p>Consumer handlers process records sequentially within each listener container. If processing a returned poll batch takes longer than Kafka’s <code>max.poll.interval.ms</code>, the group may rebalance. That setting is not overridden here; measure worst-case poll-batch processing time before substantially increasing the cap.</p>
+</section>
+<section id="limits"><h2>8. Guarantees and limitations</h2>
+<ul><li>The poll cap bounds record count per poll, not total bytes, total lag, or end-to-end work in every internal layer.</li><li>Kafka is the durable queue for published records; lag can grow until consumer capacity recovers, but retention eventually limits how long records remain available.</li><li>There is no adaptive pause/resume controller, automatic concurrency scaling, lag-triggered autoscaler, or global token bucket for consumers.</li><li>The current 25-record default is a conservative starting point and has not been load-tested against production event distributions.</li><li>One partition and concurrency one limit active consumer parallelism per group. A larger poll batch can smooth work but cannot make one listener process records faster.</li><li>Outbox batch size 50 and Kafka producer batching are separate producer-side bounds.</li><li>Retries/DLT, consumer deduplication, and outbox leases preserve reliability but do not guarantee exactly-once delivery.</li></ul>
+</section>
+<section id="verify"><h2>9. Verification performed</h2>
+<p>A focused Member Service test loads <code>application.yml</code> with Spring’s YAML property loader and asserts that the consumer poll cap is present with its environment-variable override. The test passed. This validates the checked-in configuration shape.</p>
+<p>No broker saturation or load test was run. The existing lag-calculation tests validate offset math, not actual consumer throughput, pause behavior, or a production backpressure threshold.</p>
+</section>
+<section id="interview"><h2>10. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“Backpressure is how we avoid letting producers overwhelm consumers while preserving work. Our events are durable in PostgreSQL outboxes and then Kafka. The consumers pull records and commit progress record by record; lag is the backlog signal. I added an environment-configurable <code>max.poll.records</code> cap of 25 so one poll cannot hand an arbitrarily large batch to the Member Service listeners. The existing topics have one partition and concurrency one, so the listener processes serially and Kafka holds the remaining records. We tune the cap from lag, consume rate, and database headroom; it bounds delivery bursts but does not increase processing capacity or provide automatic scaling.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Does a poll cap drop messages?</td><td>No. It limits how many records are returned in one poll. Unconsumed records remain in Kafka until consumed or expired by retention.</td></tr>
+<tr><td>Is 25 a proven optimal value?</td><td>No. It is a configurable starting bound. We need representative load tests and observed lag/DB capacity to tune it.</td></tr>
+<tr><td>Why not increase listener concurrency?</td><td>Each flow topic has one partition. A group cannot actively assign one partition to multiple consumers, so extra concurrency would not increase useful parallelism.</td></tr>
+<tr><td>What if the consumer is slower than event arrival?</td><td>Lag rises in Kafka. We inspect processing latency, failures, and database health, then either reduce pressure, improve processing, or scale partitions/consumers when measurements justify it.</td></tr>
+<tr><td>How is this different from a reactive backpressure operator?</td><td>Kafka is a pull-based durable log with consumer offsets and lag. Reactive Streams communicates demand between publishers and subscribers in-process. They are related flow-control ideas but not the same mechanism.</td></tr>
+<tr><td>What can fail after increasing the cap?</td><td>More records may be in flight per poll, increasing memory and DB burst size; batch processing time can approach <code>max.poll.interval.ms</code>, causing a rebalance.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>11. Code map: read in this order</h2>
+<ul>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — consumer poll cap, auto commit, record acknowledgement, concurrency.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/config/KafkaConsumerBackpressureConfigTest.java"><code>KafkaConsumerBackpressureConfigTest.java</code></a> — validates the YAML property and override placeholder.</li>
+<li><a href="../kubernetes/config/application-config.yaml"><code>application-config.yaml</code></a> — deployed consumer cap and listener concurrency.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventListener.java"><code>CommunityNoticeEventListener.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventListener.java"><code>LostFoundEventListener.java</code></a> — per-record transactional consumer effects.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaReliabilityConfiguration.java"><code>KafkaReliabilityConfiguration.java</code></a> — listener retry and DLT policy.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaConsumerLagMetrics.java"><code>KafkaConsumerLagMetrics.java</code></a> — lag measurement by group/topic.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventPublisher.java"><code>CommunityNoticeEventPublisher.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventPublisher.java"><code>LostFoundEventPublisher.java</code></a> — producer-side outbox bounds and retry behavior.</li>
+<li><a href="../kubernetes-observability/grafana.yaml"><code>grafana.yaml</code></a> — consumer lag and throughput panels.</li>
+<li><a href="kafka-consumer-lag-step-by-step.html"><code>kafka-consumer-lag-step-by-step.html</code></a> — how to interpret the backlog metric.</li>
+<li><a href="outbox-pattern-step-by-step.html"><code>outbox-pattern-step-by-step.html</code></a> — durable producer-side queue lifecycle.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> learn producer/consumer rates → understand Kafka’s durable log and offsets → trace the outbox → trace one record listener → inspect poll and acknowledgement settings → watch lag and DB signals → tune the batch cap only from observed behavior.</div>
+</section>
+<footer><p><small>Repository-grounded guide. The poll cap is newly configured here; other flow-control and observability behaviors described are pre-existing.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

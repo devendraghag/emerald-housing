@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CompletableFuture and Parallel Processing — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:900px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:740px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 34</span>
+<h1>CompletableFuture and parallel processing, from zero</h1>
+<p>Learn what asynchronous work means, then follow the exact Kafka outbox batch flow already in this project. See how it differs from HTTP client concurrency, why the current request flows do not need parallel fan-out, and what to measure before adding more concurrency.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Start with the concepts</a><a href="#status">2. What exists in this project</a><a href="#flow">3. Follow the Kafka futures</a><a href="#safety">4. Why the outbox remains safe</a><a href="#http">5. HTTP calls and virtual threads</a><a href="#measure">6. Measure before adding parallelism</a><a href="#limits">7. Limits and failure behavior</a><a href="#future">8. A safe future design checklist</a><a href="#interview">9. Interview preparation</a><a href="#files">10. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Start with the concepts</h2>
+<p>A synchronous call starts work and waits for the result before moving on. An asynchronous API returns a handle to work that may finish later. In Java, <code>CompletableFuture&lt;T&gt;</code> represents a result that will complete with a value or an error.</p>
+<p>Parallel work is useful only when the operations are independent: neither needs the other’s result, and running them at the same time does not violate ordering, transaction, rate, or resource constraints.</p>
+<p>Three ideas to separate:</p>
+<ul><li><b>Async:</b> the caller can enqueue work and receive a future before the work completes.</li><li><b>Concurrent/parallel:</b> multiple operations can be in flight at once.</li><li><b>Fire-and-forget:</b> the caller does not wait for success or failure. That is usually unsafe for durable business work.</li></ul>
+<div class="callout ok"><b>Repository status:</b> the outbox publishers use <code>CompletableFuture</code> to overlap Kafka sends within a claimed batch. They still wait for each result before completing that row. No business HTTP endpoint currently fans out to multiple independent downstream requests.</div>
+</section>
+<section id="status"><h2>2. What exists in this project</h2>
+<table><thead><tr><th>Area</th><th>Existing implementation</th><th>Does one business operation fan out?</th></tr></thead><tbody>
+<tr><td>Community notice outbox</td><td>Enqueues up to 50 Kafka sends as futures, then waits on each and deletes rows only after acknowledgements.</td><td>Yes, a background batch of independent event records.</td></tr>
+<tr><td>Lost-and-found outbox</td><td>Same batch enqueue and per-event result handling.</td><td>Yes, a separate background batch.</td></tr>
+<tr><td>Member → Society HTTP</td><td>Synchronous <code>RestClient</code> calls with resilience and timeouts; JDK HTTP client uses a virtual-thread-per-task executor.</td><td>No. Membership assignment validates one flat; notice flat options use one aggregated directory request.</td></tr>
+<tr><td>Gateway authentication</td><td>Reactive <code>WebClient</code>/<code>Mono</code> for an asynchronous call to Member Service.</td><td>No parallel fan-out is apparent in the reviewed login/current-account flows; each operation awaits one dependent identity response.</td></tr>
+</tbody></table>
+<p>The async Kafka send behavior is already present in <code>CommunityNoticeEventPublisher</code> and <code>LostFoundEventPublisher</code>. No new runtime parallelism is added by this guide because the inspected request paths do not show independent network calls whose concurrent execution is justified by measured need.</p>
+</section>
+<section id="flow"><h2>3. Follow one Kafka batch, step by step</h2>
+<div class="diagram" role="img" aria-label="Claim outbox rows, enqueue each Kafka send future without waiting, then await each future and delete that row after acknowledgement">
+<div class="flow"><div class="box"><b>1. Claim</b><br>up to 50 rows from PostgreSQL</div><div class="arrow">→</div><div class="box"><b>2. Enqueue</b><br>send event A, B, C…</div><div class="arrow">→</div><div class="box"><b>3. Kafka works</b><br>futures complete asynchronously</div><div class="arrow">→</div><div class="box"><b>4. Observe each result</b><br>wait and handle independently</div><div class="arrow">→</div><div class="box"><b>5. Persist outcome</b><br>delete success or release failure</div></div>
+</div>
+<div class="step"><h3>Step 1 — reserve durable rows</h3><p>The scheduled publisher claims at most 50 eligible rows using PostgreSQL <code>FOR UPDATE SKIP LOCKED</code>, a claim token, and a lease. This is background work, not part of the user’s request thread.</p></div>
+<div class="step"><h3>Step 2 — submit all Kafka sends</h3><p>For each event, code serializes its payload and calls <code>KafkaTemplate.send</code>. That call returns a <code>CompletableFuture&lt;SendResult&lt;String,String&gt;&gt;</code>. The publisher stores each event/future pair and proceeds to enqueue the next event without calling <code>get()</code> yet.</p></div>
+<div class="step"><h3>Step 3 — Kafka can batch and overlap network work</h3><p>Kafka’s producer handles buffering, request scheduling, batching, retries, and broker communication asynchronously. Enqueuing multiple records first gives one topic partition a chance to form batches under the configured batch size and linger window.</p></div>
+<div class="step"><h3>Step 4 — wait for outcomes after enqueue</h3><p>The second loop calls <code>get()</code> on each future. The waits are written sequentially, but the sends have already been submitted and can be completing concurrently. This is not the same as sending one record, waiting, then submitting the next.</p></div>
+<div class="step"><h3>Step 5 — make each result durable</h3><p>On acknowledgement, the dispatcher deletes that exact outbox row only if its event ID and claim token still match, increments <code>kafka.messages.sent</code>, and logs the event. On an enqueue/serialization/future failure it increments attempts, releases the claim, increments the failure counter, and logs. A later poll can retry the row.</p></div>
+</section>
+<section id="safety"><h2>4. Why the outbox remains safe</h2>
+<p>The future is not detached from the persistence lifecycle. The dispatcher retains it and observes completion before deleting the corresponding row. A process crash can still cause a duplicate publish after lease expiry, which is why delivery is at-least-once and consumers deduplicate by event ID.</p>
+<p>The Kafka producer uses acknowledgements, retries, idempotence, batch settings, and a delivery timeout. These Kafka settings and the outbox claim lease work together; changing batch size, linger, or event batch size should preserve the relationship between send timeout and the 180-second claim lease.</p>
+<p>Both publisher batches are independent from each other at the business level, but the repository does not explicitly configure a multi-thread scheduler for the two <code>@Scheduled</code> methods. Do not assume that their two flows always dispatch in parallel just because individual Kafka sends use futures.</p>
+</section>
+<section id="http"><h2>5. HTTP calls and virtual threads: a different kind of concurrency</h2>
+<p><code>SocietyRestClientConfig</code> builds a JDK <code>HttpClient</code> using a virtual-thread-per-task executor. This supports many concurrent blocking HTTP requests from different request threads without dedicating a platform thread to each wait. The <code>SocietyClient</code> itself uses synchronous <code>RestClient</code> methods and wraps each individual request with circuit breaker, bulkhead, and retry behavior.</p>
+<p><code>MembershipService.assign</code> first checks the member, then performs one required <code>societyClient.getFlat(flatId)</code> request, then acquires the membership lock and writes. The network call is a prerequisite for the write; there is no second independent remote lookup to overlap.</p>
+<p><code>CommunityNoticeService.flatOptions</code> makes one aggregated directory request. A notice can target multiple flat IDs, but those IDs are not individually fetched from Society Service in a loop; they are stored as audience targets and later resolved in the consumer’s database query.</p>
+<p>The Gateway login path uses reactive <code>WebClient</code> and returns a <code>Mono</code>, which is asynchronous I/O for a single identity-validation call. It is not parallel fan-out of multiple independent services.</p>
+</section>
+<section id="measure"><h2>6. Measure before adding parallelism</h2>
+<p>The appropriate decision depends on the type of work. For Kafka batching, inspect producer batch size, records per request, compression rate, sent rate, outbox backlog, and publish latency. For a proposed HTTP fan-out, measure per-dependency latency and the total request critical path under representative load.</p>
+<p>Do not parallelize operations when:</p>
+<ul><li>the second operation depends on the first result;</li><li>the calls share a write transaction, ordering rule, lock, or non-idempotent side effect;</li><li>the downstream bulkhead, connection pool, rate limit, or database cannot absorb the added concurrency;</li><li>the latency saved is not material relative to scheduling, aggregation, and failure-handling overhead.</li></ul>
+<p>The repository has producer metrics and counters for Kafka flows, but no before/after benchmark demonstrating request-latency improvement from parallel HTTP calls. No measured reason was found to add a new HTTP fan-out.</p>
+</section>
+<section id="limits"><h2>7. Limits and failure behavior</h2>
+<ul><li>Futures are retained in memory only for the currently claimed batch; PostgreSQL outbox rows remain the durable source of truth.</li><li>The batch cap is 50. Producer in-flight limits, Kafka broker capacity, partition count, network, and consumer throughput remain separate constraints.</li><li>The code waits on futures in list order after submitting them. A slow first future can delay completion handling for later already-completed futures, although their network sends were submitted.</li><li>Each event failure is handled separately in the result loop, but a database error while recording failure can still escape the dispatcher.</li><li>Async I/O does not automatically reduce total work or downstream load. It can increase simultaneous outstanding sends and memory use.</li><li>The Kafka integration test exercises one notice event and checks it reaches Kafka and is deleted after acknowledgement. It does not prove multi-event batch overlap, throughput improvement, failure isolation under a burst, or ordering under load.</li><li>Virtual threads in the Society client provide concurrency across calls; they do not make a single synchronous service method fan out.</li></ul>
+</section>
+<section id="future"><h2>8. A safe future design checklist</h2>
+<p>If a future feature introduces two or more genuinely independent downstream reads, follow this sequence before parallelizing them:</p>
+<ol><li>Identify calls that need no results from each other and have no ordering dependency.</li><li>Record their individual latency, total endpoint latency, and realistic concurrency under representative traffic.</li><li>Confirm both calls are safe to repeat and that partial failure has a defined API response.</li><li>Use a bounded, managed executor or a reactive composition consistent with that service; avoid the common pool for blocking HTTP I/O.</li><li>Propagate correlation/security context explicitly where necessary, and preserve timeouts, retry budgets, bulkheads, and cancellation.</li><li>Join results with an overall deadline. Decide whether one failure fails the whole request or allows a partial response.</li><li>Add tests for concurrent start, success, one-side failure, timeout, cancellation, and bounded concurrency; then compare before/after latency and downstream load.</li></ol>
+<div class="callout warn"><b>Not implemented here:</b> there is no new <code>CompletableFuture.allOf</code>, parallel stream, or HTTP fan-out in this task. The checklist is guidance for a future measured use case, not a claim about current code.</div>
+</section>
+<section id="interview"><h2>9. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“This project already uses CompletableFuture in the Kafka outbox publishers. They claim up to 50 rows, submit every Kafka send before waiting, then await each future and delete only the matching row after its acknowledgement. Failures release their rows for retry. This overlaps producer network work and enables Kafka batching without fire-and-forget delivery. For HTTP, the Society client supports concurrency across requests using a virtual-thread executor, but each reviewed business operation makes one dependent downstream call, so I did not introduce parallel fan-out without measured independent work. The key trade-offs are in-flight memory, downstream capacity, failure semantics, and preserving per-event durability.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Is calling <code>get()</code> still asynchronous?</td><td>Each future is awaited eventually, so the dispatcher method remains blocking while it completes the batch. The important difference is that all sends were submitted before the first wait, allowing their producer/network work to overlap.</td></tr>
+<tr><td>Why not use <code>parallelStream()</code>?</td><td>The publisher needs a clear bounded batch, per-event completion, and durable row handling. Parallel streams use the common pool by default and make resource bounds and error collection less explicit.</td></tr>
+<tr><td>Why keep a future for every send?</td><td>Each result maps back to its outbox event and claim token, so success can delete only that row and failure can release only that row.</td></tr>
+<tr><td>Does this guarantee exactly once?</td><td>No. A broker acknowledgement followed by a process crash before row deletion can lead to a replay after lease expiry. Consumers deduplicate by event ID.</td></tr>
+<tr><td>Why no parallel HTTP fan-out?</td><td>The inspected HTTP service operations each make one required downstream request. There are no independent calls to overlap, and no latency measurements justify inventing them.</td></tr>
+<tr><td>What do virtual threads do here?</td><td>They make blocking HTTP requests cheaper to host concurrently across requests. They do not automatically run multiple calls in parallel inside one request.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>10. Code map: read in this order</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventPublisher.java"><code>CommunityNoticeEventPublisher.java</code></a> — one outbox batch’s futures and per-row outcomes.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventPublisher.java"><code>LostFoundEventPublisher.java</code></a> — parallel pattern in the second flow.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/SocietyRestClientConfig.java"><code>SocietyRestClientConfig.java</code></a> — virtual-thread executor and synchronous RestClient setup.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/client/SocietyClient.java"><code>SocietyClient.java</code></a> — one HTTP attempt and resilience decorators.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/service/MembershipService.java"><code>MembershipService.java</code></a> — one required flat lookup before persistence.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeService.java"><code>CommunityNoticeService.java</code></a> — single aggregate flat-directory request.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaProducerMetrics.java"><code>KafkaProducerMetrics.java</code></a> — producer measurements useful for batch tuning.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/notices/CommunityNoticeKafkaIntegrationTest.java"><code>CommunityNoticeKafkaIntegrationTest.java</code></a> — one-event outbox-to-Kafka happy-path test.</li>
+<li><a href="kafka-producer-batching-compression-step-by-step.html"><code>kafka-producer-batching-compression-step-by-step.html</code></a> and <a href="outbox-pattern-step-by-step.html"><code>outbox-pattern-step-by-step.html</code></a> — related producer batching and persistence patterns.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> understand sync versus async → trace the outbox future list → inspect per-event success/failure handling → distinguish Kafka futures from HTTP virtual threads → measure before adding any new fan-out.</div>
+</section>
+<footer><p><small>Repository-grounded guide. Kafka batch futures and HTTP client configuration describe checked-in code; no unmeasured HTTP parallelism is claimed.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

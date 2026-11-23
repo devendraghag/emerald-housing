@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Partition and Consumer Group Scaling — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:900px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:700px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 33</span>
+<h1>Kafka partitions and consumer groups, from zero</h1>
+<p>Start with the vocabulary, inspect the current one-partition flows, then learn how to read lag and throughput before scaling. This guide distinguishes what the repository already configures from a future scale change that should wait for measured need.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#current">2. Current project setup</a><a href="#architecture">3. How group scaling works</a><a href="#measure">4. Measure before changing</a><a href="#walkthrough">5. Step-by-step decision path</a><a href="#scale">6. A safe scale procedure</a><a href="#ordering">7. Ordering and replication</a><a href="#operate">8. Commands and operations</a><a href="#limits">9. Limits and non-goals</a><a href="#interview">10. Interview preparation</a><a href="#files">11. Code map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<ul><li>A <b>topic</b> is a named stream of Kafka records.</li><li>A <b>partition</b> is an ordered slice of that stream. Kafka assigns partitions, not individual records, to consumers in a consumer group.</li><li>A <b>consumer group</b> is a set of consumers sharing work for a topic. Each partition is assigned to at most one active consumer in that group at a time.</li><li><b>Concurrency</b> is the number of listener consumers a service starts for a listener container.</li><li><b>Consumer lag</b> is the count of records between a group’s committed offset and the topic’s current end offset.</li></ul>
+<p>For one group, adding consumers helps only while there are unassigned partitions and enough work to keep them busy. If a topic has one partition, only one consumer in that group can actively process its records, even if the deployment has several pods.</p>
+<div class="callout ok"><b>Repository status:</b> the measurement foundation exists after the prior lag work: a scheduled AdminClient gauge, Prometheus scrape, and Grafana panels. The topics are still one-partition and listener concurrency is one. No checked-in production measurement demonstrates that more partitions are needed, so this task does not increase partition count or replicas.</div>
+</section>
+<section id="current"><h2>2. Inspect the current project setup</h2>
+<table><thead><tr><th>Flow</th><th>Topic partitions / replicas</th><th>Consumer group</th><th>Key</th><th>Maximum active consumers per group now</th></tr></thead><tbody>
+<tr><td>Community notices</td><td>1 partition, 1 replica</td><td><code>community-notice-notifications</code></td><td>Notice UUID</td><td>1</td></tr>
+<tr><td>Lost and found</td><td>1 partition, 1 replica</td><td><code>lost-found-notifications</code></td><td>Report UUID</td><td>1</td></tr>
+</tbody></table>
+<p>Each topic has a separate consumer group. Scaling one group does not redistribute the other topic’s partitions. The <code>@KafkaListener(groupId=...)</code> annotations define the actual notification groups; <code>spring.kafka.consumer.group-id</code> is a general default and does not override those explicit annotation group IDs.</p>
+<p><code>KAFKA_LISTENER_CONCURRENCY</code> configures listener concurrency and defaults to one. The Kubernetes Member Service Deployment runs two replicas initially, and its HPA allows two to three replicas based on CPU. With one partition per notification group, extra pods do not increase active consumer parallelism for that group.</p>
+<p>The event-topic builders specify <code>replicas(1)</code> as well as <code>partitions(1)</code>. Partition count controls possible consumer parallelism. Replication factor controls broker copies and availability; increasing replication is a durability/availability decision and does not itself add consumer parallelism.</p>
+</section>
+<section id="architecture"><h2>3. How group scaling works in this architecture</h2>
+<div class="diagram" role="img" aria-label="One topic partition assigned to one consumer in a group; additional group members are idle until more partitions exist">
+<div class="flow"><div class="box"><b>Topic</b><br>one partition P0</div><div class="arrow">→</div><div class="box"><b>Group member A</b><br>assigned P0</div><div class="arrow">+</div><div class="box"><b>Group member B</b><br>idle for this group</div><div class="arrow">+</div><div class="box"><b>Group member C</b><br>idle for this group</div></div>
+</div>
+<p>If the topic had three partitions, one consumer group could assign up to three partitions concurrently. If it had one partition, adding ten consumers still leaves one active partition owner. Across the two different event flows, each group has its own assignment; total active work can therefore include one consumer for each topic.</p>
+<p>Member Service replicas are also web/API replicas. Each process starts both listener containers. Kafka group coordination assigns partitions across those pods. The lag metrics component independently reads group offsets from each pod, and Grafana collapses the duplicate group/topic lag series with a <code>max by (group, topic)</code> query.</p>
+</section>
+<section id="measure"><h2>4. Measure before changing partition count</h2>
+<p>Use several signals together, over a representative time window:</p>
+<ul><li><b>Lag level and slope:</b> is <code>kafka.consumer.lag</code> repeatedly rising or failing to return to baseline?</li><li><b>Input versus output rate:</b> compare successful outbox send rate (<code>kafka.messages.sent</code>) with first-time consumed rate (<code>kafka.messages.consumed</code>). Check the same flow and window.</li><li><b>Outbox waiting rows:</b> distinguish a producer/backlog problem from a consumer-side lag problem.</li><li><b>Consumer failures and DLT:</b> more partitions will not fix poison messages or broken database writes.</li><li><b>Member Service and PostgreSQL capacity:</b> CPU, DB pool saturation, query latency, lock waits, and pod count show whether the listener or its dependency is actually constrained.</li><li><b>Producer batch/latency signals:</b> compare request batching and send throughput before deciding Kafka partitioning is the bottleneck.</li></ul>
+<p>A single lag value is not enough. Lag is a record count, not message age, and it can rise during bursts and then drain. No workload benchmark or sustained production lag history is checked into this repository, so the safe decision today is to retain the current one-partition configuration.</p>
+<div class="callout warn"><b>Important measurement detail:</b> all Member Service replicas report the same group offsets. Use the dashboard’s aggregation, not a sum across pods, or the same lag will be counted multiple times.</div>
+</section>
+<section id="walkthrough"><h2>5. Step-by-step scaling decision</h2>
+<div class="step"><h3>Step 1 — confirm the affected flow</h3><p>Use the group and topic tags to identify whether notices or lost-and-found is behind. Check its outbox sent rate, consumed rate, failures, and database work.</p></div>
+<div class="step"><h3>Step 2 — establish sustained demand</h3><p>Capture lag and throughput over multiple polling and scrape intervals under normal and peak traffic. Distinguish a temporary burst from a persistent input/output rate gap.</p></div>
+<div class="step"><h3>Step 3 — rule out the consumer’s downstream bottleneck</h3><p>Both listeners execute recipient-selection queries and write notification rows. If PostgreSQL is saturated, adding partitions can create more concurrent DB work without increasing completed throughput.</p></div>
+<div class="step"><h3>Step 4 — estimate useful parallelism</h3><p>Choose a partition count based on measured required concurrency, key distribution, retention, broker capacity, and ordering needs. A target of N active consumers for one group requires at least N partitions for its topic.</p></div>
+<div class="step"><h3>Step 5 — align listener concurrency and deployment replicas</h3><p>Set <code>KAFKA_LISTENER_CONCURRENCY</code> no higher than the useful partition count and ensure the number of group members can use those partitions. More pod replicas also run API traffic and increase possible DB concurrency.</p></div>
+<div class="step"><h3>Step 6 — change topic partitions deliberately</h3><p>Topic partition counts cannot be reduced. Adding partitions may remap keys and changes ordering behavior across the topic. Apply and verify a Kafka-side partition increase rather than assuming a source-code topic declaration changes an existing topic.</p></div>
+<div class="step"><h3>Step 7 — load-test and compare</h3><p>After rollout, verify group assignments, lag slope, consume rate, notification correctness, ordering assumptions, database headroom, and failure/DLT rates. Keep the change only if it improves throughput safely.</p></div>
+</section>
+<section id="scale"><h2>6. A safe scale procedure</h2>
+<p>Current source declares one partition directly in each topic configuration class; the partition count is not an application property today. A scale change should therefore include an explicit operational topic change or a reviewed source/configuration change, followed by confirmation of the actual broker state.</p>
+<p>For a deliberate partition increase, use the cluster’s approved Kafka administration path. The Kafka CLI shape is:</p>
+<pre><code>kafka-topics.sh --bootstrap-server &lt;broker:port&gt; \
+  --alter --topic community-notices.events --partitions &lt;new-count&gt;
+
+kafka-topics.sh --bootstrap-server &lt;broker:port&gt; \
+  --describe --topic community-notices.events
+
+kafka-consumer-groups.sh --bootstrap-server &lt;broker:port&gt; \
+  --describe --group community-notice-notifications</code></pre>
+<p>Repeat only for a flow whose measurements justify the change. The project’s local Kafka container uses the Apache Kafka image, whose CLI tools are under <code>/opt/kafka/bin</code>; production clusters may use a different administration workflow and credentials.</p>
+<p>Then configure listener concurrency through <code>KAFKA_LISTENER_CONCURRENCY</code> and deploy enough Member Service replicas for the intended assignments, considering the HPA’s CPU-based scale range. Re-check the group after a rebalance. Do not set concurrency above available partitions in expectation of more parallel processing.</p>
+</section>
+<section id="ordering"><h2>7. Ordering, keys, and replication are separate concerns</h2>
+<p>Publishers use the entity ID (notice or report ID) as the Kafka key. With one partition, each topic has one total order. With multiple partitions, ordering is guaranteed within each partition, not across the whole topic. Same-key records normally route together for a stable partition count, but increasing the partition count can change the key-to-partition mapping; old records for a key may be in one partition and new records in another.</p>
+<p>Before increasing partitions, decide whether consumers rely on ordered events for the same notice/report and whether a partition-count change is acceptable for in-flight entities. Event ID deduplication prevents repeated effects, but it does not reorder events or make stale events safe.</p>
+<p>Replication factor is different. Current topics use one replica, and the local compose broker is a single-node cluster. A production durability plan should review broker count, replication factor, minimum in-sync replicas, producer acknowledgements, and recovery objectives. Do not mistake more replicas for more consumer threads.</p>
+</section>
+<section id="operate"><h2>8. Commands and operations</h2>
+<p>For the local Compose Kafka service, inspect current topic partitions and the consumer group using:</p>
+<pre><code>docker exec emerald-kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --describe --topic community-notices.events
+
+docker exec emerald-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --describe --group community-notice-notifications</code></pre>
+<p>For production, use the broker address and authentication required by that environment. Inspect Grafana’s Kafka lag and consumption panels, confirm metrics are current, then inspect Kafka’s own group offsets/assignments before acting.</p>
+<p>Useful Prometheus concepts include:</p>
+<pre><code># Avoid counting the same group lag once per application pod
+max by (group, topic) (
+  kafka_consumer_lag{namespace="emerald-housing"}
+)
+
+# Successful outbox publishing rate by flow
+sum by (flow) (
+  rate(kafka_messages_sent_total{namespace="emerald-housing"}[5m])
+)
+
+# Successful unique consumption rate by flow
+sum by (flow) (
+  rate(kafka_messages_consumed_total{namespace="emerald-housing"}[5m])
+)</code></pre>
+<p>Verify exact meter names and labels at <code>/actuator/prometheus</code> before using queries in an operational alert.</p>
+</section>
+<section id="limits"><h2>9. Limits and non-goals</h2>
+<ul><li>The topic builders hard-code one partition and one replica; there is no partition-count property in application configuration.</li><li>The lag gauge is sampled and reports retained offset distance; it is not time lag.</li><li>The Member Service HPA scales on CPU, not consumer lag. There is no lag-based autoscaler or alert in the checked-in configuration.</li><li>The current Prometheus gauge is queried independently by every Member Service pod; dashboard aggregation handles duplicates but collection work scales with pod count.</li><li>Increasing partitions cannot be rolled back by reducing the count, and can affect key partition mapping and order.</li><li>One partition per flow caps active consumer parallelism at one regardless of HPA replicas. Changing that safely requires measured demand and Kafka/database capacity testing.</li><li>The local Kafka compose environment is one broker with one replica; it cannot validate production replication or high availability.</li><li>No load test or production throughput evidence is included in this repository. This guide does not assert that scaling is currently necessary or that a specific partition count is correct.</li></ul>
+</section>
+<section id="interview"><h2>10. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“In this project, each notification topic currently has one partition and one replica. Each listener uses a stable, separate consumer group, and listener concurrency is configurable but set to one. The Member Service has multiple replicas, but one partition means only one replica can actively consume each flow’s partition; CPU-based HPA scaling alone does not increase that group’s consumer throughput. We now measure group lag from Kafka offsets and compare it with sent/consumed rates, outbox depth, failures, and database capacity. Since no sustained lag or benchmark evidence is checked in, we leave partition counts unchanged. If measurements justify scaling, we would add partitions, align concurrency and replicas, then validate ordering, rebalances, database capacity, and lag under load.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Why can’t ten consumers read one partition in parallel?</td><td>Kafka assigns a partition to one consumer in a group to preserve ordered processing for that partition. Extra group members are idle until more partitions exist.</td></tr>
+<tr><td>Does the HPA scale Kafka processing?</td><td>It can add Member Service pods based on CPU, but active consumption for a group is still bounded by that topic’s partition count. The HPA does not use lag.</td></tr>
+<tr><td>How many partitions should be added?</td><td>Use measured input rate, per-consumer processing capacity, target lag/recovery time, key distribution, broker and database headroom, and ordering requirements. The repository has no benchmark from which to name a correct number.</td></tr>
+<tr><td>What happens to ordering after adding partitions?</td><td>Ordering remains per partition. Increasing partition count can remap keys, so events for one key may cross partitions across the change unless the migration strategy handles it.</td></tr>
+<tr><td>What is the difference between partitions and replicas?</td><td>Partitions expose parallel work and partition-local ordering. Replicas copy partition data for availability/durability; they do not create additional group work.</td></tr>
+<tr><td>How would you know the change helped?</td><td>Under comparable representative load, verify lower/rising-slower lag, higher completed consume rate, stable notification correctness and ordering, and acceptable broker/DB resource use.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>11. Code map: learn in this order</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeKafkaConfiguration.java"><code>CommunityNoticeKafkaConfiguration.java</code></a> — community topic’s one partition and one replica.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundKafkaConfiguration.java"><code>LostFoundKafkaConfiguration.java</code></a> — lost-and-found topic’s one partition and one replica.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventListener.java"><code>CommunityNoticeEventListener.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventListener.java"><code>LostFoundEventListener.java</code></a> — fixed group IDs and event effects.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaConsumerLagMetrics.java"><code>KafkaConsumerLagMetrics.java</code></a> — group/topic lag calculation.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> and <a href="../kubernetes/config/application-config.yaml"><code>application-config.yaml</code></a> — listener concurrency default and deployed override.</li>
+<li><a href="../kubernetes/autoscaling/member-hpa.yaml"><code>member-hpa.yaml</code></a> and <a href="../kubernetes/member/deployment.yaml"><code>member deployment</code></a> — replica count, CPU scaling, and pod rollout settings.</li>
+<li><a href="../kubernetes-observability/grafana.yaml"><code>grafana.yaml</code></a> — lag and consumed-throughput panels.</li>
+<li><a href="kafka-consumer-lag-step-by-step.html"><code>kafka-consumer-lag-step-by-step.html</code></a> — how to interpret lag.</li>
+<li><a href="kafka-producer-batching-compression-step-by-step.html"><code>kafka-producer-batching-compression-step-by-step.html</code></a> — producer-side throughput signals.</li>
+<li><a href="kafka-event-driven-communication-step-by-step.html"><code>kafka-event-driven-communication-step-by-step.html</code></a> and <a href="outbox-pattern-step-by-step.html"><code>outbox-pattern-step-by-step.html</code></a> — event and outbox flow context.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> understand partitions and groups → inspect the two topic declarations → inspect listener group IDs and keys → read lag and throughput metrics → review replica/HPA behavior → decide only from sustained measured need → validate ordering and downstream capacity.</div>
+</section>
+<footer><p><small>Repository-grounded guide. Current configuration and safe operating advice are documented; no partition increase was made because no measured throughput requirement is present in the checked-in evidence.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

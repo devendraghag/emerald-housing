@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Consumer Lag — Learn and Tune Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:870px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:720px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 31</span>
+<h1>Kafka consumer lag, from zero</h1>
+<p>Start with what lag means, then trace how Emerald Housing now measures it from Kafka offsets, exports it to Prometheus, shows it in Grafana, and uses it to make safe capacity decisions.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#before">2. What existed before</a><a href="#architecture">3. Measurement architecture</a><a href="#math">4. Understand the lag math</a><a href="#walkthrough">5. Follow one measurement</a><a href="#tuning">6. Tune in the right order</a><a href="#config">7. Configuration</a><a href="#dashboard">8. Dashboard and queries</a><a href="#operate">9. Operational runbook</a><a href="#verification">10. Verification</a><a href="#limits">11. Limits and cautions</a><a href="#interview">12. Interview preparation</a><a href="#files">13. Source map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<p>Kafka stores records in ordered <b>partitions</b>. A consumer group tracks the next offset it has committed for each partition. The broker’s end offset tells us how far the partition has advanced.</p>
+<p><b>Consumer lag</b> is the number of records between the group’s committed position and the current end of the log. It is a useful signal that consumers may be falling behind, but it is a record count, not a time duration.</p>
+<p>More consumer threads do not automatically mean more throughput. In one consumer group, a partition can be actively assigned to only one consumer at a time. Effective parallelism is bounded by partition count and by the work each consumer can complete.</p>
+<div class="callout ok"><b>What changed in this task:</b> the repository had Kafka listeners and Prometheus scraping but no consumer lag calculation or dashboard panel. It now has scheduled lag measurement for both Member Service event groups, an explicit listener concurrency setting, a Grafana lag/consumption view, and focused calculation tests.</div>
+</section>
+<section id="before"><h2>2. What was already present, and what was missing</h2>
+<p>Already present were two Kafka listener groups, two single-partition event topics, Prometheus scraping of Member Service Actuator metrics, a service overview dashboard, and a consumed-record counter by flow. No measurement of committed offsets versus log end offsets was found, and the dashboard had no Kafka panels.</p>
+<p>The current topic definitions use one partition each. The new listener setting is therefore explicitly set to one by default. This documents and preserves the effective parallelism today; raising concurrency without adding partitions would create idle consumers, not additional processing capacity.</p>
+</section>
+<section id="architecture"><h2>3. Measurement architecture</h2>
+<div class="diagram" role="img" aria-label="Scheduled AdminClient reads topic partitions, beginning and end offsets, and group committed offsets; computes lag; Micrometer exports it to Prometheus and Grafana">
+<div class="flow"><div class="box"><b>Scheduled poll</b><br>every 15 seconds by default</div><div class="arrow">→</div><div class="box"><b>Kafka AdminClient</b><br>topic partitions + offsets</div><div class="arrow">→</div><div class="box"><b>Lag calculation</b><br>end minus committed</div><div class="arrow">→</div><div class="box"><b>Micrometer gauge</b><br>group + topic tags</div><div class="arrow">→</div><div class="box"><b>Prometheus / Grafana</b><br>trend with consume rate</div></div>
+</div>
+<p><code>KafkaConsumerLagMetrics</code> measures these fixed Member Service pairs: <code>community-notice-notifications</code> with <code>community-notices.events</code>, and <code>lost-found-notifications</code> with <code>lost-found.events</code>. Each Member Service replica polls Kafka and exports the same group-level observation; the dashboard uses <code>max by (group, topic)</code> to avoid drawing duplicate pod series.</p>
+</section>
+<section id="math"><h2>4. Understand the lag math</h2>
+<p>For each partition, the metric uses:</p>
+<pre><code>partition lag = max(0, log end offset - next committed offset)
+group/topic lag = sum(partition lag for the topic)</code></pre>
+<p>Kafka’s committed offset is the next record position the group will read. For a group that has not committed an offset for a partition yet, this implementation uses the partition’s beginning offset. That matches the configured <code>auto-offset-reset: earliest</code> behavior for a new group. If retention has advanced past a stale committed offset, the calculation uses the current beginning offset so lag counts only records still retained. A partition missing from the end-offset response is skipped rather than guessed.</p>
+<p>The metric is refreshed periodically, so it is a sampled estimate. If AdminClient cannot query Kafka, a poll-failure counter increments and the gauge keeps its last successful value. Until the first successful measurement, it is <code>-1</code> to represent “unknown”; do not interpret that sentinel as negative backlog.</p>
+<div class="callout warn"><b>Lag is not age:</b> 500 records could represent a short delay on a fast topic or a long delay on a slow one. To estimate time behind, combine lag with observed arrival/consume rates or add oldest-record timestamp measurement.</div>
+</section>
+<section id="walkthrough"><h2>5. Follow one measurement, step by step</h2>
+<div class="step"><h3>Step 1 — the scheduled job wakes up</h3><p><code>@EnableScheduling</code> is already active in <code>MemberServiceApplication</code>. The new component runs with <code>kafka.consumer-lag.poll</code>, defaulting to 15 seconds.</p></div>
+<div class="step"><h3>Step 2 — discover the topic partitions</h3><p>The AdminClient asks Kafka to describe the configured topic. It constructs one <code>TopicPartition</code> for each current partition rather than assuming a permanent partition count.</p></div>
+<div class="step"><h3>Step 3 — fetch offsets</h3><p>For each partition it fetches latest and earliest offsets. It also reads the consumer group’s committed offsets. Each AdminClient wait is bounded to 10 seconds.</p></div>
+<div class="step"><h3>Step 4 — calculate the aggregate</h3><p>For committed partitions it subtracts the committed offset from the latest offset. For partitions without a commit it subtracts the earliest offset. Negative results are clamped to zero and partition results are summed into one group/topic gauge.</p></div>
+<div class="step"><h3>Step 5 — export and display</h3><p>Micrometer exposes <code>kafka.consumer.lag</code> with bounded <code>group</code> and <code>topic</code> tags. Prometheus scrapes <code>/actuator/prometheus</code>. Grafana displays lag next to the rate of <code>kafka.messages.consumed</code>.</p></div>
+<div class="step"><h3>Step 6 — investigate before tuning</h3><p>Compare lag trend with consume rate, error/DLT activity, database health, and event arrival rate. A rising lag with flat consumption points to a bottleneck or failure; a temporary spike followed by a decline can be healthy recovery.</p></div>
+</section>
+<section id="tuning"><h2>6. Tune in the right order</h2>
+<ol><li><b>Confirm sustained lag.</b> Ignore a single short spike; use a time window that covers multiple 15-second measurements.</li><li><b>Compare input and output.</b> Compare the lag trend with the existing consumed-event counter rate. If incoming traffic is unknown, instrument producer/arrival rate before guessing.</li><li><b>Find the slow stage.</b> Listener work writes notification rows with recipient-selection SQL. Check DB latency, connection pool saturation, errors, and DLT rate before changing Kafka consumer settings.</li><li><b>Check partitions first.</b> Current topic has one partition; concurrency above one cannot raise parallelism for its group. A scale-out plan starts with partition count and ordering/partition-key review.</li><li><b>Set listener concurrency no higher than useful partitions.</b> Use <code>KAFKA_LISTENER_CONCURRENCY</code>. At current settings, one is the useful default.</li><li><b>Reassess downstream capacity.</b> More partitions and active consumers also increase concurrent database work. Load-test notification writes and PostgreSQL before increasing replicas or partitions.</li><li><b>Validate after each change.</b> Check lag declines under representative load, consume rate increases, errors remain controlled, and database latency stays within its target.</li></ol>
+<p>Do not “tune” by blindly increasing <code>max.poll.records</code> or thread count. Batch size can increase per-poll work and memory, and the consumer must still complete work within poll/session constraints. This implementation does not dynamically auto-scale listener concurrency based on lag.</p>
+</section>
+<section id="config"><h2>7. Configuration</h2>
+<table><thead><tr><th>Property / environment variable</th><th>Default / deployed value</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>kafka.consumer-lag.poll</code> / <code>KAFKA_CONSUMER_LAG_POLL</code></td><td><code>15s</code></td><td>Delay between completed lag-poll runs.</td></tr>
+<tr><td><code>spring.kafka.listener.concurrency</code> / <code>KAFKA_LISTENER_CONCURRENCY</code></td><td><code>1</code></td><td>Concurrent listener consumers per application listener container. Useful throughput remains bounded by topic partitions.</td></tr>
+<tr><td><code>spring.kafka.bootstrap-servers</code> / <code>KAFKA_BOOTSTRAP_SERVERS</code></td><td>Environment-defined</td><td>Broker address used by listeners, producers, and the measurement AdminClient.</td></tr>
+<tr><td>Consumer start position</td><td><code>auto-offset-reset: earliest</code></td><td>For groups without a committed offset, start at the earliest available record.</td></tr>
+<tr><td>Topic partition count</td><td>1 for both event topics</td><td>Current maximum active consumer parallelism per group is one.</td></tr>
+</tbody></table>
+</section>
+<section id="dashboard"><h2>8. Dashboard and Prometheus queries</h2>
+<p>The Grafana service overview now includes consumer lag by group/topic and consumed events per second by flow. With Micrometer Prometheus naming, the gauge is expected as <code>kafka_consumer_lag</code> and the counter as <code>kafka_messages_consumed_total</code>; verify actual names at the running endpoint before relying on saved queries.</p>
+<pre><code># Group-level lag, collapsed across Member Service replicas
+max by (group, topic) (
+  kafka_consumer_lag{namespace="emerald-housing"}
+)
+
+# Successful unique event processing rate
+sum by (flow) (
+  rate(kafka_messages_consumed_total{namespace="emerald-housing"}[5m])
+)</code></pre>
+<p>Prometheus scrapes every 15 seconds. Since both application polling and scraping are 15 seconds, short bursts can occur between samples; use trends instead of interpreting one sample as an exact instantaneous value.</p>
+<p><code>kafka.consumer.lag.poll.failures</code> counts failed measurements. On failure, logs include group and topic; the metric itself intentionally has no high-cardinality labels.</p>
+</section>
+<section id="operate"><h2>9. Operational runbook</h2>
+<ol><li>Open Grafana’s Emerald Housing Service Overview dashboard and inspect lag by consumer group/topic together with consumed events per second.</li><li>If lag remains elevated or rises, check the Member Service Prometheus target and the <code>kafka.consumer.lag.poll.failures</code> counter. Confirm the gauge is not still at its initial <code>-1</code> state.</li><li>Review Member Service logs for lag collection failures and consumer processing errors. Check Kafka broker health and topic partition/offset state.</li><li>Compare the consume rate with arrival rate and inspect DLT activity. A falling lag means the group is catching up; a flat lag with no consume rate suggests the listener is not making progress.</li><li>Inspect PostgreSQL latency and pool pressure because each event may query recipient membership and insert notification rows.</li><li>Only then change concurrency or partition count. Keep concurrency aligned with partitions and validate event ordering, database headroom, and lag after rollout.</li></ol>
+<p>Lag can be high for an inactive group that has not started consuming, or temporarily high after a restart. Interpret group activity, retention, and topic throughput with the numeric gauge.</p>
+</section>
+<section id="verification"><h2>10. Verification performed</h2>
+<p>A focused JUnit test verifies that lag is summed across partitions, that partitions without a committed offset use their beginning offset, and that an offset race cannot produce negative lag. The Member Service module compiled and the test passed.</p>
+<p>The calculation test does not start a live Kafka broker or prove the AdminClient polling loop against a deployed cluster. The dashboard and config still need runtime validation in the target Kubernetes environment by checking the emitted series and Grafana panel results.</p>
+</section>
+<section id="limits"><h2>11. Limits and cautions</h2>
+<ul><li>Measurement is scoped to the two known Member Service groups/topics, not arbitrary Kafka consumers.</li><li>Every Member Service replica creates an AdminClient and independently queries the same group offsets every poll interval; the dashboard aggregates identical lag values.</li><li>Admin query timeouts are 10 seconds per awaited operation. Poll failures preserve the last known value, so operators should watch the failure counter too.</li><li>Lag counts retained offsets/records, not elapsed time or business impact. If committed offset is older than log start because of retention, only currently retained records count.</li><li>The topics currently have one partition; adding concurrency alone does not scale a group.</li><li>No automatic lag-triggered scaling policy or alert rule was added. HPA behavior is not wired to this gauge.</li><li>Concurrency changes can increase database pressure and should be load-tested. The repository has a unit calculation test, not a consumer load test.</li></ul>
+</section>
+<section id="interview"><h2>12. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“We measure Kafka consumer lag by comparing each group’s committed offset with the broker’s latest offset for every partition, then summing the differences. A scheduled AdminClient poll records a Micrometer gauge per topic and consumer group, which Prometheus scrapes and Grafana displays alongside consume rate. New groups use beginning offsets because the consumers are configured for earliest. Both topics currently have one partition, so concurrency is explicitly one; scaling throughput requires more partitions and enough downstream database capacity, not merely more listener threads. The metric is sampled record count rather than message age, and collection failures are tracked separately.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Is lag a time measurement?</td><td>No. It is a count of records between committed and end offsets. Estimate age by combining it with rates or measure record timestamps.</td></tr>
+<tr><td>Why include beginning offsets?</td><td>A new group may have no committed offset. Here <code>auto-offset-reset</code> is earliest, so beginning offset represents its starting position.</td></tr>
+<tr><td>Why not increase consumer concurrency now?</td><td>Each topic has one partition. A single group cannot process one partition concurrently in multiple consumers, so extra threads would be idle.</td></tr>
+<tr><td>How do you know whether the consumer is catching up?</td><td>Observe lag slope and compare it to consumed throughput and incoming event rate. Declining lag means processing exceeds arrivals over that interval.</td></tr>
+<tr><td>What can distort the signal?</td><td>Sampling interval, inactive groups, retention moving the beginning offset, scrape failures, and a stale last-known gauge after AdminClient errors.</td></tr>
+<tr><td>How would you scale safely?</td><td>Review ordering/key requirements, increase partitions, align listener concurrency, verify consumer group assignments, load-test notification database work, and watch lag plus DB resources.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>13. Source map: read in this order</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaConsumerLagMetrics.java"><code>KafkaConsumerLagMetrics.java</code></a> — AdminClient polling, offset math, gauge, failure counter.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/config/KafkaConsumerLagMetricsTest.java"><code>KafkaConsumerLagMetricsTest.java</code></a> — calculation tests.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — consumer concurrency and lag polling properties.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/MemberServiceApplication.java"><code>MemberServiceApplication.java</code></a> — scheduling activation.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeKafkaConfiguration.java"><code>CommunityNoticeKafkaConfiguration.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundKafkaConfiguration.java"><code>LostFoundKafkaConfiguration.java</code></a> — one-partition topic declarations.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventListener.java"><code>CommunityNoticeEventListener.java</code></a> and <a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventListener.java"><code>LostFoundEventListener.java</code></a> — processing path and consumed counters.</li>
+<li><a href="../kubernetes/config/application-config.yaml"><code>application-config.yaml</code></a> — deployed lag interval and listener concurrency values.</li>
+<li><a href="../kubernetes-observability/prometheus.yaml"><code>prometheus.yaml</code></a> — pod scrape discovery and interval.</li>
+<li><a href="../kubernetes-observability/grafana.yaml"><code>grafana.yaml</code></a> — lag and consumption panels.</li>
+</ul>
+<div class="callout ok"><b>Learning order:</b> understand partitions and offsets → inspect topic/group declarations → follow the AdminClient offset calculation → read the unit test → inspect Spring configuration → view Prometheus/Grafana → tune only after connecting lag trend to throughput and database capacity.</div>
+</section>
+<footer><p><small>This guide reflects the checked-in code and configuration. Runtime overrides and deployed Kafka state can change observed lag and effective capacity.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

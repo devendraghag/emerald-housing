@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idempotent Event Processing — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc;--navy:#102b50}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2) ) 40px}header p{max-width:850px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2.1rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}
+p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:650px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header>
+<span class="tag">Repository learning guide · Feature 30</span>
+<h1>Idempotent event processing, from zero</h1>
+<p>Learn why Kafka consumers can see a message more than once, how this Member Service records processed event identities in PostgreSQL, and how that record protects notification side effects. Follow the code in the order the event travels.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Start with the basics</a><a href="#why">2. Why duplicates happen</a><a href="#architecture">3. The architecture</a><a href="#event">4. Event identity</a><a href="#walkthrough">5. Process one event</a><a href="#transaction">6. Transaction safety</a><a href="#flows">7. The two consumer flows</a><a href="#config">8. Kafka configuration</a><a href="#observe">9. Observe and operate</a><a href="#coverage">10. Existing test coverage</a><a href="#limits">11. Guarantees and limits</a><a href="#interview">12. Interview preparation</a><a href="#files">13. Code reading map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Start with the basics</h2>
+<p><b>Idempotent</b> means repeating an operation with the same identity does not repeat its externally visible effect. In event systems, this matters because delivery and processing can be retried.</p>
+<p>A Kafka consumer reads a record, calls application code, and advances its offset after successful handling. If processing succeeds but offset progress is not durably recorded (or the consumer restarts before it is), Kafka may deliver the same record again. This is normal at-least-once behavior.</p>
+<p>This repository’s application-level idempotency is separate from Kafka producer idempotence. Producer idempotence helps with duplicate writes caused by producer retries. Consumer idempotency uses a database uniqueness constraint to prevent duplicate application effects.</p>
+<div class="callout ok"><b>Current implementation:</b> Both the community notice and lost-and-found Kafka listeners use <code>kafka_processed_events</code>, keyed by <code>(flow, event_id)</code>. This guide describes existing behavior; it does not add runtime code.</div>
+</section>
+<section id="why"><h2>2. Why duplicate processing happens</h2>
+<p>Imagine a consumer inserts notifications for residents, then the process stops before Kafka considers the record complete. After restart or retry, that record can be delivered again. If the handler blindly repeats inserts or other actions, users may receive duplicate notifications.</p>
+<p>There is no ordinary atomic transaction here that commits PostgreSQL writes and Kafka consumer offset together. The standard practical design is to make database effects idempotent using a stable event ID, so replay is safe.</p>
+<div class="callout warn">Idempotency does not mean a record is delivered once. It means repeated delivery with the same identity is recognized and does not repeat the protected database effects.</div>
+</section>
+<section id="architecture"><h2>3. Architecture at a glance</h2>
+<div class="diagram" role="img" aria-label="Kafka record reaches listener, listener tries unique processed-event insert, duplicates return, first-time events write notifications in the same database transaction">
+<div class="flow"><div class="box"><b>Kafka record</b><br>JSON includes eventId</div><div class="arrow">→</div><div class="box"><b>@KafkaListener</b><br>parse and start DB transaction</div><div class="arrow">→</div><div class="box"><b>Insert identity</b><br>(flow, event_id)</div></div>
+<div class="flow" style="margin-top:10px"><div class="box"><b>Conflict</b><br>duplicate counter + return</div><div class="arrow">←</div><div class="box"><b>Unique primary key</b><br>one row per flow/event</div><div class="arrow">→</div><div class="box"><b>First delivery</b><br>create notifications, commit</div></div>
+</div>
+<p>Database uniqueness is the arbiter. It protects against two concurrent deliveries racing as well as ordinary sequential replays. The flow name is part of the key so event IDs are scoped to the event stream.</p>
+</section>
+<section id="event"><h2>4. Event identity: what counts as “the same”</h2>
+<p>The event records (<code>CommunityNoticeEvent</code> and <code>LostFoundEvent</code>) include a UUID <code>eventId</code>. The outbox stores that ID, and the publisher sends the serialized event to Kafka. The listener uses the event’s ID rather than the Kafka offset as its deduplication key.</p>
+<p>The processed table schema is introduced by <code>V17__kafka_delivery_reliability.sql</code>:</p>
+<pre><code>CREATE TABLE kafka_processed_events (
+  flow varchar(80) NOT NULL,
+  event_id uuid NOT NULL,
+  processed_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (flow, event_id)
+);</code></pre>
+<p>Using a stable event ID means a replay to a different Kafka offset is still recognized as the same logical event. Including <code>flow</code> permits independent namespaces such as <code>community-notices</code> and <code>lost-found</code>.</p>
+</section>
+<section id="walkthrough"><h2>5. Process one event, step by step</h2>
+<div class="step"><h3>Step 1 — Kafka calls the listener</h3><p><code>CommunityNoticeEventListener</code> handles <code>community-notices.events</code>; <code>LostFoundEventListener</code> handles <code>lost-found.events</code>. Each method receives the JSON payload.</p></div>
+<div class="step"><h3>Step 2 — parse and enter a database transaction</h3><p>The handler deserializes the payload into its event record. The method is annotated <code>@Transactional</code>, so processed identity and notification inserts participate in one database transaction.</p></div>
+<div class="step"><h3>Step 3 — try to claim the event identity</h3><p>The listener inserts the event’s flow and ID into <code>kafka_processed_events</code> with <code>ON CONFLICT DO NOTHING</code>. If the insert affects zero rows, a row with the same composite key already exists.</p></div>
+<div class="step"><h3>Step 4 — duplicate returns without repeating effects</h3><p>On conflict the handler increments <code>kafka.messages.duplicate</code> for that flow and returns. It does not run the notification recipient query or increment the consumed counter.</p></div>
+<div class="step"><h3>Step 5 — first delivery applies effects</h3><p>If the insert succeeds, the listener selects the eligible recipients and inserts notification rows. Both flows use <code>ON CONFLICT DO NOTHING</code> on the notification write as a second guard against duplicate notification records.</p></div>
+<div class="step"><h3>Step 6 — transaction commits, then record handling succeeds</h3><p>When listener work completes, the database transaction commits. Spring Kafka is configured with record acknowledgement and auto-commit disabled. If listener processing throws, Spring’s error handler retries and eventually routes the record to its dead-letter topic.</p></div>
+<p>Because the event marker and notification effects are in the same DB transaction, a failure during notification writes rolls back the marker too. A later retry can then process the event. This is the key atomicity property of the idempotency mechanism.</p>
+</section>
+<section id="transaction"><h2>6. Transaction safety and the exact guarantee</h2>
+<p>For a new event, the database transaction performs both actions:</p>
+<ol><li>insert the unique processed-event marker;</li><li>insert the notification side effects.</li></ol>
+<p>If either database operation fails and the transaction rolls back, neither is committed. A retry can try again. If the transaction commits but Kafka redelivers, the unique key detects the existing marker and skips effects.</p>
+<p>This makes the database notification effects effectively once per <code>(flow, eventId)</code>, as long as all relevant effects stay inside this transaction and use the same identity. It does not make arbitrary external side effects exactly once. If future code sends email or calls another service, that operation cannot be rolled back with this database transaction; it needs its own idempotency or an outbox.</p>
+</section>
+<section id="flows"><h2>7. The two consumer flows</h2>
+<table><thead><tr><th>Flow</th><th>Kafka group</th><th>Deduplication scope</th><th>First-delivery effect</th><th>Duplicate meter</th></tr></thead><tbody>
+<tr><td>Community notices</td><td><code>community-notice-notifications</code></td><td><code>('community-notices', eventId)</code></td><td>Insert notice notification rows for eligible enabled accounts based on notice audience and membership.</td><td><code>kafka.messages.duplicate{flow="community-notices"}</code></td></tr>
+<tr><td>Lost and found</td><td><code>lost-found-notifications</code></td><td><code>('lost-found', eventId)</code></td><td>Insert in-app notifications for eligible enabled accounts associated with the report’s flat and administrators.</td><td><code>kafka.messages.duplicate{flow="lost-found"}</code></td></tr>
+</tbody></table>
+<p>The recipient selection logic is flow-specific. The deduplication mechanism is intentionally shared in shape, but currently written directly in each listener with its fixed flow label.</p>
+</section>
+<section id="config"><h2>8. Kafka configuration and retry behavior</h2>
+<p>In Member Service <code>application.yml</code>, consumer auto-commit is disabled and listener acknowledgement mode is <code>record</code>. The error handler in <code>KafkaReliabilityConfiguration</code> uses a fixed 1-second backoff with two retries, then publishes the original record to a topic named <code>{source-topic}.DLT</code>. For example, the community DLT is <code>community-notices.events.DLT</code>.</p>
+<p>Consumer retries can deliver the same record more than once, which is why the idempotency guard belongs in the listener’s database transaction. The DLT policy handles records that continue to fail; it is not the deduplication mechanism.</p>
+<p>The processed-event table has no cleanup/retention job in the inspected migrations or code. Rows therefore accumulate unless an operator removes them. Deleting a row deliberately permits a replay to apply effects again, so such cleanup is a correctness decision, not merely storage maintenance.</p>
+</section>
+<section id="observe"><h2>9. Observe and operate it</h2>
+<p>The listeners expose counters:</p>
+<ul><li><code>kafka.messages.duplicate</code> tagged by flow counts deliveries whose event ID already exists.</li><li><code>kafka.messages.consumed</code> tagged by flow counts first-time events that completed the listener’s notification logic.</li><li><code>kafka.messages.failed</code> tagged with flow and stage records records routed to DLT after retries.</li></ul>
+<p>Micrometer exports through Actuator’s Prometheus endpoint, and the Kubernetes Prometheus configuration scrapes annotated Member Service pods every 15 seconds. Check actual names and labels at <code>/actuator/prometheus</code> before writing queries; counters are process-local and should be viewed with rate functions in Prometheus.</p>
+<p>A rising duplicate counter can be expected during redelivery or replay; it is not automatically proof of a defect. Compare it with consumed and failed rates, inspect logs by event ID/correlation ID, and verify notification counts for the affected event before taking action.</p>
+<p>For deliberate DLT replay and its warning about deleting the processed marker, follow <a href="kafka-operations.md">Kafka notification operations</a>. Do not delete processed markers casually: doing so removes the protection against duplicate effects for that event.</p>
+<div class="callout warn"><b>Operational limit:</b> the repository exposes a duplicate counter but no dedicated duplicate-rate dashboard or alert. The processed table is durable but has no declared retention policy.</div>
+</section>
+<section id="coverage"><h2>10. Existing test coverage: what it proves and what it misses</h2>
+<p><code>FeaturesPersistenceTest</code> directly calls each listener for a normal event and checks recipient visibility. This demonstrates that the consumer logic can create the intended notifications for first delivery.</p>
+<p>The checked-in tests do not appear to invoke the same listener twice and assert exactly one set of effects plus a duplicate-counter increment. Nor do they test a transaction rollback after the marker insert, concurrent duplicate deliveries, retention policy, or duplicate delivery via an actual Kafka redelivery. The idempotency mechanism is implemented in code and backed by a database primary key, but these specific guarantees deserve focused automated tests.</p>
+</section>
+<section id="limits"><h2>11. Guarantees, limitations, and preserving behavior</h2>
+<ul><li><b>Stable identity is mandatory:</b> retries must reuse the original event ID. Generating a fresh ID on each retry defeats deduplication.</li><li><b>Flow label is part of identity:</b> the same UUID in different flow namespaces is treated as a different event.</li><li><b>Database side effects only:</b> the transaction protects database writes. Future external effects need an idempotency key or another durable handoff.</li><li><b>Marker retention matters:</b> deleting a marker makes a later replay look new.</li><li><b>Schema/flow evolution:</b> renaming a flow label changes the deduplication namespace. Plan migrations or compatibility behavior before changing it.</li><li><b>At-least-once consumer delivery:</b> this is not Kafka exactly-once processing or atomic DB-offset commit.</li><li><b>Metric interpretation:</b> duplicate count reports detection, not necessarily duplicate user-visible notifications; the guard is designed to prevent those effects.</li></ul>
+<p>When adding a new flow, define a stable event UUID at event creation, persist and serialize the same ID, choose a stable flow key, insert that marker before effects in one transaction, and add tests for first delivery, duplicate delivery, rollback/retry, and concurrency.</p>
+</section>
+<section id="interview"><h2>12. Interview preparation</h2>
+<h3>60-second explanation</h3>
+<p>“The Member Service consumers use a database-backed idempotency key because Kafka delivery is at least once. Each event has a stable UUID. In a listener transaction, the consumer inserts <code>(flow, eventId)</code> into <code>kafka_processed_events</code>, whose composite primary key rejects repeats. If the insert conflicts, the handler increments a duplicate metric and returns before creating notifications. For a new event, it inserts the marker and notification rows in the same PostgreSQL transaction, so a database failure rolls both back. This prevents repeated database notification effects on replay, but it is not an exactly-once transaction across Kafka and PostgreSQL, and it does not cover future external side effects.”</p>
+<table><thead><tr><th>Likely question</th><th>Interview-ready answer</th></tr></thead><tbody>
+<tr><td>Why use the database as the dedupe store?</td><td>The database is already where notification effects commit. A unique key there serializes concurrent attempts and lets marker plus effects share one transaction.</td></tr>
+<tr><td>Why use event ID instead of Kafka offset?</td><td>Offsets identify a position in one topic partition. The logical event ID remains stable when an event is replayed at a different offset or topic.</td></tr>
+<tr><td>What if two consumers process the event at the same time?</td><td>The primary key on <code>(flow,event_id)</code> lets one insert succeed; the other gets zero rows from <code>ON CONFLICT DO NOTHING</code> and skips effects.</td></tr>
+<tr><td>What if notification insertion fails after the marker insert?</td><td>The listener method is transactional. The marker rolls back with the failed notification insert, allowing a later retry to process the event.</td></tr>
+<tr><td>Is processing exactly once?</td><td>No. Kafka can redeliver. The database effects are idempotent per flow/event ID under the transaction, but Kafka offset and DB commit are not one distributed atomic transaction.</td></tr>
+<tr><td>Can a marker be safely deleted?</td><td>Only when replaying is intended and the side effects have been reviewed. Removing it allows the same event to be treated as new.</td></tr>
+<tr><td>What would you add next?</td><td>Focused duplicate and rollback tests for both listeners, concurrent delivery coverage, a retention policy with safe replay semantics, and dashboards for duplicate and DLT rates.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>13. Code reading map</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventListener.java"><code>CommunityNoticeEventListener.java</code></a> — event ID insert, duplicate early return, notification writes, counters.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventListener.java"><code>LostFoundEventListener.java</code></a> — equivalent guard for lost-and-found events.</li>
+<li><a href="../services/member-service/src/main/resources/db/migration/V17__kafka_delivery_reliability.sql"><code>V17__kafka_delivery_reliability.sql</code></a> — composite primary key and processed timestamp.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — disabled auto-commit and record acknowledgement mode.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaReliabilityConfiguration.java"><code>KafkaReliabilityConfiguration.java</code></a> — listener retry and DLT behavior.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/FeaturesPersistenceTest.java"><code>FeaturesPersistenceTest.java</code></a> — first-delivery persistence and audience behavior.</li>
+<li><a href="kafka-operations.md"><code>kafka-operations.md</code></a> — operational DLT replay guidance and metric names.</li>
+</ul>
+<div class="callout ok"><b>Study order:</b> learn at-least-once delivery → read the processed-events schema → trace one listener from marker insert to side effects → inspect acknowledgement and retry settings → review tests and operational replay warnings.</div>
+</section>
+<footer><p><small>Repository-grounded guide. It documents the checked-in source and configuration at the time of review; deployment overrides or future changes can alter runtime behavior.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Producer Batching and Compression — Step by Step</title>
+<style>
+:root{--ink:#172438;--muted:#526174;--blue:#174ea6;--line:#d5deea;--pale:#eef4ff;--green:#eaf7ef;--amber:#fff5dc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.68 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{color:#fff;background:linear-gradient(125deg,#102b50,#1b5e91);padding:48px max(22px,calc((100% - 1120px)/2)) 40px}header p{max-width:880px;color:#deebf9}
+main{max-width:1120px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}nav strong{display:block;margin-bottom:9px}nav a{display:block;padding:4px 0;color:#274b79;text-decoration:none;font-size:14px}nav a:hover{text-decoration:underline}
+article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);min-width:0;box-shadow:0 8px 30px #102b500a}
+h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.12;margin:10px 0}h2{font-size:1.7rem;margin:46px 0 12px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:1.17rem;margin:25px 0 8px}p{margin:10px 0}a{color:var(--blue)}code{font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1f6;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#dceaff;color:#153e72;border-radius:20px;padding:4px 10px;font-size:.82rem;font-weight:700}.callout{padding:14px 17px;border-left:4px solid var(--blue);background:var(--pale);border-radius:7px;margin:17px 0}.ok{background:var(--green);border-color:#23834c}.warn{background:var(--amber);border-color:#bd8210}
+.diagram{border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:18px;overflow:auto}.flow{display:flex;align-items:stretch;gap:9px;min-width:720px}.box{flex:1;text-align:center;background:#fff;border:1px solid #9eb4d0;border-radius:10px;padding:13px}.arrow{align-self:center;color:#42658f;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.94rem}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#edf3fb}pre{background:#101b2b;color:#ecf3ff;border-radius:10px;padding:16px;overflow:auto;white-space:pre-wrap}pre code{background:transparent;color:inherit;padding:0}.step{border-left:3px solid #7ca4dc;padding:2px 0 8px 17px;margin:18px 0}
+@media(max-width:850px){main{display:block}nav{position:static;max-height:none;margin-bottom:18px}header{padding:34px 22px}}
+</style>
+</head>
+<body>
+<header><span class="tag">Repository learning guide · Feature 32</span>
+<h1>Kafka producer batching and compression, from zero</h1>
+<p>Learn the producer concepts first, then trace the existing outbox path and the changes made here: queue a batch before waiting, configure producer batching/compression, observe Kafka’s native producer metrics, and decide what evidence is needed before further tuning.</p>
+</header>
+<main>
+<nav aria-label="Table of contents"><strong>On this page</strong>
+<a href="#start">1. Learn the basics</a><a href="#before">2. What existed first</a><a href="#architecture">3. Architecture</a><a href="#walkthrough">4. What was changed step by step</a><a href="#settings">5. Producer settings</a><a href="#metrics">6. Measure actual behavior</a><a href="#interpret">7. Read the signals</a><a href="#tune">8. How to tune safely</a><a href="#reliability">9. Reliability boundaries</a><a href="#verification">10. Verification</a><a href="#limits">11. Limits and next evidence</a><a href="#interview">12. Interview preparation</a><a href="#files">13. Source map</a>
+</nav>
+<article>
+<section id="start"><h2>1. Learn the basics first</h2>
+<p>A Kafka <b>producer</b> sends records to a topic. Each record has a key and value. Kafka groups records for a partition into a <b>batch</b> and sends a request to a broker.</p>
+<ul><li><b><code>batch.size</code>:</b> the target maximum space allocated for a batch per partition; it is not a promise that every batch reaches this size.</li><li><b><code>linger.ms</code>:</b> how long the producer may wait briefly for more records before sending a partially filled batch.</li><li><b><code>compression.type</code>:</b> compression codec applied to batches sent to Kafka.</li></ul>
+<p>Batching can reduce request overhead. Compression can reduce bytes sent and stored, at the cost of CPU. These settings trade latency, CPU, request rate, and network/storage use. They should be judged with producer metrics under representative traffic.</p>
+<div class="callout ok"><b>Before this change:</b> producer reliability settings existed (<code>acks=all</code>, retries, and idempotence), but batch size, linger, compression, producer-side measurements, and an enqueue-before-wait batch flow were not configured/implemented.</div>
+</section>
+<section id="before"><h2>2. What the project already had</h2>
+<p>Community notice and lost-and-found event publishing uses PostgreSQL outboxes. Each scheduled dispatcher claims up to 50 rows and sends to its Kafka topic. The Kafka topics currently each have one partition. A single key per event is the notice/report ID.</p>
+<p>The outbox already exposed waiting-row depth and successful/failed message counters. The Member Service Actuator endpoint is scraped by Prometheus, and Grafana already had service panels. However, senders waited synchronously for each event’s broker acknowledgement before sending the next event. That serialized the sends and left little opportunity to fill producer batches.</p>
+</section>
+<section id="architecture"><h2>3. Architecture after the change</h2>
+<div class="diagram" role="img" aria-label="Database outbox claims rows; sends in a batch are enqueued to Kafka producer; futures are awaited and each row is deleted only after its own acknowledgment; producer metrics sampled to Prometheus and Grafana">
+<div class="flow"><div class="box"><b>Outbox claim</b><br>up to 50 rows</div><div class="arrow">→</div><div class="box"><b>Enqueue all sends</b><br>futures returned</div><div class="arrow">→</div><div class="box"><b>Kafka producer</b><br>batch + LZ4</div><div class="arrow">→</div><div class="box"><b>Wait for each result</b><br>ack success or retry row</div><div class="arrow">→</div><div class="box"><b>Kafka metrics</b><br>Micrometer → Prometheus → Grafana</div></div>
+</div>
+<p>Both publishers follow the same approach. Enqueuing multiple records before waiting allows Kafka’s producer to batch records for the same partition during the configured linger window. With the current one-partition topics, all sends for a topic can share that partition’s batches.</p>
+</section>
+<section id="walkthrough"><h2>4. What was changed, step by step</h2>
+<div class="step"><h3>Step 1 — queue the claimed batch</h3><p>Each dispatcher now serializes the claimed rows and calls <code>KafkaTemplate.send</code> for each row, retaining the returned future alongside its event. It does not wait between sends.</p></div>
+<div class="step"><h3>Step 2 — wait for per-record acknowledgement</h3><p>After enqueueing, the dispatcher awaits each future. For each successful send it deletes only that event row using the matching event ID and claim token, then increments the existing per-flow sent counter.</p></div>
+<div class="step"><h3>Step 3 — preserve failure recovery</h3><p>If serialization, enqueue, or acknowledgement fails for one event, that event’s attempts count increments, its claim is released, and the existing failure counter/log is emitted. Other queued sends still get their results processed independently.</p></div>
+<div class="step"><h3>Step 4 — set tunable starting defaults</h3><p>The producer now uses a 32 KiB batch target, a 5 ms linger window, and LZ4 compression. Environment variables can override each setting. These are conservative starting values to measure, not a benchmark-proven optimum.</p></div>
+<div class="step"><h3>Step 5 — sample Kafka client metrics</h3><p>A scheduled component reads the shared producer’s native metrics through <code>KafkaTemplate.execute</code>, selects the Kafka metric families for batch size, records per request, compression rate, and record size, then publishes Micrometer gauges.</p></div>
+<div class="step"><h3>Step 6 — display the evidence</h3><p>Grafana now shows average batch bytes, compression ratio, and records per request per pod, alongside the existing sent/consumed and consumer lag signals. Compare these over a representative workload before changing values.</p></div>
+</section>
+<section id="settings"><h2>5. Producer settings and configuration</h2>
+<table><thead><tr><th>Kafka producer option</th><th>Default in this project</th><th>Environment override</th><th>What to expect</th></tr></thead><tbody>
+<tr><td><code>batch.size</code></td><td>32768 bytes</td><td><code>KAFKA_PRODUCER_BATCH_SIZE</code></td><td>More room for records per partition batch. Memory use may grow with partition count and producer count.</td></tr>
+<tr><td><code>linger.ms</code></td><td>5 ms</td><td><code>KAFKA_PRODUCER_LINGER_MS</code></td><td>Briefly waits for more records to improve batching. Adds some send delay under light traffic.</td></tr>
+<tr><td><code>compression.type</code></td><td><code>lz4</code></td><td><code>KAFKA_PRODUCER_COMPRESSION_TYPE</code></td><td>Compresses batches with LZ4, typically favoring speed. Measure ratio and CPU.</td></tr>
+<tr><td><code>acks</code></td><td><code>all</code></td><td>Configured in application YAML</td><td>Wait for the in-sync replica acknowledgement policy configured by Kafka.</td></tr>
+<tr><td>Producer idempotence</td><td>Enabled</td><td>Configured in application YAML</td><td>Protects against duplicate broker writes caused by producer retries within Kafka’s idempotent producer protocol.</td></tr>
+<tr><td><code>delivery.timeout.ms</code></td><td>120000</td><td>Configured in application YAML</td><td>Bounds how long the producer can retry a record before reporting failure.</td></tr>
+<tr><td>Producer metrics poll</td><td>15 seconds</td><td><code>KAFKA_PRODUCER_METRICS_POLL</code></td><td>Sampling interval for the native Kafka client metrics.</td></tr>
+</tbody></table>
+<p>These are configured in Member Service <code>application.yml</code>. The Kubernetes ConfigMap supplies the same starting defaults and can be changed for a deployment. The Kafka producer client applies batching/compression to outbox messages and to other sends that use the shared <code>KafkaTemplate</code>, including DLT publishing.</p>
+</section>
+<section id="metrics"><h2>6. Measure what Kafka actually does</h2>
+<table><thead><tr><th>Micrometer meter</th><th>Native Kafka metric</th><th>How to interpret</th></tr></thead><tbody>
+<tr><td><code>kafka.producer.batch.size.avg</code></td><td><code>batch-size-avg</code></td><td>Average number of batch bytes represented by Kafka’s producer metric.</td></tr>
+<tr><td><code>kafka.producer.records.per.request.avg</code></td><td><code>records-per-request-avg</code></td><td>Average number of records sent per request; a useful batching effectiveness signal.</td></tr>
+<tr><td><code>kafka.producer.compression.rate</code></td><td><code>compression-rate-avg</code></td><td>Kafka’s average batch compression ratio; values below 1 generally indicate compressed batches are smaller than the uncompressed representation.</td></tr>
+<tr><td><code>kafka.producer.record.size.avg</code></td><td><code>record-size-avg</code></td><td>Average uncompressed record size, useful context for batch occupancy and compression.</td></tr>
+<tr><td><code>kafka.producer.metrics.poll.failures</code></td><td>Application counter</td><td>Counts failures while sampling metrics; inspect logs for details.</td></tr>
+</tbody></table>
+<p>The implementation averages finite metric values of a matching Kafka metric name if Kafka exposes multiple instances. The gauge tag <code>client=member-service</code> is bounded. A value of <code>-1</code> means the producer has not yet exposed a usable sample (or that metric family is unavailable), not a real size or ratio.</p>
+<p>Prometheus scrapes Member Service pods at <code>/actuator/prometheus</code>. With the standard Micrometer naming convention, the meters appear as <code>kafka_producer_batch_size_avg</code>, <code>kafka_producer_records_per_request_avg</code>, <code>kafka_producer_compression_rate</code>, and <code>kafka_producer_record_size_avg</code>. Verify exact names at the running endpoint.</p>
+</section>
+<section id="interpret"><h2>7. Read the signals together</h2>
+<ul><li><b>Records/request rises and batch size rises:</b> producer is combining more work into broker requests; check that publish latency remains acceptable.</li><li><b>Compression ratio falls below 1:</b> batches are being reduced on the wire; compare network bytes and producer CPU to decide whether the saving is useful.</li><li><b>Batch size stays close to one record:</b> traffic may be too sparse to fill batches, events may be large, or the linger window may be too short for this workload.</li><li><b>Outbox depth rises:</b> compare sent rate, failed sends, Kafka availability, and scheduling; producer batching alone cannot fix a slow broker or producer outage.</li><li><b>Records/request improves but p95 event delay worsens:</b> batching may be trading latency for throughput; adjust linger or revert based on the service’s event freshness requirement.</li></ul>
+<p>For example, the conceptual PromQL is <code>kafka_producer_records_per_request_avg{namespace="emerald-housing"}</code>. Use Grafana’s pod dimension to compare instances. Pair it with <code>rate(kafka_messages_sent_total[5m])</code>, outbox waiting depth, publish failures, CPU, and broker/network telemetry.</p>
+</section>
+<section id="tune"><h2>8. How to tune safely</h2>
+<ol><li>Capture a baseline under representative event volume before changing configuration: throughput, publish latency, batch size, records/request, compression ratio, CPU, and outbox depth.</li><li>Change one setting at a time. Compare <code>linger.ms</code> for latency/batch fill, then <code>batch.size</code> for memory and batching, then compression codec for network/CPU trade-offs.</li><li>Test both a sparse workload and a burst. A value that works for a burst can add unnecessary delay at low traffic.</li><li>Keep producer reliability settings intact while tuning batching. This project uses <code>acks=all</code>, idempotence, retries, and a delivery timeout.</li><li>Compare before/after using identical load and environment. Keep the change only if it improves the targeted objective without violating event freshness, CPU, memory, or error limits.</li><li>Document the winning settings with workload and broker context; do not generalize a single local run to production.</li></ol>
+<p>Compression is most useful when batches contain repeated/compressible data. Tiny single-record batches can show little benefit or even overhead. This repository has not run a producer benchmark, so the configured values are measurable defaults rather than proven performance improvements.</p>
+</section>
+<section id="reliability"><h2>9. Reliability boundaries to preserve</h2>
+<p>The outbox remains the durable source for event intent. A row is deleted only after its own send future acknowledges successfully. Failed sends release the row for a later attempt. Enqueueing many sends before waiting does not change this per-row completion rule.</p>
+<p>Producer idempotence reduces duplicates from producer retries but does not eliminate outbox replay duplicates if Kafka acknowledges and the process fails before the database row is deleted. Consumers still deduplicate by event ID. Batching and compression do not create a distributed PostgreSQL/Kafka transaction.</p>
+<div class="callout warn"><b>Failure nuance:</b> a large queued batch can have multiple in-flight sends. The dispatch code handles each future separately, but a process crash can leave every claimed row to be recovered after its claim lease expires. Verify lease duration and delivery timeout remain compatible when changing these settings.</div>
+</section>
+<section id="verification"><h2>10. Verification performed</h2>
+<p>The Member Service compiled and the focused Kafka producer metric extraction test passed. That test verifies averaging matching producer metric entries and ignoring metrics with other names. The existing outbox-to-Kafka Testcontainers integration test was selected to check the asynchronous publisher path, but it was skipped because no Docker environment was available.</p>
+<p>The Grafana dashboard JSON parsed successfully and the observability Kustomize build succeeded. These checks validate code compilation, the calculation helper, and dashboard structure. They do not measure real compression ratio, batch fill, throughput, or latency against a live broker.</p>
+</section>
+<section id="limits"><h2>11. Limits and next evidence</h2>
+<ul><li>No checked-in load-test results establish that 32 KiB, 5 ms, and LZ4 are optimal for this application.</li><li>The new metrics are sampled every 15 seconds and are producer-client averages, not per-message timing or exact per-topic throughput.</li><li>Kafka metric availability and labels can vary by client version and activity. Confirm exported values rather than assuming every gauge is populated.</li><li>Current event topics each have one partition, limiting parallel broker-side consumption, though producer batching can still reduce request overhead.</li><li>Outbox sends are now queued in batches of up to 50, bounded by the existing SQL claim batch. Very large increases can raise producer memory and in-flight work.</li><li>Grafana panels show producer samples by pod but there is no automated tuning controller or alert tied to these values.</li><li>Load testing against a live Kafka broker is still required before claiming throughput or bandwidth improvement.</li></ul>
+</section>
+<section id="interview"><h2>12. Interview preparation</h2>
+<h3>60-second explanation</h3><p>“The Member Service publishes events from two transactional outboxes. Previously the dispatcher waited for each Kafka acknowledgement before submitting the next event, which limited producer batching. It now queues the claimed batch first and then awaits each future; each outbox row is still deleted only after its own broker acknowledgement. We configured a 32 KiB batch target, 5 ms linger, and LZ4, all overridable through environment variables. A scheduled sampler reads Kafka’s native batch-size, records-per-request, compression-rate, and record-size metrics into Micrometer and Grafana. These are starting values, not benchmark-proven wins; we would validate them with representative traffic while watching latency, CPU, outbox depth, and delivery errors.”</p>
+<table><thead><tr><th>Likely follow-up</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Why enqueue before waiting?</td><td>It lets multiple records reach the Kafka producer buffer together so the producer can batch records for a partition. The dispatcher still waits for each event’s own result before deleting its row.</td></tr>
+<tr><td>What does linger trade?</td><td>A short delay can increase batch fill and reduce request overhead; it can also add latency when traffic is sparse.</td></tr>
+<tr><td>Why LZ4?</td><td>It is a fast compression codec suitable as a starting point for event traffic. The compression ratio and CPU cost must be measured for actual payloads.</td></tr>
+<tr><td>Does compression always reduce bytes?</td><td>No. Small or incompressible batches may have little benefit or overhead. Check the measured ratio and network/broker bytes.</td></tr>
+<tr><td>Does producer idempotence make the whole flow exactly once?</td><td>No. It covers producer retry semantics. PostgreSQL outbox deletion is separate, so replay can still republish after a crash; consumer event-ID deduplication remains necessary.</td></tr>
+<tr><td>How do you prove the tuning helped?</td><td>Run comparable representative workloads before and after, then compare throughput, records/request, batch size, compression ratio, publish latency, CPU, network, and outbox backlog.</td></tr>
+</tbody></table>
+</section>
+<section id="files"><h2>13. Code map: read in this order</h2>
+<ul>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/notices/CommunityNoticeEventPublisher.java"><code>CommunityNoticeEventPublisher.java</code></a> — notice batch enqueue, per-send acknowledgement, and outbox completion.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/lostfound/LostFoundEventPublisher.java"><code>LostFoundEventPublisher.java</code></a> — equivalent lost-and-found publisher.</li>
+<li><a href="../services/member-service/src/main/java/com/emerald/member/config/KafkaProducerMetrics.java"><code>KafkaProducerMetrics.java</code></a> — samples native producer metrics.</li>
+<li><a href="../services/member-service/src/test/java/com/emerald/member/config/KafkaProducerMetricsTest.java"><code>KafkaProducerMetricsTest.java</code></a> — validates metric aggregation logic.</li>
+<li><a href="../services/member-service/src/main/resources/application.yml"><code>application.yml</code></a> — producer batching, linger, compression, retries, and idempotence.</li>
+<li><a href="../kubernetes/config/application-config.yaml"><code>application-config.yaml</code></a> — deployed starting values and environment overrides.</li>
+<li><a href="../kubernetes-observability/grafana.yaml"><code>grafana.yaml</code></a> — producer, consumer, and outbox observability panels.</li>
+<li><a href="outbox-pattern-step-by-step.html"><code>outbox-pattern-step-by-step.html</code></a> — outbox transaction, claim, and delivery semantics.</li>
+<li><a href="kafka-operations.md"><code>kafka-operations.md</code></a> — consumer DLT inspection and replay operations.</li>
+</ul>
+<div class="callout ok"><b>Study order:</b> learn producer batches → follow outbox claim and send futures → inspect producer settings → inspect Micrometer sampling → compare dashboard metrics under a known load → tune one variable and measure again.</div>
+</section>
+<footer><p><small>This guide describes checked-in implementation and defaults. Performance outcomes depend on traffic shape, broker configuration, network, and deployment overrides.</small></p></footer>
+</article>
+</main>
+</body>
+</html>

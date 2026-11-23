@@ -96,11 +96,51 @@ data:
           "targets": [{"expr": "sum by (app, pod, pool) (hikaricp_connections_active{namespace=\"emerald-housing\"})", "legendFormat": "{{app}} / {{pod}} / {{pool}}", "refId": "A"}]
         },
         {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Kafka consumer lag by group and topic",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [{"expr": "max by (group, topic) (kafka_consumer_lag{namespace=\"emerald-housing\"})", "legendFormat": "{{group}} / {{topic}}", "refId": "A"}]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Kafka events consumed per second",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "targets": [{"expr": "sum by (flow) (rate(kafka_messages_consumed_total{namespace=\"emerald-housing\"}[5m]))", "legendFormat": "{{flow}}", "refId": "A"}]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Producer average batch size (bytes)",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 24},
+          "targets": [{"expr": "kafka_producer_batch_size_avg{namespace=\"emerald-housing\"}", "legendFormat": "{{pod}}", "refId": "A"}]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Producer compression rate",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 24},
+          "targets": [{"expr": "kafka_producer_compression_rate{namespace=\"emerald-housing\"}", "legendFormat": "{{pod}}", "refId": "A"}]
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Producer records per request",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 24},
+          "targets": [{"expr": "kafka_producer_records_per_request_avg{namespace=\"emerald-housing\"}", "legendFormat": "{{pod}}", "refId": "A"}]
+        },
+        {
           "id": 5,
           "type": "logs",
           "title": "Recent application logs",
           "datasource": {"type": "loki", "uid": "loki"},
-          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 16},
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 32},
           "targets": [{"expr": "{namespace=\"emerald-housing\", container=~\"member-service|society-service|api-gateway\"}", "refId": "A"}]
         }
       ]

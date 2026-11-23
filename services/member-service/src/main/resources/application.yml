@@ -11,6 +11,7 @@ spring:
       group-id: ${KAFKA_CONSUMER_GROUP:member-service}
       auto-offset-reset: earliest
       enable-auto-commit: false
+      max-poll-records: "${KAFKA_CONSUMER_MAX_POLL_RECORDS:25}"
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
@@ -20,10 +21,14 @@ spring:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
         delivery.timeout.ms: 120000
+        batch.size: "${KAFKA_PRODUCER_BATCH_SIZE:32768}"
+        linger.ms: "${KAFKA_PRODUCER_LINGER_MS:5}"
+        compression.type: "${KAFKA_PRODUCER_COMPRESSION_TYPE:lz4}"
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       ack-mode: record
+      concurrency: "${KAFKA_LISTENER_CONCURRENCY:1}"
   transaction:
     default-timeout: ${TRANSACTION_DEFAULT_TIMEOUT:30s}
   data:
@@ -40,6 +45,12 @@ spring:
     show-sql: ${JPA_SHOW_SQL:false}
   flyway:
     enabled: true
+
+kafka:
+  consumer-lag:
+    poll: "${KAFKA_CONSUMER_LAG_POLL:15s}"
+  producer-metrics:
+    poll: "${KAFKA_PRODUCER_METRICS_POLL:15s}"
 
 server:
   port: ${MEMBER_SERVER_PORT:8082}
