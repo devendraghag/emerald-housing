@@ -10,6 +10,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +23,22 @@ import com.emerald.member.api.*;
 @Testcontainers(disabledWithoutDocker=true)
 class FeaturesPersistenceTest {
  private static long testMobileSequence=1L;
+ @Test void memberSubstringSearchUsesTrigramIndex() {
+  for(var target:List.of(
+      new String[]{"full_name","ix_members_full_name_trgm"},
+      new String[]{"mobile_number","ix_members_mobile_number_trgm"},
+      new String[]{"email","ix_members_email_trgm"})) {
+   var plan=jdbc.execute((ConnectionCallback<List<String>>) connection -> {
+    try(var statement=connection.createStatement()) {
+     statement.execute("SET enable_seqscan TO off");
+     try(var result=statement.executeQuery("EXPLAIN SELECT id FROM members WHERE lower("+target[0]+") LIKE '%emerald-person%' ESCAPE '!'") ) {
+      var lines=new ArrayList<String>();while(result.next())lines.add(result.getString(1));return lines;
+     } finally { statement.execute("RESET enable_seqscan"); }
+    }
+   });
+   assertNotNull(plan);assertTrue(plan.stream().anyMatch(line->line.contains(target[1])),String.join("\n",plan));
+  }
+ }
  @Test void idempotencyReplayReturnsOriginalMemberWithoutDuplicateWrites() {
   var request=new com.emerald.member.dto.CreateMemberRequest("Asha Replay","9876543291",null);
   var first=service.createIdempotent(request,"create-replay",actor);

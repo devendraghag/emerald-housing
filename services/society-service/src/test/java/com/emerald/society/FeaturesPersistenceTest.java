@@ -10,6 +10,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +24,17 @@ import org.springframework.web.server.ResponseStatusException;
 @SpringBootTest(properties={"society.cache.warmup.enabled=false","TRACING_OTLP_ENABLED=false","management.otlp.metrics.export.enabled=false"})
 @Testcontainers(disabledWithoutDocker=true)
 class FeaturesPersistenceTest {
+ @Test void flatSubstringSearchUsesTrigramIndex() {
+  var plan=jdbc.execute((ConnectionCallback<List<String>>) connection -> {
+   try(var statement=connection.createStatement()) {
+    statement.execute("SET enable_seqscan TO off");
+    try(var result=statement.executeQuery("EXPLAIN SELECT id FROM flats WHERE lower(flat_number) LIKE '%emerald-flat%' ESCAPE '!'") ) {
+     var lines=new ArrayList<String>();while(result.next())lines.add(result.getString(1));return lines;
+    } finally { statement.execute("RESET enable_seqscan"); }
+   }
+  });
+  assertNotNull(plan);assertTrue(plan.stream().anyMatch(line->line.contains("ix_flats_flat_number_trgm")),String.join("\n",plan));
+ }
  @Container static final PostgreSQLContainer<?> POSTGRES=new PostgreSQLContainer<>("postgres:16-alpine");
  @DynamicPropertySource static void database(DynamicPropertyRegistry p) { p.add("app.datasource.writer.jdbc-url",POSTGRES::getJdbcUrl);p.add("app.datasource.writer.username",POSTGRES::getUsername);p.add("app.datasource.writer.password",POSTGRES::getPassword); }
  @Autowired FlatService service; @Autowired JdbcTemplate jdbc; @Autowired PlatformTransactionManager manager;
