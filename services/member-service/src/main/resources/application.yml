@@ -45,6 +45,11 @@ spring:
     show-sql: ${JPA_SHOW_SQL:false}
   flyway:
     enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    clean-disabled: false
+    baseline-on-migrate: false
+    out-of-order: false
 
 kafka:
   consumer-lag:
