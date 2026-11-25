@@ -61,9 +61,12 @@
         <tr><td>Flats</td><td><code>GET /api/v1/flats/page</code><br><code>GET /api/v1/flats/by-floor/{floorNumber}/page</code></td><td><code>GET /api/v1/flats/cursor</code></td><td>Page metadata or cursor batch</td></tr>
         <tr><td>Member’s flat history</td><td><code>GET /api/v1/members/{memberId}/flats/page</code></td><td><code>GET /api/v1/members/{memberId}/flats/cursor</code></td><td>Page or cursor of memberships</td></tr>
         <tr><td>Flat’s membership history</td><td><code>GET /api/v1/flats/{flatId}/memberships/page</code></td><td><code>GET /api/v1/flats/{flatId}/memberships/cursor</code></td><td>Page or cursor of memberships</td></tr>
+        <tr><td>Accounts</td><td><code>GET /api/v1/accounts?page=...</code></td><td><code>GET /api/v1/accounts/cursor</code></td><td>Page-style list or cursor batch, with search/role/enabled filters</td></tr>
+        <tr><td>Owners</td><td><code>GET /api/v1/owners?page=...</code></td><td><code>GET /api/v1/owners/cursor</code></td><td>Offset list or cursor batch, with flat/member/status/search filters</td></tr>
+        <tr><td>Family directory</td><td><code>GET /api/v1/families?page=...</code></td><td><code>GET /api/v1/families/cursor</code></td><td>Offset list or cursor batch, optionally filtered by flat</td></tr>
         <tr><td>Legacy full lists</td><td><code>GET /api/v1/members</code>, <code>GET /api/v1/flats</code>, membership list routes</td><td>—</td><td>Unpaged list; prefer bounded alternative as data grows</td></tr>
       </tbody></table></div>
-      <div class="callout info"><b>More specific notes:</b> the Society flat directory page/cursor routes support search, status and floor filters. The member directory supports search and status. Membership history has page and cursor routes from either member or flat perspective. Their cursor implementation is in <code>MembershipService</code>, separate from the directory query helper.</div>
+      <div class="callout info"><b>More specific notes:</b> the Society flat directory page/cursor routes support search, status and floor filters. The member directory supports search and status. Membership history has page and cursor routes from either member or flat perspective. Account, owner and family cursor alternatives use their existing filters and access rules. Their cursor implementation is in each controller/service, separate from the shared directory query helper.</div>
       <p>Page and cursor responses are intentionally different. A page returns totals and sort information. A cursor response returns <code>items</code>, <code>nextCursor</code> and <code>hasNext</code>. Consumers should use the contract for the route they called.</p>
     </section>
 
@@ -172,13 +175,15 @@ GET /api/v1/members/{memberId}/flats/cursor?limit=20&amp;after={nextCursor}</cod
     <section id="coverage">
       <div class="step-label">Step 9 · Know the boundaries</div>
       <h2>Implemented coverage and remaining unbounded routes</h2>
-      <p>The repository includes bounded directory and membership-history routes, but compatibility list routes remain. Pagination is therefore available for important browse paths, not automatically applied to every collection endpoint.</p>
+      <p>The repository includes bounded directory, membership-history, account, owner and family routes. Cursor alternatives now cover the growing lists that previously only had offset-based access. Compatibility list/page routes remain for existing clients. Floors stay page-based because the domain limits them to floor numbers 1–99.</p>
       <div class="table-wrap"><table><thead><tr><th>Area</th><th>Checked-in bounded alternative</th><th>Also present</th></tr></thead><tbody>
         <tr><td>Member directory</td><td><code>/members/page</code>, <code>/members/cursor</code></td><td><code>/members</code> returns a list</td></tr>
         <tr><td>Flat directory</td><td><code>/flats/page</code>, <code>/flats/cursor</code>, <code>/flats/by-floor/{n}/page</code></td><td><code>/flats</code> and <code>/flats/by-floor/{n}</code> return lists</td></tr>
         <tr><td>Membership history</td><td>Member- and flat-oriented page and cursor routes</td><td>Member- and flat-oriented list routes</td></tr>
+        <tr><td>Accounts, owners, families</td><td>Page/offset route and new cursor alternative</td><td>Existing offset/list route remains compatible</td></tr>
+        <tr><td>Floors</td><td>Bounded page route; no cursor</td><td>Floor numbers are limited to 1–99</td></tr>
       </tbody></table></div>
-      <p>Before labeling other domains as paginated or unbounded, inspect their current controller and repository implementation. This guide intentionally avoids implying that all family, owner, account, audit or workflow lists use the same contract.</p>
+      <p>Audit feeds have their own sequence-based continuation contract; workflow collections should be reviewed separately based on expected growth. Do not assume that different collection APIs share the same response or cursor format.</p>
       <h3>Concepts from general Spring Data tutorials</h3>
       <div class="table-wrap"><table><thead><tr><th>Concept</th><th>How to interpret it for this repo</th></tr></thead><tbody>
         <tr><td><code>Page&lt;T&gt;</code> / <code>PageRequest</code></td><td>Used internally by directory page query code, with the API exposing a project-specific <code>PageResponse</code>.</td></tr>

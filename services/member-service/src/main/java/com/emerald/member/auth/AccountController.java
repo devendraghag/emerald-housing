@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.emerald.member.repository.MemberRepository;
 import com.emerald.member.audit.AuditTrail;
 import com.emerald.member.api.ApiFailure;
+import com.emerald.member.api.CursorCodec;
+import com.emerald.member.api.CursorPage;
 import com.emerald.member.security.MemberAccess;
 
 @RestController @RequestMapping("/api/v1/accounts")
@@ -61,6 +63,30 @@ public class AccountController {
   if(!term.isEmpty()){sql.append(" AND a.username ILIKE ? ESCAPE '!' ");args.add("%"+term.replace("!","!!").replace("%","!%").replace("_","!_")+"%");}
   sql.append(" ORDER BY a.id LIMIT ? OFFSET ?");args.add(size);args.add((long)page*size);
   return registry.database().queryForList(sql.toString(),UUID.class,args.toArray()).stream().map(accounts::findById).flatMap(Optional::stream).map(this::view).toList();
+ }
+ @GetMapping("/cursor") @Transactional(readOnly=true) @PreAuthorize("@memberAccess.has('USER_VIEW','SOCIETY')")
+ public CursorPage<View> cursor(@RequestParam(defaultValue="20") int limit,@RequestParam(required=false) String after,
+        @RequestParam(required=false) String search,@RequestParam(required=false) String role,@RequestParam(required=false) Boolean enabled) {
+  if(limit<1||limit>100)throw new ApiFailure(400,"INVALID_PAGE","limit must be between 1 and 100");
+  String term=search==null?"":search.trim();if(term.length()>120)throw new ApiFailure(400,"INVALID_SEARCH","Search must be at most 120 characters");
+  String normalizedRole=role==null||role.isBlank()?"":role.trim().toUpperCase(Locale.ROOT);
+  if(!normalizedRole.isEmpty()&&!Boolean.TRUE.equals(registry.database().queryForObject("SELECT EXISTS(SELECT 1 FROM access_roles WHERE code=?)",Boolean.class,normalizedRole)))throw new ApiFailure(400,"INVALID_ROLE","Unknown role filter");
+  var actor=access.identity();
+  String scope=CursorCodec.scope("accounts|"+term+"|"+normalizedRole+"|"+enabled+"|"+actor.adminId()+"|"+actor.role());
+  var position=CursorCodec.decode(after,scope);
+  var sql=new StringBuilder("SELECT DISTINCT a.id FROM admin_users a LEFT JOIN account_roles ar ON ar.account_id=a.id WHERE a.society_code='EMERALD'");
+  var args=new ArrayList<Object>();
+  if(enabled!=null){sql.append(" AND a.enabled=?");args.add(enabled);}
+  if(!normalizedRole.isEmpty()){sql.append(" AND ar.role_code=?");args.add(normalizedRole);}
+  if(!term.isEmpty()){sql.append(" AND a.username ILIKE ? ESCAPE '!' ");args.add("%"+term.replace("!","!!").replace("%","!%").replace("_","!_")+"%");}
+  if(position!=null){sql.append(" AND a.id > ?");args.add(position.id());}
+  sql.append(" ORDER BY a.id LIMIT ?");args.add(limit+1);
+  var ids=registry.database().queryForList(sql.toString(),UUID.class,args.toArray());
+  boolean hasNext=ids.size()>limit;
+  var pageIds=ids.subList(0,Math.min(limit,ids.size()));
+  var items=pageIds.stream().map(accounts::findById).flatMap(Optional::stream).map(this::view).toList();
+  UUID last=pageIds.isEmpty()?null:pageIds.get(pageIds.size()-1);
+  return new CursorPage<>(items,hasNext&&last!=null?CursorCodec.encode(java.time.Instant.EPOCH,last,scope):null,hasNext);
  }
  @GetMapping("/me") @Transactional
  public Object me() {var actor=access.identity();var a=find(actor.adminId());return Map.of("account",view(a),"permissions",registry.grants(a.getId()),"flatIds",actor.flatIds());}

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -117,6 +118,76 @@ public class FamilyController {
         args.add(size);
         args.add((long) page * size);
         return registry.database().queryForList("SELECT f.* FROM family_members f JOIN flat_memberships fm ON fm.id=f.owner_membership_id JOIN members m ON m.id=fm.member_id" + where + " ORDER BY f.created_at,f.id LIMIT ? OFFSET ?", args.toArray());
+    }
+
+    @GetMapping("/cursor")
+    @Transactional(readOnly = true)
+    public com.emerald.member.api.CursorPage<Map<String, Object>> cursor(
+            @RequestParam(required = false) UUID flatId,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String after) {
+        if (limit < 1 || limit > 100)
+            throw new ApiFailure(400, "INVALID_PAGE", "limit must be between 1 and 100");
+        var actor = access.identity();
+        if (actor == null) throw new AccessDeniedException("No family directory access");
+        if (!access.has("FAMILY_VIEW", "SOCIETY")) {
+            boolean canReadOwnedFamilies = access.has("FAMILY_VIEW", "OWN_FLATS") && actor.memberId() != null;
+            boolean canReadLinkedFamily = access.has("FAMILY_VIEW", "SELF") && actor.memberId() != null;
+            if (!canReadOwnedFamilies && !canReadLinkedFamily)
+                throw new AccessDeniedException("No family directory access");
+        }
+        String scope = com.emerald.member.api.CursorCodec.scope("family|" + flatId + "|"
+                + actor.adminId() + "|" + actor.role() + "|" + actor.memberId() + "|"
+                + actor.flatIds().stream().sorted().toList() + "|"
+                + actor.permissions().stream().sorted().toList());
+        var position = com.emerald.member.api.CursorCodec.decode(after, scope);
+        var sql = new StringBuilder("SELECT f.* FROM family_members f JOIN flat_memberships fm ON fm.id=f.owner_membership_id JOIN members m ON m.id=fm.member_id WHERE 1=1");
+        var args = new ArrayList<Object>();
+        if (flatId != null) {
+            sql.append(" AND f.flat_id=?");
+            args.add(flatId);
+        }
+        if (!access.has("FAMILY_VIEW", "SOCIETY")) {
+            sql.append(" AND fm.end_date IS NULL AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE) AND m.status='ACTIVE' AND (");
+            var scopes = new ArrayList<String>();
+            if (access.has("FAMILY_VIEW", "OWN_FLATS") && actor.memberId() != null) {
+                scopes.add("fm.member_id=?");
+                args.add(actor.memberId());
+            }
+            if (access.has("FAMILY_VIEW", "SELF") && actor.memberId() != null) {
+                scopes.add("(f.linked_member_id=? AND f.active)");
+                args.add(actor.memberId());
+            }
+            if (scopes.isEmpty()) throw new AccessDeniedException("No family directory access");
+            sql.append(String.join(" OR ", scopes)).append(')');
+        }
+        if (position != null) {
+            sql.append(" AND (f.created_at > ? OR (f.created_at = ? AND f.id > ?))");
+            var timestamp = java.sql.Timestamp.from(position.createdAt());
+            args.add(timestamp);
+            args.add(timestamp);
+            args.add(position.id());
+        }
+        sql.append(" ORDER BY f.created_at ASC,f.id ASC LIMIT ?");
+        args.add(limit + 1);
+        var rows = registry.database().queryForList(sql.toString(), args.toArray());
+        boolean hasNext = rows.size() > limit;
+        var items = List.copyOf(rows.subList(0, Math.min(limit, rows.size())));
+        var last = items.isEmpty() ? null : items.get(items.size() - 1);
+        UUID lastId = last == null ? null : (UUID) last.get("id");
+        java.time.Instant lastCreatedAt = last == null ? null : cursorInstant(last.get("created_at"));
+        String nextCursor = hasNext && last != null
+                ? com.emerald.member.api.CursorCodec.encode(lastCreatedAt, lastId, scope)
+                : null;
+        return new com.emerald.member.api.CursorPage<>(items, nextCursor, hasNext);
+    }
+
+    private static java.time.Instant cursorInstant(Object value) {
+        if (value instanceof java.time.Instant instant) return instant;
+        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
+        if (value instanceof java.time.OffsetDateTime dateTime) return dateTime.toInstant();
+        if (value instanceof java.time.LocalDateTime dateTime) return dateTime.toInstant(java.time.ZoneOffset.UTC);
+        throw new IllegalStateException("Unsupported database timestamp type for family cursor: " + value);
     }
 
     @PostMapping

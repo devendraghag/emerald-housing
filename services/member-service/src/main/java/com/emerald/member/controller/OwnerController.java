@@ -38,6 +38,49 @@ public class OwnerController {
   sql+=" ORDER BY fm.start_date DESC,fm.created_at DESC,fm.id DESC LIMIT ? OFFSET ?";args.add(size);args.add((long)page*size);
   return registry.database().queryForList(sql,args.toArray());
  }
+ @GetMapping("/cursor") @Transactional(readOnly=true,propagation=Propagation.SUPPORTS)
+ public com.emerald.member.api.CursorPage<Map<String,Object>> cursor(@RequestParam(defaultValue="20") int limit,
+        @RequestParam(required=false) String after,@RequestParam(required=false) UUID flatId,
+        @RequestParam(required=false) UUID memberId,@RequestParam(defaultValue="ALL") String status,
+        @RequestParam(required=false) String search){
+  if(limit<1||limit>100)throw new com.emerald.member.api.ApiFailure(400,"INVALID_PAGE","limit must be between 1 and 100");
+  if(!access.has("MEMBER_VIEW","SOCIETY")&&!access.has("MEMBER_VIEW","SELF"))throw new org.springframework.security.access.AccessDeniedException("No owner directory access");
+  String normalized=status.trim().toUpperCase(Locale.ROOT);
+  if(!Set.of("ALL","CURRENT","HISTORY").contains(normalized))throw new com.emerald.member.api.ApiFailure(400,"INVALID_STATUS","Status must be ALL, CURRENT, or HISTORY");
+  String term=search==null?"":search.trim();if(term.length()>120)throw new com.emerald.member.api.ApiFailure(400,"INVALID_SEARCH","Search must be at most 120 characters");
+  var actor=access.identity();
+  String scope=com.emerald.member.api.CursorCodec.scope("owners|"+flatId+"|"+memberId+"|"+normalized+"|"+term+"|"+actor.adminId()+"|"+actor.role()+"|"+actor.memberId()+"|"+actor.flatIds().stream().sorted().toList());
+  var position=com.emerald.member.api.CursorCodec.decodeOwner(after,scope);
+  String sql="SELECT fm.*,m.full_name FROM flat_memberships fm JOIN members m ON m.id=fm.member_id WHERE fm.relationship_type='OWNER'";
+  List<Object> args=new ArrayList<>();
+  if(normalized.equals("CURRENT"))sql+=" AND fm.end_date IS NULL AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE) AND m.status='ACTIVE'";
+  if(normalized.equals("HISTORY"))sql+=" AND fm.end_date IS NOT NULL";
+  if(flatId!=null){sql+=" AND fm.flat_id=?";args.add(flatId);}
+  if(memberId!=null){sql+=" AND fm.member_id=?";args.add(memberId);}
+  if(!term.isEmpty()){sql+=" AND (m.full_name ILIKE ? ESCAPE '!' OR m.mobile_number ILIKE ? ESCAPE '!')";String pattern="%"+term.replace("!","!!").replace("%","!%").replace("_","!_")+"%";args.add(pattern);args.add(pattern);}
+  if(!access.has("MEMBER_VIEW","SOCIETY")){sql+=" AND fm.member_id=? AND fm.start_date<=CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS DATE)";args.add(access.ownMember());}
+  if(position!=null){sql+=" AND (fm.start_date < ? OR (fm.start_date = ? AND (fm.created_at < ? OR (fm.created_at = ? AND fm.id < ?))))";var timestamp=java.sql.Timestamp.from(position.createdAt());args.add(java.sql.Date.valueOf(position.startDate()));args.add(java.sql.Date.valueOf(position.startDate()));args.add(timestamp);args.add(timestamp);args.add(position.id());}
+  sql+=" ORDER BY fm.start_date DESC,fm.created_at DESC,fm.id DESC LIMIT ?";args.add(limit+1);
+  var rows=registry.database().queryForList(sql,args.toArray());boolean hasNext=rows.size()>limit;
+  var items=List.copyOf(rows.subList(0,Math.min(limit,rows.size())));
+  var last=items.isEmpty()?null:items.get(items.size()-1);
+  java.util.UUID nextId=last==null?null:(java.util.UUID)last.get("id");
+  java.time.Instant nextTime=last==null?null:cursorInstant(last.get("created_at"));
+  java.time.LocalDate nextDate=last==null?null:cursorDate(last.get("start_date"));
+  return new com.emerald.member.api.CursorPage<>(items,hasNext&&last!=null?com.emerald.member.api.CursorCodec.encodeOwner(nextDate,nextTime,nextId,scope):null,hasNext);
+ }
+ private static java.time.Instant cursorInstant(Object value){
+  if(value instanceof java.time.Instant instant)return instant;
+  if(value instanceof java.sql.Timestamp timestamp)return timestamp.toInstant();
+  if(value instanceof java.time.OffsetDateTime dateTime)return dateTime.toInstant();
+  if(value instanceof java.time.LocalDateTime dateTime)return dateTime.toInstant(java.time.ZoneOffset.UTC);
+  throw new IllegalStateException("Unsupported database timestamp type for owner cursor: "+value);
+ }
+ private static java.time.LocalDate cursorDate(Object value){
+  if(value instanceof java.time.LocalDate date)return date;
+  if(value instanceof java.sql.Date date)return date.toLocalDate();
+  throw new IllegalStateException("Unsupported database date type for owner cursor: "+value);
+ }
  public record Register(@NotNull @Valid CreateMemberRequest person,@NotNull UUID flatId,@NotNull @PastOrPresent LocalDate startDate,@NotBlank String username,@NotBlank String password){}
  @PostMapping @ResponseStatus(org.springframework.http.HttpStatus.CREATED) @Transactional(timeout=15,rollbackFor=Exception.class)
  @PreAuthorize("@memberAccess.has('OWNER_REGISTER','SOCIETY') and @memberAccess.has('MEMBER_CREATE','SOCIETY') and @memberAccess.has('USER_CREATE','SOCIETY') and @memberAccess.has('USER_ASSIGN_ROLE','SOCIETY')")
